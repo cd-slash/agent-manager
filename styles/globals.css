@@ -100,6 +100,7 @@
   --spacing-input-x: var(--space-input-x);
   --spacing-input-y: var(--space-input-y);
   --spacing-sidebar: var(--space-sidebar);
+  --spacing-footer: var(--space-footer);
 }
 
 :root {
@@ -117,6 +118,7 @@
   --space-input-x: 0.75rem;
   --space-input-y: 0.5rem;
   --space-sidebar: 1.5rem;
+  --space-footer: 1rem;
 
   /* Base */
   --background: oklch(1 0 0);

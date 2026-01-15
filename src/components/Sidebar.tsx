@@ -164,7 +164,7 @@ export function Sidebar({
         </div>
 
         {/* Bottom Actions */}
-        <div className="p-sidebar border-t border-sidebar-border">
+        <div className="px-sidebar py-footer border-t border-sidebar-border">
           <div
             className={cn(
               'flex items-center p-item rounded-lg hover:bg-sidebar-accent/50 cursor-pointer transition-colors',
