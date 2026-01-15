@@ -33,8 +33,8 @@ export function AgentChatPanel({
   };
 
   return (
-    <div className="w-80 bg-surface flex flex-col border-l border-border h-full">
-      <div className="p-card border-b border-border flex justify-between items-center bg-surface/50">
+    <div className="bg-surface border border-border rounded-xl flex flex-col h-full overflow-hidden">
+      <div className="p-4 border-b border-border flex justify-between items-center">
         <h3 className="text-sm font-semibold text-foreground flex items-center">
           <MessageSquare size={16} className="mr-2 text-feature-blue" />
           Agent Chat
@@ -51,7 +51,7 @@ export function AgentChatPanel({
         </Select>
       </div>
 
-      <ScrollArea className="flex-1 p-card">
+      <ScrollArea className="flex-1 p-4">
         <div className="space-y-4">
           {chatHistory?.map((msg) => (
             <div
@@ -79,7 +79,7 @@ export function AgentChatPanel({
         </div>
       </ScrollArea>
 
-      <div className="p-card border-t border-border bg-surface">
+      <div className="p-4 border-t border-border">
         <form onSubmit={handleSend} className="relative">
           <Input
             value={chatInput}

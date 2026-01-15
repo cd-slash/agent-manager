@@ -148,7 +148,7 @@ export function TaskDetailView({
   return (
     <div className="flex flex-col h-full bg-background animate-in fade-in duration-300">
       <div className="flex-1 flex overflow-hidden">
-        <div className="flex-1 overflow-y-auto min-w-0 border-r border-border">
+        <div className="flex-1 overflow-y-auto min-w-0">
           <div className="px-page pt-section shrink-0">
             <Tabs value={activeTab} onValueChange={setActiveTab}>
               <TabsList className="w-full justify-start">
@@ -182,7 +182,8 @@ export function TaskDetailView({
                 </TabsTrigger>
               </TabsList>
 
-              <div className="py-6">
+              <div className="py-6 flex gap-6">
+                <div className="flex-1 min-w-0">
                 <TabsContent value="requirements" className="mt-0">
                   <div className="space-y-8">
                     <section>
@@ -972,14 +973,18 @@ export function TaskDetailView({
                     ))}
                   </div>
                 </TabsContent>
+                </div>
+
+                <div className="w-1/3 shrink-0 sticky top-0 self-start h-[calc(100vh-12rem)]">
+                  <AgentChatPanel
+                    chatHistory={task.chatHistory}
+                    onSendMessage={handleSendMessage}
+                  />
+                </div>
               </div>
             </Tabs>
           </div>
         </div>
-        <AgentChatPanel
-          chatHistory={task.chatHistory}
-          onSendMessage={handleSendMessage}
-        />
       </div>
 
       <DependencyPickerModal
