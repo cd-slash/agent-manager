@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { MessageSquare, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import {
   Select,
   SelectContent,
@@ -35,6 +34,7 @@ export function FloatingAgentChat({
   const [chatInput, setChatInput] = useState('');
   const [selectedModel, setSelectedModel] = useState(agent.defaultModel);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Scroll to bottom when new messages arrive
   useEffect(() => {
@@ -42,6 +42,15 @@ export function FloatingAgentChat({
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [chatHistory]);
+
+  // Auto-resize textarea
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (textarea) {
+      textarea.style.height = 'auto';
+      textarea.style.height = `${textarea.scrollHeight}px`;
+    }
+  }, [chatInput]);
 
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
@@ -111,17 +120,25 @@ export function FloatingAgentChat({
       {/* Input */}
       <div className="px-3 py-2.5 border-t border-border bg-surface shrink-0">
         <form onSubmit={handleSend} className="relative">
-          <Input
+          <textarea
+            ref={textareaRef}
             value={chatInput}
             onChange={(e) => setChatInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSend(e);
+              }
+            }}
             placeholder={agent.placeholder || `Ask ${agent.name}...`}
-            className="pr-10 h-9 text-sm"
+            rows={1}
+            className="w-full rounded-md border border-input bg-transparent px-3 py-2 pr-10 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 resize-none overflow-hidden"
           />
           <Button
             type="submit"
             variant="ghost"
             size="icon-sm"
-            className="absolute right-1 top-1 h-7 w-7 text-muted-foreground hover:text-foreground"
+            className="absolute right-1 bottom-2 text-muted-foreground hover:text-foreground"
           >
             <Send size={14} />
           </Button>
