@@ -3,18 +3,10 @@ import {
   Edit2,
   GitPullRequest,
   Link as LinkIcon,
-  ChevronLeft,
-  ChevronRight,
   Search,
 } from 'lucide-react';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+import type { ColumnDef } from '@tanstack/react-table';
+import { DataTable, createSelectionColumn } from '@/components/ui/data-table';
 import {
   Select,
   SelectContent,
@@ -32,7 +24,10 @@ interface AllTasksViewProps {
   onTaskClick: (task: Task, projectId: number) => void;
 }
 
-const ITEMS_PER_PAGE = 10;
+type TaskWithProject = Task & {
+  projectId: number;
+  projectName: string;
+};
 
 const getStatusVariant = (status: string) => {
   switch (status) {
@@ -52,7 +47,6 @@ export function AllTasksView({ projects, onTaskClick }: AllTasksViewProps) {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [tagFilter, setTagFilter] = useState<string>('all');
   const [projectFilter, setProjectFilter] = useState<string>('all');
-  const [currentPage, setCurrentPage] = useState(1);
 
   const allTasks = useMemo(
     () =>
@@ -85,15 +79,89 @@ export function AllTasksView({ projects, onTaskClick }: AllTasksViewProps) {
     });
   }, [allTasks, searchQuery, statusFilter, tagFilter, projectFilter]);
 
-  const totalPages = Math.ceil(filteredTasks.length / ITEMS_PER_PAGE);
-  const paginatedTasks = filteredTasks.slice(
-    (currentPage - 1) * ITEMS_PER_PAGE,
-    currentPage * ITEMS_PER_PAGE
+  const columns: ColumnDef<TaskWithProject>[] = useMemo(
+    () => [
+      createSelectionColumn<TaskWithProject>(),
+      {
+        accessorKey: 'title',
+        header: 'Task',
+        size: 400,
+        cell: ({ row }) => {
+          const task = row.original;
+          return (
+            <div className="font-medium text-foreground">
+              <div className="flex flex-col">
+                <span>{task.title}</span>
+                {task.dependencies && task.dependencies.length > 0 && (
+                  <span className="text-[10px] text-warning flex items-center mt-1">
+                    <LinkIcon size={10} className="mr-1" />
+                    Waiting on {task.dependencies.length} tasks
+                  </span>
+                )}
+              </div>
+              {task.prCreated && (
+                <Badge variant="purple" className="ml-2 text-[10px]">
+                  <GitPullRequest size={10} className="mr-1" /> PR #
+                  {task.prNumber || '4829'}
+                </Badge>
+              )}
+            </div>
+          );
+        },
+      },
+      {
+        accessorKey: 'projectName',
+        header: 'Project',
+        cell: ({ row }) => (
+          <span className="text-sm text-muted-foreground">
+            {row.getValue('projectName')}
+          </span>
+        ),
+      },
+      {
+        accessorKey: 'category',
+        header: 'Status',
+        cell: ({ row }) => {
+          const category = row.getValue('category') as string;
+          return (
+            <Badge
+              variant={getStatusVariant(category)}
+              className="text-[10px] uppercase font-bold"
+            >
+              {category}
+            </Badge>
+          );
+        },
+      },
+      {
+        accessorKey: 'tag',
+        header: 'Tag',
+        cell: ({ row }) => (
+          <Badge variant="outline" className="text-xs">
+            {row.getValue('tag')}
+          </Badge>
+        ),
+      },
+      {
+        id: 'actions',
+        header: () => <span className="sr-only">Actions</span>,
+        enableSorting: false,
+        cell: () => (
+          <div className="text-right">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="text-feature-blue hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <Edit2 size={16} />
+            </Button>
+          </div>
+        ),
+      },
+    ],
+    []
   );
-
-  const handleFilterChange = () => {
-    setCurrentPage(1);
-  };
 
   return (
     <div className="h-full flex flex-col p-page">
@@ -107,21 +175,12 @@ export function AllTasksView({ projects, onTaskClick }: AllTasksViewProps) {
           <Input
             placeholder="Search tasks..."
             value={searchQuery}
-            onChange={(e) => {
-              setSearchQuery(e.target.value);
-              handleFilterChange();
-            }}
+            onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-9"
           />
         </div>
 
-        <Select
-          value={projectFilter}
-          onValueChange={(value) => {
-            setProjectFilter(value);
-            handleFilterChange();
-          }}
-        >
+        <Select value={projectFilter} onValueChange={setProjectFilter}>
           <SelectTrigger className="w-[160px]">
             <SelectValue placeholder="All Projects" />
           </SelectTrigger>
@@ -135,13 +194,7 @@ export function AllTasksView({ projects, onTaskClick }: AllTasksViewProps) {
           </SelectContent>
         </Select>
 
-        <Select
-          value={statusFilter}
-          onValueChange={(value) => {
-            setStatusFilter(value);
-            handleFilterChange();
-          }}
-        >
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="w-[140px]">
             <SelectValue placeholder="All Statuses" />
           </SelectTrigger>
@@ -154,13 +207,7 @@ export function AllTasksView({ projects, onTaskClick }: AllTasksViewProps) {
           </SelectContent>
         </Select>
 
-        <Select
-          value={tagFilter}
-          onValueChange={(value) => {
-            setTagFilter(value);
-            handleFilterChange();
-          }}
-        >
+        <Select value={tagFilter} onValueChange={setTagFilter}>
           <SelectTrigger className="w-[140px]">
             <SelectValue placeholder="All Tags" />
           </SelectTrigger>
@@ -180,136 +227,21 @@ export function AllTasksView({ projects, onTaskClick }: AllTasksViewProps) {
       </div>
 
       {/* Table */}
-      <div className="bg-surface/50 rounded-xl border border-border overflow-hidden flex-1 flex flex-col min-h-0">
-        <div className="overflow-auto flex-1">
-          <Table>
-            <TableHeader className="bg-surface/90 backdrop-blur sticky top-0 z-10">
-              <TableRow>
-                <TableHead className="w-[40%]">Task</TableHead>
-                <TableHead>Project</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Tag</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {paginatedTasks.map((task) => (
-                <TableRow
-                  key={`${task.projectId}-${task.id}`}
-                  onClick={() => onTaskClick(task, task.projectId)}
-                  className="cursor-pointer group"
-                >
-                  <TableCell className="font-medium text-foreground">
-                    <div className="flex flex-col">
-                      <span>{task.title}</span>
-                      {task.dependencies?.length > 0 && (
-                        <span className="text-[10px] text-warning flex items-center mt-1">
-                          <LinkIcon size={10} className="mr-1" />
-                          Waiting on {task.dependencies.length} tasks
-                        </span>
-                      )}
-                    </div>
-                    {task.prCreated && (
-                      <Badge variant="purple" className="ml-2 text-[10px]">
-                        <GitPullRequest size={10} className="mr-1" /> PR #
-                        {task.prNumber || '4829'}
-                      </Badge>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <span className="text-sm text-muted-foreground">
-                      {task.projectName}
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    <Badge
-                      variant={getStatusVariant(task.category)}
-                      className="text-[10px] uppercase font-bold"
-                    >
-                      {task.category}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className="text-xs">
-                      {task.tag}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      className="text-feature-blue hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <Edit2 size={16} />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {paginatedTasks.length === 0 && (
-                <TableRow>
-                  <TableCell
-                    colSpan={5}
-                    className="p-12 text-center text-muted-foreground"
-                  >
-                    {allTasks.length === 0
-                      ? 'No tasks found. Create a project to get started!'
-                      : 'No tasks match your filters.'}
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
-
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-border bg-surface/50">
-            <div className="text-sm text-muted-foreground">
-              Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1} to{' '}
-              {Math.min(currentPage * ITEMS_PER_PAGE, filteredTasks.length)} of{' '}
-              {filteredTasks.length}
-            </div>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                disabled={currentPage === 1}
-              >
-                <ChevronLeft size={16} className="mr-1" />
-                Previous
-              </Button>
-              <div className="flex items-center gap-1">
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map(
-                  (page) => (
-                    <Button
-                      key={page}
-                      variant={currentPage === page ? 'default' : 'ghost'}
-                      size="icon-sm"
-                      onClick={() => setCurrentPage(page)}
-                      className="w-8 h-8"
-                    >
-                      {page}
-                    </Button>
-                  )
-                )}
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() =>
-                  setCurrentPage((p) => Math.min(totalPages, p + 1))
-                }
-                disabled={currentPage === totalPages}
-              >
-                Next
-                <ChevronRight size={16} className="ml-1" />
-              </Button>
-            </div>
-          </div>
-        )}
-      </div>
+      <DataTable
+        columns={columns}
+        data={filteredTasks}
+        onRowClick={(task) => onTaskClick(task, task.projectId)}
+        enableRowSelection
+        enablePagination
+        fillHeight
+        pageSize={10}
+        emptyMessage={
+          allTasks.length === 0
+            ? 'No tasks found. Create a project to get started!'
+            : 'No tasks match your filters.'
+        }
+        getRowId={(row) => `${row.projectId}-${row.id}`}
+      />
     </div>
   );
 }
