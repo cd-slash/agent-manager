@@ -211,7 +211,7 @@ function App() {
 
     if (activeView === 'servers') {
       if (selectedServerId && selectedServer) {
-        return <ServerDetailView server={selectedServer} containers={containers} onBack={() => setSelectedServerId(null)} />;
+        return <ServerDetailView server={selectedServer} containers={containers} />;
       }
       return <ServerView servers={servers} onSelectServer={setSelectedServerId} />;
     }
@@ -326,6 +326,31 @@ function App() {
                   </h2>
                   <div className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">
                     Projects
+                  </div>
+                </div>
+              </>
+            ) : selectedServerId && selectedServer ? (
+              <>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => setSelectedServerId(null)}
+                  className="mr-3"
+                >
+                  <ChevronLeft size={20} />
+                </Button>
+                <div className="min-w-0 flex-1">
+                  <h2 className="text-sm font-bold text-white flex items-center">
+                    <span className="truncate">{selectedServer.name}</span>
+                    <Badge
+                      variant={selectedServer.status === 'online' ? 'success' : 'warning'}
+                      className="ml-2 uppercase text-[10px]"
+                    >
+                      {selectedServer.status}
+                    </Badge>
+                  </h2>
+                  <div className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">
+                    Servers
                   </div>
                 </div>
               </>
