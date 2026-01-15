@@ -46,12 +46,12 @@ const mockDiffs = [
       {
         line: 25,
         type: 'remove',
-        text: '-   return items.reduce((acc, item) => acc + item.price, 0);',
+        text: '    return items.reduce((acc, item) => acc + item.price, 0);',
       },
       {
         line: 26,
         type: 'add',
-        text: '+   return items.reduce((acc, item) => acc + (item.price * item.qty), 0);',
+        text: '    return items.reduce((acc, item) => acc + (item.price * item.qty), 0);',
       },
       { line: 27, type: 'same', text: '  };' },
     ],
@@ -63,7 +63,7 @@ const mockDiffs = [
       {
         line: 13,
         type: 'add',
-        text: '+    <div className="total-price">{calculateTotal(cart)}</div>',
+        text: '    <div className="total-price">{calculateTotal(cart)}</div>',
       },
       { line: 14, type: 'same', text: '    <button>Pay Now</button>' },
     ],
@@ -375,7 +375,7 @@ export function TaskDetailView({
                                     line.type === 'add'
                                       ? 'text-green-300'
                                       : line.type === 'remove'
-                                        ? 'text-red-300 line-through decoration-red-500/30'
+                                        ? 'text-red-300'
                                         : 'text-muted-foreground'
                                   }`}
                                 >
