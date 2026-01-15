@@ -184,7 +184,7 @@ export function TaskDetailView({
 
               <div className="py-6 flex gap-page items-start">
                 <div className="flex-1 min-w-0">
-                <TabsContent value="requirements" className="mt-0">
+                <TabsContent value="requirements" className="!mt-0">
                   <div className="space-y-8">
                     <section>
                       <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center">
@@ -372,7 +372,7 @@ export function TaskDetailView({
                   </div>
                 </TabsContent>
 
-                <TabsContent value="diff" className="mt-0">
+                <TabsContent value="diff" className="!mt-0">
                   <div className="space-y-4">
                     {mockDiffs.map((file, idx) => (
                       <div
@@ -454,7 +454,7 @@ export function TaskDetailView({
                   </div>
                 </TabsContent>
 
-                <TabsContent value="pr" className="mt-0">
+                <TabsContent value="pr" className="!mt-0">
                   {!task.prCreated ? (
                     <div className="flex flex-col items-center justify-center h-64 text-muted-foreground bg-surface/30 border border-border rounded-xl border-dashed">
                       <GitPullRequest size={48} className="mb-4 opacity-50" />
@@ -586,7 +586,7 @@ export function TaskDetailView({
                   )}
                 </TabsContent>
 
-                <TabsContent value="ai-review" className="mt-0">
+                <TabsContent value="ai-review" className="!mt-0">
                   <div className="space-y-6">
                     <div className="bg-blue-950/30 border border-blue-900/50 rounded-xl p-5 text-blue-100 flex items-start space-x-4">
                       <Bot size={24} className="mt-1 flex-shrink-0 text-feature-blue" />
@@ -681,7 +681,7 @@ export function TaskDetailView({
                   </div>
                 </TabsContent>
 
-                <TabsContent value="human-review" className="mt-0">
+                <TabsContent value="human-review" className="!mt-0">
                   <div className="space-y-6">
                     <div className="bg-surface border border-border rounded-xl p-6">
                       <div className="flex items-center justify-between mb-6">
@@ -762,7 +762,7 @@ export function TaskDetailView({
                   </div>
                 </TabsContent>
 
-                <TabsContent value="merge" className="mt-0">
+                <TabsContent value="merge" className="!mt-0">
                   <div className="space-y-6">
                     <div className="bg-surface border border-border rounded-xl p-6">
                       <div className="flex items-center justify-between mb-6">
@@ -955,7 +955,7 @@ export function TaskDetailView({
                   </div>
                 </TabsContent>
 
-                <TabsContent value="history" className="mt-0">
+                <TabsContent value="history" className="!mt-0">
                   <div className="relative border-l border-border ml-3 space-y-6">
                     {task.history?.map((event) => (
                       <div key={event.id} className="relative pl-6">
