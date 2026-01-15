@@ -1,0 +1,192 @@
+import {
+  FolderOpen,
+  Server,
+  Box,
+  Settings,
+  Layout,
+  Plus,
+  PanelLeftClose,
+  PanelLeftOpen,
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+  TooltipProvider,
+} from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
+
+interface SidebarProps {
+  activeView: string;
+  onViewChange: (view: string) => void;
+  isCollapsed: boolean;
+  toggleCollapse: () => void;
+  onQuickTask: () => void;
+}
+
+const menuItems = [
+  { id: 'projects', label: 'Projects', icon: FolderOpen },
+  { id: 'servers', label: 'Servers', icon: Server },
+  { id: 'containers', label: 'Containers', icon: Box },
+  { id: 'settings', label: 'Settings', icon: Settings },
+];
+
+export function Sidebar({
+  activeView,
+  onViewChange,
+  isCollapsed,
+  toggleCollapse,
+  onQuickTask,
+}: SidebarProps) {
+  return (
+    <TooltipProvider delayDuration={0}>
+      <div
+        className={cn(
+          'h-screen bg-slate-900 border-r border-slate-800 flex flex-col transition-all duration-300 shrink-0 z-30',
+          isCollapsed ? 'w-20' : 'w-64'
+        )}
+      >
+        {/* Top Header */}
+        <div
+          className={cn(
+            'h-16 flex items-center border-b border-slate-800 transition-all duration-300',
+            isCollapsed ? 'justify-center' : 'px-4 justify-between'
+          )}
+        >
+          {!isCollapsed && (
+            <div className="flex items-center">
+              <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center shadow-lg shrink-0">
+                <Layout className="text-white w-5 h-5" />
+              </div>
+              <span className="ml-3 font-bold text-white text-lg tracking-tight">
+                DevPlanner
+              </span>
+            </div>
+          )}
+
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={toggleCollapse}
+            className="text-slate-400 hover:text-white"
+          >
+            {isCollapsed ? (
+              <PanelLeftOpen size={20} />
+            ) : (
+              <PanelLeftClose size={20} />
+            )}
+          </Button>
+        </div>
+
+        {/* Nav Items */}
+        <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
+          {menuItems.map((item) => {
+            const isActive =
+              activeView === item.id ||
+              activeView.startsWith(item.id.slice(0, -1));
+
+            const NavButton = (
+              <button
+                key={item.id}
+                onClick={() => onViewChange(item.id)}
+                className={cn(
+                  'w-full flex items-center p-2 rounded-lg transition-all duration-200 group relative',
+                  isActive
+                    ? 'bg-blue-600 text-white shadow-md shadow-blue-900/20'
+                    : 'text-slate-400 hover:bg-slate-800 hover:text-white',
+                  isCollapsed && 'justify-center'
+                )}
+              >
+                <div className="w-8 h-8 flex items-center justify-center shrink-0">
+                  <item.icon
+                    size={20}
+                    className={cn(
+                      isActive
+                        ? 'text-white'
+                        : 'text-slate-400 group-hover:text-white'
+                    )}
+                  />
+                </div>
+
+                {!isCollapsed && (
+                  <span className="ml-2 font-medium text-sm truncate">
+                    {item.label}
+                  </span>
+                )}
+              </button>
+            );
+
+            if (isCollapsed) {
+              return (
+                <Tooltip key={item.id}>
+                  <TooltipTrigger asChild>{NavButton}</TooltipTrigger>
+                  <TooltipContent side="right">{item.label}</TooltipContent>
+                </Tooltip>
+              );
+            }
+
+            return NavButton;
+          })}
+        </nav>
+
+        {/* Quick Task Button */}
+        <div className="px-4 pb-2">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={onQuickTask}
+                className={cn(
+                  'w-full flex items-center p-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-500 hover:to-indigo-500 transition-all shadow-lg shadow-blue-900/20 group border border-white/10',
+                  isCollapsed && 'justify-center'
+                )}
+              >
+                <div className="w-8 h-8 flex items-center justify-center shrink-0">
+                  <Plus size={20} />
+                </div>
+                {!isCollapsed && (
+                  <div className="ml-3 flex items-center justify-between flex-1 overflow-hidden">
+                    <span className="font-semibold text-sm">New Task</span>
+                    <kbd className="text-[10px] bg-white/20 px-1.5 py-0.5 rounded text-white/90 font-sans border border-white/10">
+                      Ctrl+T
+                    </kbd>
+                  </div>
+                )}
+              </button>
+            </TooltipTrigger>
+            {isCollapsed && (
+              <TooltipContent side="right">Quick Task (Ctrl+T)</TooltipContent>
+            )}
+          </Tooltip>
+        </div>
+
+        {/* Bottom Actions */}
+        <div className="p-4 border-t border-slate-800">
+          <div
+            className={cn(
+              'flex items-center p-2 rounded-lg hover:bg-slate-800/50 cursor-pointer transition-colors',
+              isCollapsed && 'justify-center'
+            )}
+          >
+            <Avatar className="h-8 w-8 border-2 border-slate-900">
+              <AvatarFallback className="bg-indigo-500 text-white text-xs font-bold">
+                JD
+              </AvatarFallback>
+            </Avatar>
+            {!isCollapsed && (
+              <div className="ml-3 flex flex-col overflow-hidden">
+                <span className="text-sm font-medium text-white truncate">
+                  John Doe
+                </span>
+                <span className="text-[10px] text-slate-500 truncate">
+                  Lead Developer
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </TooltipProvider>
+  );
+}
