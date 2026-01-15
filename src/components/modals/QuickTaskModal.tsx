@@ -57,7 +57,7 @@ export function QuickTaskModal({
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center">
-            <Plus size={20} className="mr-2 text-blue-500" />
+            <Plus size={20} className="mr-2 text-primary" />
             Create Quick Task
           </DialogTitle>
         </DialogHeader>

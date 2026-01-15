@@ -23,16 +23,16 @@ export function ProjectListView({
   onNewProject,
 }: ProjectListViewProps) {
   return (
-    <div className="p-8 h-full overflow-y-auto bg-slate-950">
+    <div className="p-8 h-full overflow-y-auto bg-background">
       <div className="flex justify-end mb-6">
         <Button onClick={onNewProject}>
           <Plus size={16} className="mr-2" />
           New Project
         </Button>
       </div>
-      <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-sm">
+      <div className="bg-surface border border-border rounded-xl overflow-hidden shadow-sm">
         <Table>
-          <TableHeader className="bg-slate-950">
+          <TableHeader className="bg-background">
             <TableRow>
               <TableHead className="w-1/4">Project Name</TableHead>
               <TableHead className="w-1/3">Description</TableHead>
@@ -56,35 +56,35 @@ export function ProjectListView({
                   onClick={() => onSelectProject(project)}
                   className="cursor-pointer group"
                 >
-                  <TableCell className="font-medium text-slate-200 whitespace-nowrap max-w-[200px]">
+                  <TableCell className="font-medium text-foreground whitespace-nowrap max-w-[200px]">
                     <div className="flex items-center">
                       <Layout
                         size={16}
-                        className="mr-3 text-blue-500 shrink-0"
+                        className="mr-3 text-feature-blue shrink-0"
                       />
                       <span className="truncate">{project.name}</span>
                     </div>
                   </TableCell>
-                  <TableCell className="text-slate-400 max-w-xs truncate">
+                  <TableCell className="text-muted-foreground max-w-xs truncate">
                     {project.description}
                   </TableCell>
                   <TableCell className="w-48">
                     <div className="flex items-center space-x-3">
                       <Progress value={progress} className="flex-1" />
-                      <span className="text-xs text-slate-500 font-medium w-8 text-right">
+                      <span className="text-xs text-muted-foreground font-medium w-8 text-right">
                         {progress}%
                       </span>
                     </div>
                   </TableCell>
-                  <TableCell className="text-slate-400">
+                  <TableCell className="text-muted-foreground">
                     <div className="flex items-center">
-                      <List size={14} className="mr-1.5 text-slate-600" />
+                      <List size={14} className="mr-1.5 text-muted-foreground" />
                       {total}
                     </div>
                   </TableCell>
-                  <TableCell className="text-slate-500 text-xs">
+                  <TableCell className="text-muted-foreground text-xs">
                     <div className="flex items-center">
-                      <Clock size={14} className="mr-1.5 text-slate-600" />
+                      <Clock size={14} className="mr-1.5 text-muted-foreground" />
                       2h ago
                     </div>
                   </TableCell>

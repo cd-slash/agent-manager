@@ -19,16 +19,16 @@ interface ServerViewProps {
 
 export function ServerView({ servers, onSelectServer }: ServerViewProps) {
   return (
-    <div className="p-8 h-full overflow-y-auto bg-slate-950">
+    <div className="p-8 h-full overflow-y-auto bg-background">
       <div className="flex justify-end mb-6">
         <Button variant="outline">
           <Plus size={16} className="mr-2" />
           Provision Server
         </Button>
       </div>
-      <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-sm">
+      <div className="bg-surface border border-border rounded-xl overflow-hidden shadow-sm">
         <Table>
-          <TableHeader className="bg-slate-950">
+          <TableHeader className="bg-background">
             <TableRow>
               <TableHead>Server Name</TableHead>
               <TableHead>IP Address</TableHead>
@@ -45,19 +45,19 @@ export function ServerView({ servers, onSelectServer }: ServerViewProps) {
                 onClick={() => onSelectServer(server.id)}
                 className="cursor-pointer group"
               >
-                <TableCell className="font-medium text-slate-200">
+                <TableCell className="font-medium text-foreground">
                   <div className="flex items-center">
                     <Server
                       size={16}
-                      className="mr-3 text-slate-500 group-hover:text-blue-400 transition-colors"
+                      className="mr-3 text-muted-foreground group-hover:text-feature-blue transition-colors"
                     />
                     {server.name}
                   </div>
                 </TableCell>
-                <TableCell className="text-slate-400 font-mono text-xs">
+                <TableCell className="text-muted-foreground font-mono text-xs">
                   {server.ip}
                 </TableCell>
-                <TableCell className="text-slate-400">{server.region}</TableCell>
+                <TableCell className="text-muted-foreground">{server.region}</TableCell>
                 <TableCell>
                   <Badge
                     variant={server.status === 'online' ? 'success' : 'warning'}
@@ -68,21 +68,21 @@ export function ServerView({ servers, onSelectServer }: ServerViewProps) {
                 </TableCell>
                 <TableCell className="w-48">
                   <div className="space-y-1.5">
-                    <div className="flex items-center text-xs text-slate-500">
+                    <div className="flex items-center text-xs text-muted-foreground">
                       <span className="w-8">CPU</span>
-                      <div className="flex-1 h-1 bg-slate-800 rounded-full mx-2">
+                      <div className="flex-1 h-1 bg-surface-elevated rounded-full mx-2">
                         <div
-                          className="h-1 bg-blue-500 rounded-full"
+                          className="h-1 bg-feature-blue rounded-full"
                           style={{ width: `${server.cpu}%` }}
                         ></div>
                       </div>
                       <span className="w-6 text-right">{server.cpu}%</span>
                     </div>
-                    <div className="flex items-center text-xs text-slate-500">
+                    <div className="flex items-center text-xs text-muted-foreground">
                       <span className="w-8">MEM</span>
-                      <div className="flex-1 h-1 bg-slate-800 rounded-full mx-2">
+                      <div className="flex-1 h-1 bg-surface-elevated rounded-full mx-2">
                         <div
-                          className="h-1 bg-purple-500 rounded-full"
+                          className="h-1 bg-feature-purple rounded-full"
                           style={{ width: `${server.mem}%` }}
                         ></div>
                       </div>

@@ -72,8 +72,8 @@ export function NewProjectModal({
           <div className="p-8">
             <DialogHeader className="mb-8 text-center">
               <div className="flex justify-center mb-4">
-                <div className="inline-flex items-center justify-center p-3 bg-blue-500/10 rounded-xl">
-                  <Sparkles className="text-blue-400 w-8 h-8" />
+                <div className="inline-flex items-center justify-center p-3 bg-primary/10 rounded-xl">
+                  <Sparkles className="text-primary w-8 h-8" />
                 </div>
               </div>
               <DialogTitle className="text-3xl">Create New Project</DialogTitle>
@@ -106,7 +106,7 @@ export function NewProjectModal({
               <Button
                 onClick={() => setStep('analyzing')}
                 disabled={!project.name || !project.description}
-                className="w-full py-4 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400"
+                className="w-full py-4"
                 size="lg"
               >
                 <span>Generate Plan</span>
@@ -117,10 +117,10 @@ export function NewProjectModal({
         ) : (
           <div className="p-12 flex flex-col items-center justify-center min-h-[500px]">
             <div className="relative mb-8">
-              <div className="absolute inset-0 bg-blue-500 blur-xl opacity-20 animate-pulse rounded-full"></div>
-              <Cpu size={64} className="text-blue-400 relative z-10" />
+              <div className="absolute inset-0 bg-primary blur-xl opacity-20 animate-pulse rounded-full"></div>
+              <Cpu size={64} className="text-primary relative z-10" />
             </div>
-            <h2 className="text-2xl font-bold text-center mb-6 text-white">
+            <h2 className="text-2xl font-bold text-center mb-6 text-foreground">
               Analyzing Project
             </h2>
             <div className="space-y-3 w-full max-w-md">
@@ -134,17 +134,17 @@ export function NewProjectModal({
                   }`}
                 >
                   {i < analysisStep ? (
-                    <CheckCircle2 className="text-green-400 w-5 h-5" />
+                    <CheckCircle2 className="text-success w-5 h-5" />
                   ) : i === analysisStep ? (
-                    <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                    <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
                   ) : (
-                    <Circle className="text-slate-700 w-5 h-5" />
+                    <Circle className="text-muted w-5 h-5" />
                   )}
                   <span
                     className={`text-sm ${
                       i === analysisStep
-                        ? 'text-blue-200 font-medium'
-                        : 'text-slate-400'
+                        ? 'text-primary font-medium'
+                        : 'text-muted-foreground'
                     }`}
                   >
                     {s}

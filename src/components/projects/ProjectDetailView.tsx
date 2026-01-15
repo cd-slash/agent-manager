@@ -88,10 +88,10 @@ export function ProjectDetailView({
   };
 
   return (
-    <div className="flex flex-col h-full bg-slate-950">
+    <div className="flex flex-col h-full bg-background">
       <div className="flex-1 flex overflow-hidden">
         {/* Left Panel: Tabs + Content */}
-        <div className="flex-1 flex flex-col min-w-0 border-r border-slate-800">
+        <div className="flex-1 flex flex-col min-w-0 border-r border-border">
           <div className="px-6 pt-6 shrink-0">
             <Tabs value={activeTab} onValueChange={setActiveTab}>
               <TabsList className="w-full justify-start">
@@ -122,7 +122,7 @@ export function ProjectDetailView({
                       >
                         <Plus
                           size={16}
-                          className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500"
+                          className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
                         />
                         <Input
                           value={quickTaskTitle}
@@ -131,7 +131,7 @@ export function ProjectDetailView({
                           className="pl-10"
                         />
                       </form>
-                      <div className="flex items-center space-x-2 bg-slate-900 border border-slate-800 rounded-lg p-1">
+                      <div className="flex items-center space-x-2 bg-surface border border-border rounded-lg p-1">
                         <Button
                           variant={taskViewMode === 'list' ? 'secondary' : 'ghost'}
                           size="icon-sm"
@@ -193,11 +193,11 @@ export function ProjectDetailView({
                 <TabsContent value="plan" className="mt-0">
                   <div className="h-full flex flex-col py-6">
                     <div className="mb-4 flex justify-between items-center">
-                      <h3 className="font-semibold text-slate-200 flex items-center">
-                        <FileEdit size={16} className="mr-2 text-blue-400" />
+                      <h3 className="font-semibold text-foreground flex items-center">
+                        <FileEdit size={16} className="mr-2 text-feature-blue" />
                         Project Plan & Requirements
                       </h3>
-                      <Button variant="ghost" size="sm" className="text-blue-400">
+                      <Button variant="ghost" size="sm" className="text-feature-blue">
                         <Save size={12} className="mr-1" /> Auto-saved
                       </Button>
                     </div>
@@ -213,15 +213,15 @@ export function ProjectDetailView({
                 <TabsContent value="details" className="mt-0">
                   <div className="h-full flex flex-col py-6 animate-in fade-in duration-300">
                     <div className="space-y-6 w-full">
-                      <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 space-y-4">
+                      <div className="bg-surface border border-border rounded-xl p-6 space-y-4">
                         <div>
-                          <label className="block text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">
+                          <label className="block text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
                             Project Name
                           </label>
                           <Input value={project.name} readOnly />
                         </div>
                         <div>
-                          <label className="block text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">
+                          <label className="block text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
                             Description
                           </label>
                           <Textarea
@@ -232,23 +232,23 @@ export function ProjectDetailView({
                         </div>
                       </div>
 
-                      <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 space-y-4">
-                        <h4 className="text-sm font-medium text-white mb-2 flex items-center">
+                      <div className="bg-surface border border-border rounded-xl p-6 space-y-4">
+                        <h4 className="text-sm font-medium text-foreground mb-2 flex items-center">
                           <GitPullRequest
                             size={16}
-                            className="mr-2 text-purple-400"
+                            className="mr-2 text-feature-purple"
                           />
                           Repository Configuration
                         </h4>
                         <div>
-                          <label className="block text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">
+                          <label className="block text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
                             Repository URL
                           </label>
                           <div className="flex">
                             <Input
                               value={`github.com/demo-user/${project.name.toLowerCase().replace(/\s+/g, '-')}`}
                               readOnly
-                              className="rounded-r-none text-blue-400 font-mono"
+                              className="rounded-r-none text-feature-blue font-mono"
                             />
                             <Button variant="outline" className="rounded-l-none">
                               Copy
@@ -256,7 +256,7 @@ export function ProjectDetailView({
                           </div>
                         </div>
                         <div>
-                          <label className="block text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">
+                          <label className="block text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
                             Branch
                           </label>
                           <Select defaultValue="main">

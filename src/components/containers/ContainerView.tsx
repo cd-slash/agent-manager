@@ -52,11 +52,11 @@ export function ContainerView({
   });
 
   return (
-    <div className="p-8 h-full overflow-y-auto bg-slate-950">
+    <div className="p-8 h-full overflow-y-auto bg-background">
       <div className="flex flex-col sm:flex-row gap-4 mb-6">
         <div className="relative flex-1 max-w-md">
           <Search
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500"
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
             size={16}
           />
           <Input
@@ -69,7 +69,7 @@ export function ContainerView({
         <div className="relative w-full sm:w-48">
           <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger>
-              <Filter size={16} className="mr-2 text-slate-500" />
+              <Filter size={16} className="mr-2 text-muted-foreground" />
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -81,9 +81,9 @@ export function ContainerView({
         </div>
       </div>
 
-      <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+      <div className="bg-surface border border-border rounded-xl overflow-hidden">
         <Table>
-          <TableHeader className="bg-slate-950">
+          <TableHeader className="bg-background">
             <TableRow>
               <TableHead>Container Name</TableHead>
               <TableHead>Image</TableHead>
@@ -97,7 +97,7 @@ export function ContainerView({
               <TableRow>
                 <TableCell
                   colSpan={5}
-                  className="p-8 text-center text-slate-500"
+                  className="p-8 text-center text-muted-foreground"
                 >
                   No containers found matching your filters.
                 </TableCell>
@@ -110,15 +110,15 @@ export function ContainerView({
                   className="cursor-pointer group"
                 >
                   <TableCell>
-                    <div className="font-medium text-slate-200 flex items-center">
-                      <Box size={14} className="mr-2 text-slate-500" />
+                    <div className="font-medium text-foreground flex items-center">
+                      <Box size={14} className="mr-2 text-muted-foreground" />
                       {container.name}
                     </div>
-                    <div className="text-xs text-slate-500 font-mono mt-0.5 ml-6">
+                    <div className="text-xs text-muted-foreground font-mono mt-0.5 ml-6">
                       ID: {container.id}
                     </div>
                   </TableCell>
-                  <TableCell className="text-slate-400 font-mono text-xs">
+                  <TableCell className="text-muted-foreground font-mono text-xs">
                     {container.image}
                   </TableCell>
                   <TableCell>
@@ -126,22 +126,22 @@ export function ContainerView({
                       <div
                         className={`w-2 h-2 rounded-full mr-2 ${
                           container.status === 'running'
-                            ? 'bg-green-500 animate-pulse'
-                            : 'bg-red-500'
+                            ? 'bg-success animate-pulse'
+                            : 'bg-destructive'
                         }`}
                       ></div>
                       <span
                         className={`capitalize ${
                           container.status === 'running'
-                            ? 'text-green-400'
-                            : 'text-red-400'
+                            ? 'text-success'
+                            : 'text-destructive'
                         }`}
                       >
                         {container.status}
                       </span>
                     </div>
                   </TableCell>
-                  <TableCell className="text-slate-400">
+                  <TableCell className="text-muted-foreground">
                     {container.server}
                   </TableCell>
                   <TableCell className="text-right">
@@ -151,7 +151,7 @@ export function ContainerView({
                         size="icon-sm"
                         onClick={(e) => e.stopPropagation()}
                         title="Logs"
-                        className="text-slate-400 hover:text-blue-400"
+                        className="text-muted-foreground hover:text-feature-blue"
                       >
                         <FileText size={16} />
                       </Button>
@@ -169,7 +169,7 @@ export function ContainerView({
                           size="icon-sm"
                           onClick={(e) => e.stopPropagation()}
                           title="Stop"
-                          className="text-slate-400 hover:text-red-400"
+                          className="text-muted-foreground hover:text-destructive"
                         >
                           <StopCircle size={16} />
                         </Button>
@@ -179,7 +179,7 @@ export function ContainerView({
                           size="icon-sm"
                           onClick={(e) => e.stopPropagation()}
                           title="Start"
-                          className="text-slate-400 hover:text-green-400"
+                          className="text-muted-foreground hover:text-success"
                         >
                           <Play size={16} />
                         </Button>

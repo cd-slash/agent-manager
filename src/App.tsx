@@ -264,7 +264,7 @@ function App() {
   };
 
   return (
-    <div className="flex h-screen bg-slate-950 text-slate-200 overflow-hidden font-sans">
+    <div className="flex h-screen bg-background text-foreground overflow-hidden font-sans">
       <Sidebar
         activeView={activeView}
         onViewChange={handleViewChange}
@@ -274,7 +274,7 @@ function App() {
       />
 
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
-        <header className="h-16 border-b border-slate-800 bg-slate-900/80 backdrop-blur-md flex items-center justify-between px-6 shrink-0 z-20">
+        <header className="h-16 border-b border-border bg-surface/80 backdrop-blur-md flex items-center justify-between px-6 shrink-0 z-20">
           <div className="flex items-center min-w-0 flex-1 mr-4">
             {selectedTaskId && selectedTask ? (
               <>
@@ -287,7 +287,7 @@ function App() {
                   <ChevronLeft size={20} />
                 </Button>
                 <div className="min-w-0 flex-1">
-                  <h2 className="text-sm font-bold text-white flex items-center">
+                  <h2 className="text-sm font-bold text-foreground flex items-center">
                     <span className="truncate">{selectedTask.title}</span>
                     {selectedTask.prCreated && (
                       <Badge variant="purple" className="ml-2 text-[10px]">
@@ -305,7 +305,7 @@ function App() {
                       {selectedTask.category}
                     </Badge>
                   </h2>
-                  <div className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold truncate">
+                  <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold truncate">
                     {selectedProject?.name} / Tasks
                   </div>
                 </div>
@@ -321,10 +321,10 @@ function App() {
                   <ChevronLeft size={20} />
                 </Button>
                 <div className="min-w-0 flex-1">
-                  <h2 className="text-sm font-bold text-white truncate">
+                  <h2 className="text-sm font-bold text-foreground truncate">
                     {selectedProject.name}
                   </h2>
-                  <div className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">
+                  <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">
                     Projects
                   </div>
                 </div>
@@ -340,7 +340,7 @@ function App() {
                   <ChevronLeft size={20} />
                 </Button>
                 <div className="min-w-0 flex-1">
-                  <h2 className="text-sm font-bold text-white flex items-center">
+                  <h2 className="text-sm font-bold text-foreground flex items-center">
                     <span className="truncate">{selectedServer.name}</span>
                     <Badge
                       variant={selectedServer.status === 'online' ? 'success' : 'warning'}
@@ -349,17 +349,17 @@ function App() {
                       {selectedServer.status}
                     </Badge>
                   </h2>
-                  <div className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">
+                  <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">
                     Servers
                   </div>
                 </div>
               </>
             ) : (
               <div>
-                <h2 className="text-sm font-bold text-white capitalize">
+                <h2 className="text-sm font-bold text-foreground capitalize">
                   {activeView}
                 </h2>
-                <div className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">
+                <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">
                   Dashboard
                 </div>
               </div>

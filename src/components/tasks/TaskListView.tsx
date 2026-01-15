@@ -31,10 +31,10 @@ const getStatusVariant = (status: string) => {
 
 export function TaskListView({ tasks, onTaskClick }: TaskListViewProps) {
   return (
-    <div className="bg-slate-900/50 rounded-xl border border-slate-800 overflow-hidden w-full h-full flex flex-col">
+    <div className="bg-surface/50 rounded-xl border border-border overflow-hidden w-full h-full flex flex-col">
       <div className="overflow-auto flex-1">
         <Table>
-          <TableHeader className="bg-slate-900/90 backdrop-blur sticky top-0 z-10">
+          <TableHeader className="bg-surface/90 backdrop-blur sticky top-0 z-10">
             <TableRow>
               <TableHead className="w-1/2">Task</TableHead>
               <TableHead>Status</TableHead>
@@ -49,11 +49,11 @@ export function TaskListView({ tasks, onTaskClick }: TaskListViewProps) {
                 onClick={() => onTaskClick(task)}
                 className="cursor-pointer group"
               >
-                <TableCell className="font-medium text-slate-200">
+                <TableCell className="font-medium text-foreground">
                   <div className="flex flex-col">
                     <span>{task.title}</span>
                     {task.dependencies?.length > 0 && (
-                      <span className="text-[10px] text-amber-500 flex items-center mt-1">
+                      <span className="text-[10px] text-warning flex items-center mt-1">
                         <LinkIcon size={10} className="mr-1" />
                         Waiting on {task.dependencies.length} tasks
                       </span>
@@ -83,7 +83,7 @@ export function TaskListView({ tasks, onTaskClick }: TaskListViewProps) {
                   <Button
                     variant="ghost"
                     size="icon-sm"
-                    className="text-blue-400 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="text-feature-blue hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
                     onClick={(e) => e.stopPropagation()}
                   >
                     <Edit2 size={16} />
@@ -95,7 +95,7 @@ export function TaskListView({ tasks, onTaskClick }: TaskListViewProps) {
               <TableRow>
                 <TableCell
                   colSpan={4}
-                  className="p-12 text-center text-slate-500"
+                  className="p-12 text-center text-muted-foreground"
                 >
                   No tasks found. Add one to get started!
                 </TableCell>

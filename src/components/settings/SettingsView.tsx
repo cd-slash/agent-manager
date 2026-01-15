@@ -17,7 +17,7 @@ export function SettingsView() {
   const [activeTab, setActiveTab] = useState('credentials');
 
   return (
-    <div className="flex flex-col h-full bg-slate-950">
+    <div className="flex flex-col h-full bg-background">
       <div className="px-6 pt-6 shrink-0">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="w-full justify-start">
@@ -42,8 +42,8 @@ export function SettingsView() {
           <div className="flex-1 overflow-y-auto py-6 animate-in fade-in duration-300">
             <TabsContent value="credentials" className="mt-0">
               <div className="w-full space-y-6">
-                <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
-                  <h3 className="text-lg font-semibold text-white mb-4">
+                <div className="bg-surface border border-border rounded-xl p-6">
+                  <h3 className="text-lg font-semibold text-foreground mb-4">
                     API Keys
                   </h3>
                   <div className="space-y-4 max-w-3xl">
@@ -53,7 +53,7 @@ export function SettingsView() {
                         <Input type="password" placeholder="sk-..." />
                         <Lock
                           size={14}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500"
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
                         />
                       </div>
                     </div>
@@ -63,7 +63,7 @@ export function SettingsView() {
                         <Input type="password" placeholder="sk-ant-..." />
                         <Lock
                           size={14}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500"
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
                         />
                       </div>
                     </div>
@@ -73,7 +73,7 @@ export function SettingsView() {
                         <Input type="password" placeholder="AIza..." />
                         <Lock
                           size={14}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500"
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
                         />
                       </div>
                     </div>
@@ -87,8 +87,8 @@ export function SettingsView() {
 
             <TabsContent value="models" className="mt-0">
               <div className="w-full space-y-6">
-                <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
-                  <h3 className="text-lg font-semibold text-white mb-4">
+                <div className="bg-surface border border-border rounded-xl p-6">
+                  <h3 className="text-lg font-semibold text-foreground mb-4">
                     Model Defaults
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl">
@@ -126,9 +126,9 @@ export function SettingsView() {
                         min="0"
                         max="1"
                         step="0.1"
-                        className="w-full h-2 bg-slate-950 rounded-lg appearance-none cursor-pointer"
+                        className="w-full h-2 bg-background rounded-lg appearance-none cursor-pointer"
                       />
-                      <div className="flex justify-between text-xs text-slate-500 mt-1">
+                      <div className="flex justify-between text-xs text-muted-foreground mt-1">
                         <span>Precise</span>
                         <span>Creative</span>
                       </div>
@@ -152,17 +152,17 @@ export function SettingsView() {
 
             <TabsContent value="network" className="mt-0">
               <div className="w-full space-y-6">
-                <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
-                  <h3 className="text-lg font-semibold text-white mb-4">
+                <div className="bg-surface border border-border rounded-xl p-6">
+                  <h3 className="text-lg font-semibold text-foreground mb-4">
                     Network Configuration
                   </h3>
                   <div className="space-y-4 max-w-3xl">
-                    <div className="flex items-center justify-between p-4 bg-slate-950 rounded-lg border border-slate-800">
+                    <div className="flex items-center justify-between p-4 bg-background rounded-lg border border-border">
                       <div>
-                        <div className="text-sm font-medium text-white">
+                        <div className="text-sm font-medium text-foreground">
                           Enable VPC Peering
                         </div>
-                        <div className="text-xs text-slate-500">
+                        <div className="text-xs text-muted-foreground">
                           Allow direct connection to private resources
                         </div>
                       </div>
@@ -179,19 +179,19 @@ export function SettingsView() {
 
             <TabsContent value="general" className="mt-0">
               <div className="w-full space-y-6">
-                <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
-                  <h3 className="text-lg font-semibold text-white mb-4">
+                <div className="bg-surface border border-border rounded-xl p-6">
+                  <h3 className="text-lg font-semibold text-foreground mb-4">
                     Preferences
                   </h3>
                   <div className="space-y-4 max-w-3xl">
-                    <div className="flex items-center justify-between p-4 bg-slate-950 rounded-lg border border-slate-800">
+                    <div className="flex items-center justify-between p-4 bg-background rounded-lg border border-border">
                       <div className="flex items-center">
-                        <Bell size={18} className="text-slate-400 mr-3" />
+                        <Bell size={18} className="text-muted-foreground mr-3" />
                         <div>
-                          <div className="text-sm font-medium text-white">
+                          <div className="text-sm font-medium text-foreground">
                             Notifications
                           </div>
-                          <div className="text-xs text-slate-500">
+                          <div className="text-xs text-muted-foreground">
                             Receive alerts for task updates
                           </div>
                         </div>

@@ -33,10 +33,10 @@ export function AgentChatPanel({
   };
 
   return (
-    <div className="w-80 bg-slate-900 flex flex-col border-l border-slate-800 h-full">
-      <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-900/50">
-        <h3 className="text-sm font-semibold text-slate-200 flex items-center">
-          <MessageSquare size={16} className="mr-2 text-blue-400" />
+    <div className="w-80 bg-surface flex flex-col border-l border-border h-full">
+      <div className="p-4 border-b border-border flex justify-between items-center bg-surface/50">
+        <h3 className="text-sm font-semibold text-foreground flex items-center">
+          <MessageSquare size={16} className="mr-2 text-feature-blue" />
           Agent Chat
         </h3>
         <Select value={selectedModel} onValueChange={setSelectedModel}>
@@ -65,13 +65,13 @@ export function AgentChatPanel({
                 className={cn(
                   'max-w-[85%] rounded-2xl p-3 text-sm shadow-sm',
                   msg.sender === 'user'
-                    ? 'bg-blue-600 text-white rounded-br-none'
-                    : 'bg-slate-800 text-slate-200 rounded-bl-none border border-slate-700'
+                    ? 'bg-primary text-primary-foreground rounded-br-none'
+                    : 'bg-surface-elevated text-foreground rounded-bl-none border border-border'
                 )}
               >
                 {msg.text}
               </div>
-              <span className="text-[10px] text-slate-500 mt-1 px-1">
+              <span className="text-[10px] text-muted-foreground mt-1 px-1">
                 {msg.time}
               </span>
             </div>
@@ -79,7 +79,7 @@ export function AgentChatPanel({
         </div>
       </ScrollArea>
 
-      <div className="p-4 border-t border-slate-800 bg-slate-900">
+      <div className="p-4 border-t border-border bg-surface">
         <form onSubmit={handleSend} className="relative">
           <Input
             value={chatInput}
@@ -91,7 +91,7 @@ export function AgentChatPanel({
             type="submit"
             variant="ghost"
             size="icon-sm"
-            className="absolute right-1 top-1 text-slate-400 hover:text-white"
+            className="absolute right-1 top-1 text-muted-foreground hover:text-foreground"
           >
             <Send size={16} />
           </Button>
