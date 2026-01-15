@@ -148,6 +148,10 @@ export function TaskDetailView({
                   <UserCheck size={14} className="mr-1.5" />
                   Human Review
                 </TabsTrigger>
+                <TabsTrigger value="merge" className="flex items-center">
+                  <GitMerge size={14} className="mr-1.5" />
+                  Merge
+                </TabsTrigger>
                 <TabsTrigger value="history" className="flex items-center">
                   <History size={14} className="mr-1.5" />
                   History
@@ -707,6 +711,199 @@ export function TaskDetailView({
                                 Post Comment
                               </Button>
                             </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="merge" className="mt-0">
+                  <div className="space-y-6">
+                    <div className="bg-surface border border-border rounded-xl p-6">
+                      <div className="flex items-center justify-between mb-6">
+                        <h3 className="text-lg font-semibold text-foreground">
+                          Merge Status
+                        </h3>
+                        <Badge variant="destructive" className="uppercase">
+                          Conflicts Detected
+                        </Badge>
+                      </div>
+
+                      <div className="bg-background rounded-lg border border-border p-4 mb-6">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-3">
+                            <GitMerge size={18} className="text-red-400" />
+                            <div className="text-sm">
+                              <span className="font-mono bg-surface border border-border px-2 py-0.5 rounded text-foreground text-xs">
+                                feature/task-{String(task.id).slice(-4)}
+                              </span>
+                              <ArrowRight
+                                size={14}
+                                className="inline mx-2 text-muted-foreground"
+                              />
+                              <span className="font-mono bg-surface border border-border px-2 py-0.5 rounded text-foreground text-xs">
+                                main
+                              </span>
+                            </div>
+                          </div>
+                          <span className="text-xs text-red-400">
+                            2 conflicting files
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="bg-red-950/30 border border-red-900/50 rounded-lg p-4 mb-6">
+                        <div className="flex items-start space-x-3">
+                          <XCircle size={18} className="text-red-400 mt-0.5 flex-shrink-0" />
+                          <div>
+                            <h4 className="text-sm font-medium text-red-200">
+                              Merge Conflicts Require Resolution
+                            </h4>
+                            <p className="text-xs text-red-300/70 mt-1">
+                              The automatic merge failed due to conflicts between the feature branch
+                              and recent changes in main. Review the conflicts below and choose a resolution method.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="space-y-4">
+                        <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+                          Conflicting Files
+                        </h4>
+                        <div className="space-y-3">
+                          <div className="bg-background rounded-lg border border-red-900/50 overflow-hidden">
+                            <button
+                              className="w-full flex items-center justify-between p-3 bg-red-950/20 hover:bg-red-950/30 transition-colors border-b border-red-900/30"
+                            >
+                              <div className="flex items-center space-x-2 text-sm font-mono text-foreground">
+                                <ChevronDown size={16} />
+                                <span>src/utils/cart.js</span>
+                              </div>
+                              <Badge variant="destructive" className="text-xs">
+                                3 conflicts
+                              </Badge>
+                            </button>
+                            <div className="font-mono text-sm leading-6">
+                              <div className="bg-surface/30 p-2 text-xs text-muted-foreground border-b border-border">
+                                Lines 24-32
+                              </div>
+                              <div className="bg-red-500/5 border-l-2 border-red-500">
+                                <div className="px-3 py-1 text-xs text-red-400 bg-red-950/30">
+                                  {'<<<<<<< HEAD (main)'}
+                                </div>
+                                <div className="flex">
+                                  <div className="w-10 text-muted-foreground text-right pr-3 select-none border-r border-border/50 bg-surface/30">
+                                    25
+                                  </div>
+                                  <div className="flex-1 px-3 text-red-300 whitespace-pre">
+                                    {'  return items.reduce((acc, item) => acc + item.price, 0);'}
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="px-3 py-1 text-xs text-muted-foreground bg-surface/50">
+                                {'======='}
+                              </div>
+                              <div className="bg-green-500/5 border-l-2 border-green-500">
+                                <div className="flex">
+                                  <div className="w-10 text-muted-foreground text-right pr-3 select-none border-r border-border/50 bg-surface/30">
+                                    25
+                                  </div>
+                                  <div className="flex-1 px-3 text-green-300 whitespace-pre">
+                                    {'  return items.reduce((acc, item) => acc + (item.price * item.qty), 0);'}
+                                  </div>
+                                </div>
+                                <div className="px-3 py-1 text-xs text-green-400 bg-green-950/30">
+                                  {'>>>>>>> feature/task-' + String(task.id).slice(-4)}
+                                </div>
+                              </div>
+                              <div className="p-3 bg-surface/30 border-t border-border flex items-center justify-between">
+                                <span className="text-xs text-muted-foreground">Choose resolution:</span>
+                                <div className="flex space-x-2">
+                                  <Button variant="outline" size="sm" className="text-xs h-7">
+                                    Keep Main
+                                  </Button>
+                                  <Button variant="outline" size="sm" className="text-xs h-7">
+                                    Keep Ours
+                                  </Button>
+                                  <Button variant="outline" size="sm" className="text-xs h-7 text-feature-blue border-feature-blue/50">
+                                    <Bot size={12} className="mr-1" />
+                                    AI Merge
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="bg-background rounded-lg border border-red-900/50 overflow-hidden">
+                            <button
+                              className="w-full flex items-center justify-between p-3 bg-red-950/20 hover:bg-red-950/30 transition-colors"
+                            >
+                              <div className="flex items-center space-x-2 text-sm font-mono text-foreground">
+                                <ChevronRight size={16} />
+                                <span>src/components/Checkout.jsx</span>
+                              </div>
+                              <Badge variant="destructive" className="text-xs">
+                                1 conflict
+                              </Badge>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="mt-6 pt-6 border-t border-border">
+                        <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">
+                          Resolution Options
+                        </h4>
+                        <div className="flex space-x-3">
+                          <Button className="bg-feature-blue hover:bg-feature-blue/80">
+                            <Bot size={16} className="mr-2" />
+                            Auto-Resolve All Conflicts
+                          </Button>
+                          <Button variant="outline">
+                            <GitMerge size={16} className="mr-2" />
+                            Manual Resolution
+                          </Button>
+                          <Button variant="outline" className="text-red-400 border-red-900/50 hover:bg-red-950/30">
+                            <XCircle size={16} className="mr-2" />
+                            Abort Merge
+                          </Button>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-3">
+                          AI will analyze both versions and create an intelligent merge that preserves
+                          the intent of both changes.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="bg-surface border border-border rounded-xl p-6">
+                      <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">
+                        Merge History
+                      </h4>
+                      <div className="relative border-l border-border ml-3 space-y-4">
+                        <div className="relative pl-6">
+                          <div className="absolute -left-1.5 top-1.5 w-3 h-3 bg-red-500 border border-red-400 rounded-full"></div>
+                          <div className="text-sm text-foreground font-medium">
+                            Merge attempt failed - conflicts detected
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-1 flex items-center space-x-2">
+                            <Bot size={12} />
+                            <span>Agent</span>
+                            <span className="w-1 h-1 bg-muted rounded-full"></span>
+                            <span>2 minutes ago</span>
+                          </div>
+                        </div>
+                        <div className="relative pl-6">
+                          <div className="absolute -left-1.5 top-1.5 w-3 h-3 bg-green-500 border border-green-400 rounded-full"></div>
+                          <div className="text-sm text-foreground font-medium">
+                            Human review approved
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-1 flex items-center space-x-2">
+                            <User size={12} />
+                            <span>John Doe</span>
+                            <span className="w-1 h-1 bg-muted rounded-full"></span>
+                            <span>5 minutes ago</span>
                           </div>
                         </div>
                       </div>
