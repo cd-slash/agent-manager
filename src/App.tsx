@@ -9,6 +9,7 @@ import { NewProjectModal } from '@/components/modals/NewProjectModal';
 import { ProjectListView } from '@/components/projects/ProjectListView';
 import { ProjectDetailView } from '@/components/projects/ProjectDetailView';
 import { TaskDetailView } from '@/components/tasks/TaskDetailView';
+import { AllTasksView } from '@/components/tasks/AllTasksView';
 import { ServerView } from '@/components/servers/ServerView';
 import { ServerDetailView } from '@/components/servers/ServerDetailView';
 import { ContainerView } from '@/components/containers/ContainerView';
@@ -223,6 +224,31 @@ function App() {
       return <ContainerView containers={containers} onSelectContainer={setSelectedContainerId} />;
     }
 
+    if (activeView === 'tasks') {
+      if (selectedTaskId && selectedTask && selectedProject) {
+        return (
+          <TaskDetailView
+            task={selectedTask}
+            project={selectedProject}
+            onBack={() => {
+              setSelectedTaskId(null);
+              setSelectedProjectId(null);
+            }}
+            onUpdate={handleTaskUpdate}
+          />
+        );
+      }
+      return (
+        <AllTasksView
+          projects={projects}
+          onTaskClick={(task, projectId) => {
+            setSelectedProjectId(projectId);
+            setSelectedTaskId(task.id);
+          }}
+        />
+      );
+    }
+
     if (activeView === 'projects') {
       if (selectedProjectId) {
         if (selectedTaskId && selectedTask) {
@@ -258,7 +284,9 @@ function App() {
 
   const handleViewChange = (view: string) => {
     setActiveView(view);
-    if (view !== 'projects') { setSelectedProjectId(null); setSelectedTaskId(null); }
+    if (view !== 'projects' && view !== 'tasks') { setSelectedProjectId(null); setSelectedTaskId(null); }
+    if (view === 'projects') { setSelectedTaskId(null); }
+    if (view === 'tasks') { setSelectedProjectId(null); setSelectedTaskId(null); }
     if (view !== 'servers') { setSelectedServerId(null); }
     if (view !== 'containers') { setSelectedContainerId(null); }
   };

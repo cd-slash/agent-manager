@@ -7,6 +7,7 @@ import {
   Plus,
   ChevronsLeft,
   ChevronsRight,
+  CheckSquare,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -28,6 +29,7 @@ interface SidebarProps {
 
 const menuItems = [
   { id: 'projects', label: 'Projects', icon: FolderOpen },
+  { id: 'tasks', label: 'Tasks', icon: CheckSquare },
   { id: 'servers', label: 'Servers', icon: Server },
   { id: 'containers', label: 'Containers', icon: Box },
   { id: 'settings', label: 'Settings', icon: Settings },

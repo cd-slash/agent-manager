@@ -21,6 +21,9 @@ import {
   MessageSquare,
   Globe,
   XCircle,
+  ClipboardList,
+  Plus,
+  X,
 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
@@ -28,6 +31,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { AgentChatPanel } from '@/components/chat/AgentChatPanel';
+import { DependencyPickerModal } from '@/components/modals/DependencyPickerModal';
 import type { Task, Project } from '@/types';
 
 interface TaskDetailViewProps {
@@ -95,6 +99,23 @@ export function TaskDetailView({
   const [openFiles, setOpenFiles] = useState<Record<string, boolean>>({
     'src/utils/cart.js': true,
   });
+  const [showDependencyPicker, setShowDependencyPicker] = useState(false);
+
+  const handleAddDependency = (depId: number) => {
+    const updatedTask = {
+      ...task,
+      dependencies: [...(task.dependencies || []), depId],
+    };
+    onUpdate(updatedTask);
+  };
+
+  const handleRemoveDependency = (depId: number) => {
+    const updatedTask = {
+      ...task,
+      dependencies: task.dependencies?.filter((id) => id !== depId) || [],
+    };
+    onUpdate(updatedTask);
+  };
 
   const toggleFile = (filename: string) =>
     setOpenFiles((prev) => ({ ...prev, [filename]: !prev[filename] }));
@@ -131,7 +152,10 @@ export function TaskDetailView({
           <div className="px-page pt-section shrink-0">
             <Tabs value={activeTab} onValueChange={setActiveTab}>
               <TabsList className="w-full justify-start">
-                <TabsTrigger value="requirements">Requirements</TabsTrigger>
+                <TabsTrigger value="requirements" className="flex items-center">
+                  <ClipboardList size={14} className="mr-1.5" />
+                  Requirements
+                </TabsTrigger>
                 <TabsTrigger value="diff" className="flex items-center">
                   <GitPullRequest size={14} className="mr-1.5" />
                   Diff
@@ -171,14 +195,24 @@ export function TaskDetailView({
                     </section>
 
                     <section>
-                      <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center">
-                        <LinkIcon size={16} className="mr-2" /> Dependencies
+                      <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center justify-between">
+                        <span className="flex items-center">
+                          <LinkIcon size={16} className="mr-2" /> Dependencies
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setShowDependencyPicker(true)}
+                        >
+                          <Plus size={14} className="mr-1" />
+                          Add
+                        </Button>
                       </h3>
                       <div className="bg-surface border border-border rounded-xl overflow-hidden">
                         {(!task.dependencies ||
                           task.dependencies.length === 0) && (
                           <div className="p-4 text-sm text-muted-foreground">
-                            No dependencies.
+                            No dependencies. Add tasks that must be completed before this one can start.
                           </div>
                         )}
                         {task.dependencies?.map((depId) => {
@@ -189,18 +223,18 @@ export function TaskDetailView({
                           return (
                             <div
                               key={depId}
-                              className="flex items-center justify-between p-3 border-b border-border last:border-0 hover:bg-surface-elevated/50"
+                              className="flex items-center justify-between p-3 border-b border-border last:border-0 hover:bg-surface-elevated/50 group"
                             >
-                              <div className="flex items-center">
+                              <div className="flex items-center min-w-0 flex-1">
                                 <div
-                                  className={`w-2 h-2 rounded-full mr-3 ${
+                                  className={`w-2 h-2 rounded-full mr-3 flex-shrink-0 ${
                                     depTask.category === 'done'
                                       ? 'bg-green-500'
                                       : 'bg-muted'
                                   }`}
                                 ></div>
                                 <span
-                                  className={`text-sm ${
+                                  className={`text-sm truncate ${
                                     depTask.category === 'done'
                                       ? 'text-muted-foreground line-through'
                                       : 'text-foreground'
@@ -209,9 +243,18 @@ export function TaskDetailView({
                                   {depTask.title}
                                 </span>
                               </div>
-                              <Badge variant="secondary" className="uppercase">
-                                {depTask.category}
-                              </Badge>
+                              <div className="flex items-center gap-2 flex-shrink-0">
+                                <Badge variant="secondary" className="uppercase">
+                                  {depTask.category}
+                                </Badge>
+                                <button
+                                  onClick={() => handleRemoveDependency(depId)}
+                                  className="opacity-0 group-hover:opacity-100 p-1 hover:bg-destructive/10 rounded transition-all"
+                                  title="Remove dependency"
+                                >
+                                  <X size={14} className="text-muted-foreground hover:text-destructive" />
+                                </button>
+                              </div>
                             </div>
                           );
                         })}
@@ -938,6 +981,15 @@ export function TaskDetailView({
           onSendMessage={handleSendMessage}
         />
       </div>
+
+      <DependencyPickerModal
+        open={showDependencyPicker}
+        onOpenChange={setShowDependencyPicker}
+        tasks={project?.tasks || []}
+        currentTaskId={task.id}
+        existingDependencies={task.dependencies || []}
+        onSelect={handleAddDependency}
+      />
     </div>
   );
 }
