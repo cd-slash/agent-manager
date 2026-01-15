@@ -5,8 +5,8 @@ import {
   Settings,
   Layout,
   Plus,
-  PanelLeftClose,
-  PanelLeftOpen,
+  ChevronsLeft,
+  ChevronsRight,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -67,15 +67,15 @@ export function Sidebar({
           )}
 
           <Button
-            variant="ghost"
+            variant="outline"
             size="icon-sm"
             onClick={toggleCollapse}
             className="text-muted-foreground hover:text-sidebar-foreground"
           >
             {isCollapsed ? (
-              <PanelLeftOpen size={20} />
+              <ChevronsRight size={20} />
             ) : (
-              <PanelLeftClose size={20} />
+              <ChevronsLeft size={20} />
             )}
           </Button>
         </div>
