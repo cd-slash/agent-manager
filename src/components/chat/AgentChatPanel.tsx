@@ -34,7 +34,7 @@ export function AgentChatPanel({
 
   return (
     <div className="w-80 bg-surface flex flex-col border-l border-border h-full">
-      <div className="p-4 border-b border-border flex justify-between items-center bg-surface/50">
+      <div className="p-card border-b border-border flex justify-between items-center bg-surface/50">
         <h3 className="text-sm font-semibold text-foreground flex items-center">
           <MessageSquare size={16} className="mr-2 text-feature-blue" />
           Agent Chat
@@ -51,7 +51,7 @@ export function AgentChatPanel({
         </Select>
       </div>
 
-      <ScrollArea className="flex-1 p-4">
+      <ScrollArea className="flex-1 p-card">
         <div className="space-y-4">
           {chatHistory?.map((msg) => (
             <div
@@ -63,7 +63,7 @@ export function AgentChatPanel({
             >
               <div
                 className={cn(
-                  'max-w-[85%] rounded-2xl p-3 text-sm shadow-sm',
+                  'max-w-[85%] rounded-2xl p-component text-sm shadow-sm',
                   msg.sender === 'user'
                     ? 'bg-primary text-primary-foreground rounded-br-none'
                     : 'bg-surface-elevated text-foreground rounded-bl-none border border-border'
@@ -71,7 +71,7 @@ export function AgentChatPanel({
               >
                 {msg.text}
               </div>
-              <span className="text-[10px] text-muted-foreground mt-1 px-1">
+              <span className="text-[10px] text-muted-foreground mt-1 px-compact">
                 {msg.time}
               </span>
             </div>
@@ -79,7 +79,7 @@ export function AgentChatPanel({
         </div>
       </ScrollArea>
 
-      <div className="p-4 border-t border-border bg-surface">
+      <div className="p-card border-t border-border bg-surface">
         <form onSubmit={handleSend} className="relative">
           <Input
             value={chatInput}

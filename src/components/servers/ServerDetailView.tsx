@@ -22,7 +22,7 @@ export function ServerDetailView({
   const serverContainers = containers.filter((c) => c.server === server.name);
 
   return (
-    <div className="h-full overflow-y-auto bg-background p-8">
+    <div className="h-full overflow-y-auto bg-background p-page">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
         <div className="bg-surface border border-border rounded-xl p-6 lg:col-span-2">
           <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">

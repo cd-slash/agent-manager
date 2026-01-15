@@ -69,10 +69,10 @@ export function NewProjectModal({
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-2xl p-0 overflow-hidden">
         {step === 'input' ? (
-          <div className="p-8">
-            <DialogHeader className="mb-8 text-center">
-              <div className="flex justify-center mb-4">
-                <div className="inline-flex items-center justify-center p-3 bg-primary/10 rounded-xl">
+          <div className="p-page">
+            <DialogHeader className="mb-page text-center">
+              <div className="flex justify-center mb-card">
+                <div className="inline-flex items-center justify-center p-component bg-primary/10 rounded-xl">
                   <Sparkles className="text-primary w-8 h-8" />
                 </div>
               </div>
@@ -81,8 +81,8 @@ export function NewProjectModal({
                 Describe your idea to generate an AI-powered roadmap.
               </DialogDescription>
             </DialogHeader>
-            <div className="space-y-6">
-              <div className="space-y-2">
+            <div className="space-y-section">
+              <div className="space-y-item">
                 <Label>Project Name</Label>
                 <Input
                   value={project.name}
@@ -92,7 +92,7 @@ export function NewProjectModal({
                   placeholder="e.g., My Awesome SaaS"
                 />
               </div>
-              <div className="space-y-2">
+              <div className="space-y-item">
                 <Label>Description</Label>
                 <Textarea
                   value={project.description}
@@ -116,18 +116,18 @@ export function NewProjectModal({
           </div>
         ) : (
           <div className="p-12 flex flex-col items-center justify-center min-h-[500px]">
-            <div className="relative mb-8">
+            <div className="relative mb-page">
               <div className="absolute inset-0 bg-primary blur-xl opacity-20 animate-pulse rounded-full"></div>
               <Cpu size={64} className="text-primary relative z-10" />
             </div>
-            <h2 className="text-2xl font-bold text-center mb-6 text-foreground">
+            <h2 className="text-2xl font-bold text-center mb-section text-foreground">
               Analyzing Project
             </h2>
-            <div className="space-y-3 w-full max-w-md">
+            <div className="space-y-component w-full max-w-md">
               {analysisSteps.map((s, i) => (
                 <div
                   key={i}
-                  className={`flex items-center space-x-3 transition-all duration-500 ${
+                  className={`flex items-center space-x-component transition-all duration-500 ${
                     i > analysisStep
                       ? 'opacity-0 translate-y-2'
                       : 'opacity-100 translate-y-0'

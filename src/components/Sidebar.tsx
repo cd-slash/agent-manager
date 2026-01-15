@@ -52,7 +52,7 @@ export function Sidebar({
         <div
           className={cn(
             'h-16 flex items-center border-b border-sidebar-border transition-all duration-300',
-            isCollapsed ? 'justify-center' : 'px-4 justify-between'
+            isCollapsed ? 'justify-center' : 'px-sidebar justify-between'
           )}
         >
           {!isCollapsed && (
@@ -81,7 +81,7 @@ export function Sidebar({
         </div>
 
         {/* Nav Items */}
-        <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
+        <nav className="flex-1 p-sidebar space-y-item overflow-y-auto">
           {menuItems.map((item) => {
             const isActive =
               activeView === item.id ||
@@ -92,7 +92,7 @@ export function Sidebar({
                 key={item.id}
                 onClick={() => onViewChange(item.id)}
                 className={cn(
-                  'w-full flex items-center p-2 rounded-lg transition-all duration-200 group relative',
+                  'w-full flex items-center p-item rounded-lg transition-all duration-200 group relative',
                   isActive
                     ? 'bg-sidebar-primary text-sidebar-primary-foreground shadow-md shadow-primary/20'
                     : 'text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
@@ -132,13 +132,13 @@ export function Sidebar({
         </nav>
 
         {/* Quick Task Button */}
-        <div className="px-4 pb-2">
+        <div className="px-sidebar pb-item">
           <Tooltip>
             <TooltipTrigger asChild>
               <button
                 onClick={onQuickTask}
                 className={cn(
-                  'w-full flex items-center p-2 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition-all shadow-lg shadow-primary/20 group border border-primary-foreground/10',
+                  'w-full flex items-center p-item rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition-all shadow-lg shadow-primary/20 group border border-primary-foreground/10',
                   isCollapsed && 'justify-center'
                 )}
               >
@@ -148,7 +148,7 @@ export function Sidebar({
                 {!isCollapsed && (
                   <div className="ml-3 flex items-center justify-between flex-1 overflow-hidden">
                     <span className="font-semibold text-sm">New Task</span>
-                    <kbd className="text-[10px] bg-primary-foreground/20 px-1.5 py-0.5 rounded text-primary-foreground/90 font-sans border border-primary-foreground/10">
+                    <kbd className="text-[10px] bg-primary-foreground/20 px-sm py-xs rounded text-primary-foreground/90 font-sans border border-primary-foreground/10">
                       Ctrl+T
                     </kbd>
                   </div>
@@ -162,10 +162,10 @@ export function Sidebar({
         </div>
 
         {/* Bottom Actions */}
-        <div className="p-4 border-t border-sidebar-border">
+        <div className="p-sidebar border-t border-sidebar-border">
           <div
             className={cn(
-              'flex items-center p-2 rounded-lg hover:bg-sidebar-accent/50 cursor-pointer transition-colors',
+              'flex items-center p-item rounded-lg hover:bg-sidebar-accent/50 cursor-pointer transition-colors',
               isCollapsed && 'justify-center'
             )}
           >

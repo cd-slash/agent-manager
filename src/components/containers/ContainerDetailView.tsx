@@ -14,7 +14,7 @@ export function ContainerDetailView({
   onBack,
 }: ContainerDetailViewProps) {
   return (
-    <div className="h-full overflow-y-auto bg-background p-8">
+    <div className="h-full overflow-y-auto bg-background p-page">
       <Button
         variant="ghost"
         onClick={onBack}

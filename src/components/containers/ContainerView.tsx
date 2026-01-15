@@ -52,8 +52,8 @@ export function ContainerView({
   });
 
   return (
-    <div className="p-8 h-full overflow-y-auto bg-background">
-      <div className="flex flex-col sm:flex-row gap-4 mb-6">
+    <div className="p-page h-full overflow-y-auto bg-background">
+      <div className="flex flex-col sm:flex-row gap-card mb-section">
         <div className="relative flex-1 max-w-md">
           <Search
             className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
@@ -97,7 +97,7 @@ export function ContainerView({
               <TableRow>
                 <TableCell
                   colSpan={5}
-                  className="p-8 text-center text-muted-foreground"
+                  className="p-page text-center text-muted-foreground"
                 >
                   No containers found matching your filters.
                 </TableCell>
@@ -145,7 +145,7 @@ export function ContainerView({
                     {container.server}
                   </TableCell>
                   <TableCell className="text-right">
-                    <div className="flex items-center justify-end space-x-2">
+                    <div className="flex items-center justify-end space-x-item">
                       <Button
                         variant="ghost"
                         size="icon-sm"

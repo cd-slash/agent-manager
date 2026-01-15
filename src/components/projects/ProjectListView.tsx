@@ -23,8 +23,8 @@ export function ProjectListView({
   onNewProject,
 }: ProjectListViewProps) {
   return (
-    <div className="p-8 h-full overflow-y-auto bg-background">
-      <div className="flex justify-end mb-6">
+    <div className="p-page h-full overflow-y-auto bg-background">
+      <div className="flex justify-end mb-section">
         <Button onClick={onNewProject}>
           <Plus size={16} className="mr-2" />
           New Project

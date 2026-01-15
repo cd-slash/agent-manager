@@ -92,7 +92,7 @@ export function ProjectDetailView({
       <div className="flex-1 flex overflow-hidden">
         {/* Left Panel: Tabs + Content */}
         <div className="flex-1 flex flex-col min-w-0 border-r border-border">
-          <div className="px-6 pt-6 shrink-0">
+          <div className="px-page pt-section shrink-0">
             <Tabs value={activeTab} onValueChange={setActiveTab}>
               <TabsList className="w-full justify-start">
                 <TabsTrigger value="tasks" className="flex items-center">
@@ -114,8 +114,8 @@ export function ProjectDetailView({
 
               <div className="flex-1 overflow-y-auto min-w-0">
                 <TabsContent value="tasks" className="mt-0">
-                  <div className="h-full flex flex-col py-6">
-                    <div className="flex justify-between items-center mb-6">
+                  <div className="h-full flex flex-col py-section">
+                    <div className="flex justify-between items-center mb-section">
                       <form
                         onSubmit={handleQuickAdd}
                         className="flex-1 max-w-lg relative mr-4"
@@ -131,7 +131,7 @@ export function ProjectDetailView({
                           className="pl-10"
                         />
                       </form>
-                      <div className="flex items-center space-x-2 bg-surface border border-border rounded-lg p-1">
+                      <div className="flex items-center space-x-2 bg-surface border border-border rounded-lg p-compact">
                         <Button
                           variant={taskViewMode === 'list' ? 'secondary' : 'ghost'}
                           size="icon-sm"
@@ -155,7 +155,7 @@ export function ProjectDetailView({
                           onTaskClick={onTaskClick}
                         />
                       ) : (
-                        <div className="flex h-full space-x-6 min-w-max overflow-x-auto pb-2">
+                        <div className="flex h-full space-x-section min-w-max overflow-x-auto pb-item">
                           <KanbanColumn
                             title="Backlog"
                             tasks={project.tasks.filter(
@@ -191,8 +191,8 @@ export function ProjectDetailView({
                 </TabsContent>
 
                 <TabsContent value="plan" className="mt-0">
-                  <div className="h-full flex flex-col py-6">
-                    <div className="mb-4 flex justify-between items-center">
+                  <div className="h-full flex flex-col py-section">
+                    <div className="mb-card flex justify-between items-center">
                       <h3 className="font-semibold text-foreground flex items-center">
                         <FileEdit size={16} className="mr-2 text-feature-blue" />
                         Project Plan & Requirements
@@ -211,17 +211,17 @@ export function ProjectDetailView({
                 </TabsContent>
 
                 <TabsContent value="details" className="mt-0">
-                  <div className="h-full flex flex-col py-6 animate-in fade-in duration-300">
-                    <div className="space-y-6 w-full">
-                      <div className="bg-surface border border-border rounded-xl p-6 space-y-4">
+                  <div className="h-full flex flex-col py-section animate-in fade-in duration-300">
+                    <div className="space-y-section w-full">
+                      <div className="bg-surface border border-border rounded-xl p-section space-y-card">
                         <div>
-                          <label className="block text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
+                          <label className="block text-xs font-medium text-muted-foreground uppercase tracking-wider mb-item">
                             Project Name
                           </label>
                           <Input value={project.name} readOnly />
                         </div>
                         <div>
-                          <label className="block text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
+                          <label className="block text-xs font-medium text-muted-foreground uppercase tracking-wider mb-item">
                             Description
                           </label>
                           <Textarea
@@ -232,8 +232,8 @@ export function ProjectDetailView({
                         </div>
                       </div>
 
-                      <div className="bg-surface border border-border rounded-xl p-6 space-y-4">
-                        <h4 className="text-sm font-medium text-foreground mb-2 flex items-center">
+                      <div className="bg-surface border border-border rounded-xl p-section space-y-card">
+                        <h4 className="text-sm font-medium text-foreground mb-item flex items-center">
                           <GitPullRequest
                             size={16}
                             className="mr-2 text-feature-purple"
@@ -241,7 +241,7 @@ export function ProjectDetailView({
                           Repository Configuration
                         </h4>
                         <div>
-                          <label className="block text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
+                          <label className="block text-xs font-medium text-muted-foreground uppercase tracking-wider mb-item">
                             Repository URL
                           </label>
                           <div className="flex">
@@ -256,7 +256,7 @@ export function ProjectDetailView({
                           </div>
                         </div>
                         <div>
-                          <label className="block text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
+                          <label className="block text-xs font-medium text-muted-foreground uppercase tracking-wider mb-item">
                             Branch
                           </label>
                           <Select defaultValue="main">
@@ -271,7 +271,7 @@ export function ProjectDetailView({
                         </div>
                       </div>
 
-                      <div className="flex justify-end pt-4">
+                      <div className="flex justify-end pt-card">
                         <Button variant="destructive">
                           <Trash2 size={16} className="mr-2" /> Archive Project
                         </Button>

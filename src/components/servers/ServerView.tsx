@@ -19,8 +19,8 @@ interface ServerViewProps {
 
 export function ServerView({ servers, onSelectServer }: ServerViewProps) {
   return (
-    <div className="p-8 h-full overflow-y-auto bg-background">
-      <div className="flex justify-end mb-6">
+    <div className="p-page h-full overflow-y-auto bg-background">
+      <div className="flex justify-end mb-section">
         <Button variant="outline">
           <Plus size={16} className="mr-2" />
           Provision Server
@@ -67,7 +67,7 @@ export function ServerView({ servers, onSelectServer }: ServerViewProps) {
                   </Badge>
                 </TableCell>
                 <TableCell className="w-48">
-                  <div className="space-y-1.5">
+                  <div className="space-y-sm">
                     <div className="flex items-center text-xs text-muted-foreground">
                       <span className="w-8">CPU</span>
                       <div className="flex-1 h-1 bg-surface-elevated rounded-full mx-2">
@@ -91,7 +91,7 @@ export function ServerView({ servers, onSelectServer }: ServerViewProps) {
                   </div>
                 </TableCell>
                 <TableCell className="text-right">
-                  <div className="flex justify-end space-x-2">
+                  <div className="flex justify-end space-x-item">
                     <Button
                       variant="ghost"
                       size="icon-sm"

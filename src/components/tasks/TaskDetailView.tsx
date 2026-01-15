@@ -128,7 +128,7 @@ export function TaskDetailView({
     <div className="flex flex-col h-full bg-background animate-in fade-in duration-300">
       <div className="flex-1 flex overflow-hidden">
         <div className="flex-1 overflow-y-auto min-w-0 border-r border-border">
-          <div className="px-6 pt-6 shrink-0">
+          <div className="px-page pt-section shrink-0">
             <Tabs value={activeTab} onValueChange={setActiveTab}>
               <TabsList className="w-full justify-start">
                 <TabsTrigger value="requirements">Requirements</TabsTrigger>

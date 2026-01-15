@@ -274,15 +274,15 @@ function App() {
       />
 
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
-        <header className="h-16 border-b border-border bg-surface/80 backdrop-blur-md flex items-center justify-between px-6 shrink-0 z-20">
-          <div className="flex items-center min-w-0 flex-1 mr-4">
+        <header className="h-16 border-b border-border bg-surface/80 backdrop-blur-md flex items-center justify-between px-page shrink-0 z-20">
+          <div className="flex items-center min-w-0 flex-1 mr-card">
             {selectedTaskId && selectedTask ? (
               <>
                 <Button
-                  variant="ghost"
+                  variant="outline"
                   size="icon-sm"
                   onClick={() => setSelectedTaskId(null)}
-                  className="mr-3"
+                  className="mr-component"
                 >
                   <ChevronLeft size={20} />
                 </Button>
@@ -290,8 +290,8 @@ function App() {
                   <h2 className="text-sm font-bold text-foreground flex items-center">
                     <span className="truncate">{selectedTask.title}</span>
                     {selectedTask.prCreated && (
-                      <Badge variant="purple" className="ml-2 text-[10px]">
-                        <GitPullRequest size={10} className="mr-1" /> #{selectedTask.prNumber}
+                      <Badge variant="purple" className="ml-item text-[10px]">
+                        <GitPullRequest size={10} className="mr-compact" /> #{selectedTask.prNumber}
                       </Badge>
                     )}
                     <Badge
@@ -300,7 +300,7 @@ function App() {
                         selectedTask.category === 'in-progress' ? 'info' :
                         'secondary'
                       }
-                      className="ml-2 uppercase text-[10px]"
+                      className="ml-item uppercase text-[10px]"
                     >
                       {selectedTask.category}
                     </Badge>
@@ -313,10 +313,10 @@ function App() {
             ) : selectedProjectId && selectedProject ? (
               <>
                 <Button
-                  variant="ghost"
+                  variant="outline"
                   size="icon-sm"
                   onClick={() => setSelectedProjectId(null)}
-                  className="mr-3"
+                  className="mr-component"
                 >
                   <ChevronLeft size={20} />
                 </Button>
@@ -332,10 +332,10 @@ function App() {
             ) : selectedServerId && selectedServer ? (
               <>
                 <Button
-                  variant="ghost"
+                  variant="outline"
                   size="icon-sm"
                   onClick={() => setSelectedServerId(null)}
-                  className="mr-3"
+                  className="mr-component"
                 >
                   <ChevronLeft size={20} />
                 </Button>
@@ -344,7 +344,7 @@ function App() {
                     <span className="truncate">{selectedServer.name}</span>
                     <Badge
                       variant={selectedServer.status === 'online' ? 'success' : 'warning'}
-                      className="ml-2 uppercase text-[10px]"
+                      className="ml-item uppercase text-[10px]"
                     >
                       {selectedServer.status}
                     </Badge>

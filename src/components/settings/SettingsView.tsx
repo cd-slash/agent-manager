@@ -18,7 +18,7 @@ export function SettingsView() {
 
   return (
     <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col h-full bg-background">
-      <div className="px-6 pt-6 shrink-0">
+      <div className="px-page pt-section shrink-0">
         <TabsList className="w-full justify-start">
           <TabsTrigger value="credentials" className="flex items-center">
             <Key size={14} className="mr-1.5" />
@@ -39,7 +39,7 @@ export function SettingsView() {
         </TabsList>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-6 py-6 animate-in fade-in duration-300">
+      <div className="flex-1 overflow-y-auto px-page py-section animate-in fade-in duration-300">
         <TabsContent value="credentials" className="mt-0">
           <div className="w-full space-y-6">
             <div className="bg-surface border border-border rounded-xl p-6">

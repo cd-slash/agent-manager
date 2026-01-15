@@ -87,10 +87,36 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+
+  /* Spacing */
+  --spacing-page: var(--space-page);
+  --spacing-section: var(--space-section);
+  --spacing-card: var(--space-card);
+  --spacing-component: var(--space-component);
+  --spacing-item: var(--space-item);
+  --spacing-sm: var(--space-sm);
+  --spacing-compact: var(--space-compact);
+  --spacing-xs: var(--space-xs);
+  --spacing-input-x: var(--space-input-x);
+  --spacing-input-y: var(--space-input-y);
+  --spacing-sidebar: var(--space-sidebar);
 }
 
 :root {
   --radius: 0.625rem;
+
+  /* Spacing */
+  --space-page: 2rem;
+  --space-section: 1.5rem;
+  --space-card: 1rem;
+  --space-component: 0.75rem;
+  --space-item: 0.5rem;
+  --space-sm: 0.375rem;
+  --space-compact: 0.25rem;
+  --space-xs: 0.125rem;
+  --space-input-x: 0.75rem;
+  --space-input-y: 0.5rem;
+  --space-sidebar: 1.5rem;
 
   /* Base */
   --background: oklch(1 0 0);
