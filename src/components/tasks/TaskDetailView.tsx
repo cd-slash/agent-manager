@@ -182,7 +182,7 @@ export function TaskDetailView({
                 </TabsTrigger>
               </TabsList>
 
-              <div className="py-6 flex gap-6">
+              <div className="py-6 flex gap-page items-start">
                 <div className="flex-1 min-w-0">
                 <TabsContent value="requirements" className="mt-0">
                   <div className="space-y-8">
