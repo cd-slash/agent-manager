@@ -190,7 +190,7 @@ export function TaskDetailView({
                       <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center">
                         <Layout size={16} className="mr-2" /> Description
                       </h3>
-                      <div className="bg-surface border border-border rounded-xl p-4 text-foreground leading-relaxed">
+                      <div className="bg-surface border border-border rounded-lg p-4 text-foreground leading-relaxed">
                         {task.description}
                       </div>
                     </section>
@@ -209,7 +209,7 @@ export function TaskDetailView({
                           Add
                         </Button>
                       </h3>
-                      <div className="bg-surface border border-border rounded-xl overflow-hidden">
+                      <div className="bg-surface border border-border rounded-lg overflow-hidden">
                         {(!task.dependencies ||
                           task.dependencies.length === 0) && (
                           <div className="p-4 text-sm text-muted-foreground">
@@ -266,7 +266,7 @@ export function TaskDetailView({
                       <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center">
                         <Terminal size={16} className="mr-2" /> AI Prompt
                       </h3>
-                      <div className="bg-surface border border-border rounded-xl p-4">
+                      <div className="bg-surface border border-border rounded-lg p-4">
                         <code className="text-sm font-mono text-feature-blue block mb-2">
                           {task.prompt}
                         </code>
@@ -287,7 +287,7 @@ export function TaskDetailView({
                         <CheckSquare size={16} className="mr-2" /> Acceptance
                         Criteria
                       </h3>
-                      <div className="bg-surface border border-border rounded-xl p-2">
+                      <div className="bg-surface border border-border rounded-lg p-2">
                         {task.acceptanceCriteria?.map((criteria) => (
                           <div
                             key={criteria.id}
@@ -325,7 +325,7 @@ export function TaskDetailView({
                       <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center">
                         <Activity size={16} className="mr-2" /> Tests
                       </h3>
-                      <div className="bg-surface border border-border rounded-xl overflow-hidden">
+                      <div className="bg-surface border border-border rounded-lg overflow-hidden">
                         <table className="w-full text-sm text-left">
                           <thead className="bg-background text-muted-foreground font-medium">
                             <tr>
@@ -456,7 +456,7 @@ export function TaskDetailView({
 
                 <TabsContent value="pr" className="!mt-0">
                   {!task.prCreated ? (
-                    <div className="flex flex-col items-center justify-center h-64 text-muted-foreground bg-surface/30 border border-border rounded-xl border-dashed">
+                    <div className="flex flex-col items-center justify-center h-64 text-muted-foreground bg-surface/30 border border-border rounded-lg border-dashed">
                       <GitPullRequest size={48} className="mb-4 opacity-50" />
                       <p className="font-medium text-muted-foreground">
                         No Pull Request created yet.
@@ -471,7 +471,7 @@ export function TaskDetailView({
                     </div>
                   ) : (
                     <div className="space-y-6">
-                      <div className="bg-surface border border-border rounded-xl p-6">
+                      <div className="bg-surface border border-border rounded-lg p-6">
                         <div className="mb-6">
                           <div className="mb-3">
                             <span className="text-xl font-bold text-foreground">
@@ -506,7 +506,7 @@ export function TaskDetailView({
                         </div>
                       </div>
 
-                      <div className="bg-surface border border-border rounded-xl overflow-hidden">
+                      <div className="bg-surface border border-border rounded-lg overflow-hidden">
                         <div className="p-4 border-b border-border font-semibold text-foreground">
                           Checks
                         </div>
@@ -561,7 +561,7 @@ export function TaskDetailView({
                         </div>
                       </div>
 
-                      <div className="bg-surface border border-border rounded-xl p-4">
+                      <div className="bg-surface border border-border rounded-lg p-4">
                         <h4 className="text-sm font-medium text-muted-foreground mb-3">
                           Add a comment
                         </h4>
@@ -588,7 +588,7 @@ export function TaskDetailView({
 
                 <TabsContent value="ai-review" className="!mt-0">
                   <div className="space-y-6">
-                    <div className="bg-blue-950/30 border border-blue-900/50 rounded-xl p-5 text-blue-100 flex items-start space-x-4">
+                    <div className="bg-blue-950/30 border border-blue-900/50 rounded-lg p-5 text-blue-100 flex items-start space-x-4">
                       <Bot size={24} className="mt-1 flex-shrink-0 text-feature-blue" />
                       <div>
                         <h4 className="font-semibold text-feature-blue mb-1">
@@ -607,7 +607,7 @@ export function TaskDetailView({
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <div className="bg-surface p-5 rounded-xl border border-border flex flex-col items-center">
+                      <div className="bg-surface p-5 rounded-lg border border-border flex flex-col items-center">
                         <div className="text-muted-foreground text-xs uppercase font-semibold mb-2">
                           Security Score
                         </div>
@@ -618,7 +618,7 @@ export function TaskDetailView({
                           No vulnerabilities
                         </div>
                       </div>
-                      <div className="bg-surface p-5 rounded-xl border border-border flex flex-col items-center">
+                      <div className="bg-surface p-5 rounded-lg border border-border flex flex-col items-center">
                         <div className="text-muted-foreground text-xs uppercase font-semibold mb-2">
                           Performance
                         </div>
@@ -627,7 +627,7 @@ export function TaskDetailView({
                         </div>
                         <div className="text-blue-500/60 text-xs">Optimized</div>
                       </div>
-                      <div className="bg-surface p-5 rounded-xl border border-border flex flex-col items-center">
+                      <div className="bg-surface p-5 rounded-lg border border-border flex flex-col items-center">
                         <div className="text-muted-foreground text-xs uppercase font-semibold mb-2">
                           Maintainability
                         </div>
@@ -683,7 +683,7 @@ export function TaskDetailView({
 
                 <TabsContent value="human-review" className="!mt-0">
                   <div className="space-y-6">
-                    <div className="bg-surface border border-border rounded-xl p-6">
+                    <div className="bg-surface border border-border rounded-lg p-6">
                       <div className="flex items-center justify-between mb-6">
                         <h3 className="text-lg font-semibold text-foreground">
                           Review Status
@@ -764,7 +764,7 @@ export function TaskDetailView({
 
                 <TabsContent value="merge" className="!mt-0">
                   <div className="space-y-6">
-                    <div className="bg-surface border border-border rounded-xl p-6">
+                    <div className="bg-surface border border-border rounded-lg p-6">
                       <div className="flex items-center justify-between mb-6">
                         <h3 className="text-lg font-semibold text-foreground">
                           Merge Status
@@ -921,7 +921,7 @@ export function TaskDetailView({
                       </div>
                     </div>
 
-                    <div className="bg-surface border border-border rounded-xl p-6">
+                    <div className="bg-surface border border-border rounded-lg p-6">
                       <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">
                         Merge History
                       </h4>

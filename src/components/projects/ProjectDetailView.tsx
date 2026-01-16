@@ -7,8 +7,6 @@ import {
   Grid,
   FileEdit,
   Save,
-  GitPullRequest,
-  ChevronDown,
   Trash2,
 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -115,6 +113,10 @@ export function ProjectDetailView({
                 <div className="flex-1 min-w-0">
                   <TabsContent value="tasks" className="!mt-0">
                     <div className="h-full flex flex-col">
+                      <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center">
+                        <List size={16} className="mr-2" />
+                        Tasks
+                      </h3>
                       <div className="flex justify-between items-center mb-section">
                         <form
                           onSubmit={handleQuickAdd}
@@ -192,19 +194,19 @@ export function ProjectDetailView({
 
                   <TabsContent value="plan" className="!mt-0">
                     <div className="h-full flex flex-col">
-                      <div className="mb-card flex justify-between items-center">
-                        <h3 className="font-semibold text-foreground flex items-center">
-                          <FileEdit size={16} className="mr-2 text-feature-blue" />
+                      <div className="mb-3 flex justify-between items-center">
+                        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center">
+                          <FileEdit size={16} className="mr-2" />
                           Project Plan & Requirements
                         </h3>
-                        <Button variant="ghost" size="sm" className="text-feature-blue">
+                        <span className="text-xs text-muted-foreground flex items-center">
                           <Save size={12} className="mr-1" /> Auto-saved
-                        </Button>
+                        </span>
                       </div>
                       <Textarea
                         value={planText}
                         onChange={(e) => setPlanText(e.target.value)}
-                        className="flex-1 font-mono text-sm leading-relaxed resize-none min-h-[400px]"
+                        className="flex-1 font-mono text-sm leading-relaxed resize-none min-h-[400px] rounded-lg"
                         placeholder="Define your project requirements here..."
                       />
                     </div>
@@ -212,65 +214,56 @@ export function ProjectDetailView({
 
                   <TabsContent value="details" className="!mt-0">
                     <div className="h-full flex flex-col animate-in fade-in duration-300">
-                      <div className="space-y-section w-full">
-                        <div className="bg-surface border border-border rounded-xl p-section space-y-card">
-                          <div>
-                            <label className="block text-xs font-medium text-muted-foreground uppercase tracking-wider mb-item">
-                              Project Name
-                            </label>
-                            <Input value={project.name} readOnly />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-muted-foreground uppercase tracking-wider mb-item">
-                              Description
-                            </label>
-                            <Textarea
-                              value={project.description}
+                      <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center">
+                        <Info size={16} className="mr-2" />
+                        Project Details
+                      </h3>
+                      <div className="bg-surface border border-border rounded-lg p-section space-y-card">
+                        <div>
+                          <label className="block text-xs font-medium text-muted-foreground uppercase tracking-wider mb-item">
+                            Project Name
+                          </label>
+                          <Input value={project.name} readOnly />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-muted-foreground uppercase tracking-wider mb-item">
+                            Description
+                          </label>
+                          <Textarea
+                            value={project.description}
+                            readOnly
+                            className="h-24 resize-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-muted-foreground uppercase tracking-wider mb-item">
+                            Repository URL
+                          </label>
+                          <div className="flex">
+                            <Input
+                              value={`github.com/demo-user/${project.name.toLowerCase().replace(/\s+/g, '-')}`}
                               readOnly
-                              className="h-24 resize-none"
+                              className="rounded-r-none text-feature-blue font-mono"
                             />
+                            <Button variant="outline" className="rounded-l-none">
+                              Copy
+                            </Button>
                           </div>
                         </div>
-
-                        <div className="bg-surface border border-border rounded-xl p-section space-y-card">
-                          <h4 className="text-sm font-medium text-foreground mb-item flex items-center">
-                            <GitPullRequest
-                              size={16}
-                              className="mr-2 text-feature-purple"
-                            />
-                            Repository Configuration
-                          </h4>
-                          <div>
-                            <label className="block text-xs font-medium text-muted-foreground uppercase tracking-wider mb-item">
-                              Repository URL
-                            </label>
-                            <div className="flex">
-                              <Input
-                                value={`github.com/demo-user/${project.name.toLowerCase().replace(/\s+/g, '-')}`}
-                                readOnly
-                                className="rounded-r-none text-feature-blue font-mono"
-                              />
-                              <Button variant="outline" className="rounded-l-none">
-                                Copy
-                              </Button>
-                            </div>
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-muted-foreground uppercase tracking-wider mb-item">
-                              Branch
-                            </label>
-                            <Select defaultValue="main">
-                              <SelectTrigger>
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="main">main</SelectItem>
-                                <SelectItem value="develop">develop</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
+                        <div>
+                          <label className="block text-xs font-medium text-muted-foreground uppercase tracking-wider mb-item">
+                            Branch
+                          </label>
+                          <Select defaultValue="main">
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="main">main</SelectItem>
+                              <SelectItem value="develop">develop</SelectItem>
+                            </SelectContent>
+                          </Select>
                         </div>
-
                         <div className="flex justify-end pt-card">
                           <Button variant="destructive">
                             <Trash2 size={16} className="mr-2" /> Archive Project

@@ -40,7 +40,7 @@ export function AgentChatPanel({
         <MessageSquare size={16} className="mr-2" />
         Agent Chat
       </h3>
-      <div className="bg-surface border border-border rounded-xl flex flex-col flex-1 overflow-hidden">
+      <div className="bg-surface border border-border rounded-lg flex flex-col flex-1 overflow-hidden">
       <ScrollArea className="flex-1 p-4">
         <div className="space-y-4">
           {chatHistory?.map((msg) => (
@@ -53,10 +53,10 @@ export function AgentChatPanel({
             >
               <div
                 className={cn(
-                  'max-w-[85%] rounded-2xl p-component text-sm shadow-sm',
+                  'max-w-[85%] rounded-lg p-component text-sm shadow-sm',
                   msg.sender === 'user'
-                    ? 'bg-primary text-primary-foreground rounded-br-none'
-                    : 'bg-surface-elevated text-foreground rounded-bl-none border border-border'
+                    ? 'bg-primary text-primary-foreground rounded-br-sm'
+                    : 'bg-surface-elevated text-foreground rounded-bl-sm border border-border'
                 )}
               >
                 {msg.text}
