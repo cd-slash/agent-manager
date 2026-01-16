@@ -88,10 +88,9 @@ export function ProjectDetailView({
   };
 
   return (
-    <div className="flex flex-col h-full bg-background">
+    <div className="flex flex-col h-full bg-background animate-in fade-in duration-300">
       <div className="flex-1 flex overflow-hidden">
-        {/* Left Panel: Tabs + Content */}
-        <div className="flex-1 flex flex-col min-w-0 border-r border-border">
+        <div className="flex-1 overflow-y-auto min-w-0">
           <div className="px-page pt-section shrink-0">
             <Tabs value={activeTab} onValueChange={setActiveTab}>
               <TabsList className="w-full justify-start">
@@ -112,181 +111,186 @@ export function ProjectDetailView({
                 </TabsTrigger>
               </TabsList>
 
-              <div className="flex-1 overflow-y-auto min-w-0">
-                <TabsContent value="tasks" className="mt-0">
-                  <div className="h-full flex flex-col py-section">
-                    <div className="flex justify-between items-center mb-section">
-                      <form
-                        onSubmit={handleQuickAdd}
-                        className="flex-1 max-w-lg relative mr-4"
-                      >
-                        <Plus
-                          size={16}
-                          className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-                        />
-                        <Input
-                          value={quickTaskTitle}
-                          onChange={(e) => setQuickTaskTitle(e.target.value)}
-                          placeholder="Add a new task..."
-                          className="pl-10"
-                        />
-                      </form>
-                      <div className="flex items-center space-x-2 bg-surface border border-border rounded-lg p-compact">
-                        <Button
-                          variant={taskViewMode === 'list' ? 'secondary' : 'ghost'}
-                          size="icon-sm"
-                          onClick={() => setTaskViewMode('list')}
+              <div className="py-6 flex gap-page items-start">
+                <div className="flex-1 min-w-0">
+                  <TabsContent value="tasks" className="!mt-0">
+                    <div className="h-full flex flex-col">
+                      <div className="flex justify-between items-center mb-section">
+                        <form
+                          onSubmit={handleQuickAdd}
+                          className="flex-1 max-w-lg relative mr-4"
                         >
-                          <List size={18} />
-                        </Button>
-                        <Button
-                          variant={taskViewMode === 'board' ? 'secondary' : 'ghost'}
-                          size="icon-sm"
-                          onClick={() => setTaskViewMode('board')}
-                        >
-                          <Grid size={18} />
-                        </Button>
-                      </div>
-                    </div>
-                    <div className="flex-1 overflow-hidden">
-                      {taskViewMode === 'list' ? (
-                        <TaskListView
-                          tasks={project.tasks}
-                          onTaskClick={onTaskClick}
-                        />
-                      ) : (
-                        <div className="flex h-full space-x-section min-w-max overflow-x-auto pb-item">
-                          <KanbanColumn
-                            title="Backlog"
-                            tasks={project.tasks.filter(
-                              (t) => t.category === 'backlog'
-                            )}
-                            onTaskClick={onTaskClick}
-                          />
-                          <KanbanColumn
-                            title="To Do"
-                            tasks={project.tasks.filter(
-                              (t) => t.category === 'todo'
-                            )}
-                            onTaskClick={onTaskClick}
-                          />
-                          <KanbanColumn
-                            title="In Progress"
-                            tasks={project.tasks.filter(
-                              (t) => t.category === 'in-progress'
-                            )}
-                            onTaskClick={onTaskClick}
-                          />
-                          <KanbanColumn
-                            title="Done"
-                            tasks={project.tasks.filter(
-                              (t) => t.category === 'done'
-                            )}
-                            onTaskClick={onTaskClick}
-                          />
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </TabsContent>
-
-                <TabsContent value="plan" className="mt-0">
-                  <div className="h-full flex flex-col py-section">
-                    <div className="mb-card flex justify-between items-center">
-                      <h3 className="font-semibold text-foreground flex items-center">
-                        <FileEdit size={16} className="mr-2 text-feature-blue" />
-                        Project Plan & Requirements
-                      </h3>
-                      <Button variant="ghost" size="sm" className="text-feature-blue">
-                        <Save size={12} className="mr-1" /> Auto-saved
-                      </Button>
-                    </div>
-                    <Textarea
-                      value={planText}
-                      onChange={(e) => setPlanText(e.target.value)}
-                      className="flex-1 font-mono text-sm leading-relaxed resize-none min-h-[400px]"
-                      placeholder="Define your project requirements here..."
-                    />
-                  </div>
-                </TabsContent>
-
-                <TabsContent value="details" className="mt-0">
-                  <div className="h-full flex flex-col py-section animate-in fade-in duration-300">
-                    <div className="space-y-section w-full">
-                      <div className="bg-surface border border-border rounded-xl p-section space-y-card">
-                        <div>
-                          <label className="block text-xs font-medium text-muted-foreground uppercase tracking-wider mb-item">
-                            Project Name
-                          </label>
-                          <Input value={project.name} readOnly />
-                        </div>
-                        <div>
-                          <label className="block text-xs font-medium text-muted-foreground uppercase tracking-wider mb-item">
-                            Description
-                          </label>
-                          <Textarea
-                            value={project.description}
-                            readOnly
-                            className="h-24 resize-none"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="bg-surface border border-border rounded-xl p-section space-y-card">
-                        <h4 className="text-sm font-medium text-foreground mb-item flex items-center">
-                          <GitPullRequest
+                          <Plus
                             size={16}
-                            className="mr-2 text-feature-purple"
+                            className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
                           />
-                          Repository Configuration
-                        </h4>
-                        <div>
-                          <label className="block text-xs font-medium text-muted-foreground uppercase tracking-wider mb-item">
-                            Repository URL
-                          </label>
-                          <div className="flex">
-                            <Input
-                              value={`github.com/demo-user/${project.name.toLowerCase().replace(/\s+/g, '-')}`}
-                              readOnly
-                              className="rounded-r-none text-feature-blue font-mono"
+                          <Input
+                            value={quickTaskTitle}
+                            onChange={(e) => setQuickTaskTitle(e.target.value)}
+                            placeholder="Add a new task..."
+                            className="pl-10"
+                          />
+                        </form>
+                        <div className="flex items-center space-x-2 bg-surface border border-border rounded-lg p-compact">
+                          <Button
+                            variant={taskViewMode === 'list' ? 'secondary' : 'ghost'}
+                            size="icon-sm"
+                            onClick={() => setTaskViewMode('list')}
+                          >
+                            <List size={18} />
+                          </Button>
+                          <Button
+                            variant={taskViewMode === 'board' ? 'secondary' : 'ghost'}
+                            size="icon-sm"
+                            onClick={() => setTaskViewMode('board')}
+                          >
+                            <Grid size={18} />
+                          </Button>
+                        </div>
+                      </div>
+                      <div className="flex-1 overflow-hidden">
+                        {taskViewMode === 'list' ? (
+                          <TaskListView
+                            tasks={project.tasks}
+                            onTaskClick={onTaskClick}
+                          />
+                        ) : (
+                          <div className="flex h-full space-x-section min-w-max overflow-x-auto pb-item">
+                            <KanbanColumn
+                              title="Backlog"
+                              tasks={project.tasks.filter(
+                                (t) => t.category === 'backlog'
+                              )}
+                              onTaskClick={onTaskClick}
                             />
-                            <Button variant="outline" className="rounded-l-none">
-                              Copy
-                            </Button>
+                            <KanbanColumn
+                              title="To Do"
+                              tasks={project.tasks.filter(
+                                (t) => t.category === 'todo'
+                              )}
+                              onTaskClick={onTaskClick}
+                            />
+                            <KanbanColumn
+                              title="In Progress"
+                              tasks={project.tasks.filter(
+                                (t) => t.category === 'in-progress'
+                              )}
+                              onTaskClick={onTaskClick}
+                            />
+                            <KanbanColumn
+                              title="Done"
+                              tasks={project.tasks.filter(
+                                (t) => t.category === 'done'
+                              )}
+                              onTaskClick={onTaskClick}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent value="plan" className="!mt-0">
+                    <div className="h-full flex flex-col">
+                      <div className="mb-card flex justify-between items-center">
+                        <h3 className="font-semibold text-foreground flex items-center">
+                          <FileEdit size={16} className="mr-2 text-feature-blue" />
+                          Project Plan & Requirements
+                        </h3>
+                        <Button variant="ghost" size="sm" className="text-feature-blue">
+                          <Save size={12} className="mr-1" /> Auto-saved
+                        </Button>
+                      </div>
+                      <Textarea
+                        value={planText}
+                        onChange={(e) => setPlanText(e.target.value)}
+                        className="flex-1 font-mono text-sm leading-relaxed resize-none min-h-[400px]"
+                        placeholder="Define your project requirements here..."
+                      />
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent value="details" className="!mt-0">
+                    <div className="h-full flex flex-col animate-in fade-in duration-300">
+                      <div className="space-y-section w-full">
+                        <div className="bg-surface border border-border rounded-xl p-section space-y-card">
+                          <div>
+                            <label className="block text-xs font-medium text-muted-foreground uppercase tracking-wider mb-item">
+                              Project Name
+                            </label>
+                            <Input value={project.name} readOnly />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-muted-foreground uppercase tracking-wider mb-item">
+                              Description
+                            </label>
+                            <Textarea
+                              value={project.description}
+                              readOnly
+                              className="h-24 resize-none"
+                            />
                           </div>
                         </div>
-                        <div>
-                          <label className="block text-xs font-medium text-muted-foreground uppercase tracking-wider mb-item">
-                            Branch
-                          </label>
-                          <Select defaultValue="main">
-                            <SelectTrigger>
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="main">main</SelectItem>
-                              <SelectItem value="develop">develop</SelectItem>
-                            </SelectContent>
-                          </Select>
+
+                        <div className="bg-surface border border-border rounded-xl p-section space-y-card">
+                          <h4 className="text-sm font-medium text-foreground mb-item flex items-center">
+                            <GitPullRequest
+                              size={16}
+                              className="mr-2 text-feature-purple"
+                            />
+                            Repository Configuration
+                          </h4>
+                          <div>
+                            <label className="block text-xs font-medium text-muted-foreground uppercase tracking-wider mb-item">
+                              Repository URL
+                            </label>
+                            <div className="flex">
+                              <Input
+                                value={`github.com/demo-user/${project.name.toLowerCase().replace(/\s+/g, '-')}`}
+                                readOnly
+                                className="rounded-r-none text-feature-blue font-mono"
+                              />
+                              <Button variant="outline" className="rounded-l-none">
+                                Copy
+                              </Button>
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-muted-foreground uppercase tracking-wider mb-item">
+                              Branch
+                            </label>
+                            <Select defaultValue="main">
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="main">main</SelectItem>
+                                <SelectItem value="develop">develop</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+
+                        <div className="flex justify-end pt-card">
+                          <Button variant="destructive">
+                            <Trash2 size={16} className="mr-2" /> Archive Project
+                          </Button>
                         </div>
                       </div>
-
-                      <div className="flex justify-end pt-card">
-                        <Button variant="destructive">
-                          <Trash2 size={16} className="mr-2" /> Archive Project
-                        </Button>
-                      </div>
                     </div>
-                  </div>
-                </TabsContent>
+                  </TabsContent>
+                </div>
+
+                <div className="w-1/3 shrink-0 sticky top-0 self-start h-[calc(100vh-12rem)]">
+                  <AgentChatPanel
+                    chatHistory={project.projectChatHistory}
+                    onSendMessage={handleChatSend}
+                  />
+                </div>
               </div>
             </Tabs>
           </div>
         </div>
-        <AgentChatPanel
-          chatHistory={project.projectChatHistory}
-          onSendMessage={handleChatSend}
-        />
       </div>
     </div>
   );
