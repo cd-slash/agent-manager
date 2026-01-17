@@ -118,7 +118,7 @@ export function DataTable<TData, TValue>({
         fillHeight ? "flex-1 min-h-0 overflow-y-auto scrollbar-styled" : "overflow-x-auto"
       )}>
         <Table className={tableClassName}>
-          <TableHeader className="bg-background sticky top-0 z-10">
+          <TableHeader className="bg-background sticky top-0 z-10" style={{ boxShadow: '0 1px 0 var(--border)' }}>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id} className="hover:bg-transparent">
                 {headerGroup.headers.map((header) => (
