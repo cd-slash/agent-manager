@@ -115,7 +115,7 @@ export function DataTable<TData, TValue>({
       className
     )}>
       <div className={cn(
-        "bg-surface border border-border rounded-xl overflow-hidden",
+        "border border-border rounded-xl overflow-hidden",
         fillHeight ? "flex-1 min-h-0 overflow-y-auto" : "overflow-x-auto"
       )}>
         <Table className={tableClassName}>

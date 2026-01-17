@@ -134,7 +134,7 @@ export function Sidebar({
         </nav>
 
         {/* Quick Task Button */}
-        <div className="px-sidebar pb-item">
+        <div className="px-sidebar pb-sidebar">
           <Tooltip>
             <TooltipTrigger asChild>
               <button
@@ -148,11 +148,16 @@ export function Sidebar({
                   <Plus size={20} />
                 </div>
                 {!isCollapsed && (
-                  <div className="ml-3 flex items-center justify-between flex-1 overflow-hidden">
+                  <div className="ml-3 mr-1 flex items-center justify-between flex-1 overflow-hidden">
                     <span className="font-semibold text-sm">New Task</span>
-                    <kbd className="text-[10px] bg-primary-foreground/20 px-sm py-xs rounded text-primary-foreground/90 font-sans border border-primary-foreground/10">
-                      Ctrl+T
-                    </kbd>
+                    <span className="flex items-center gap-0.5">
+                      <kbd className="text-[10px] bg-primary-foreground/20 px-sm py-xs rounded text-primary-foreground/90 font-sans border border-primary-foreground/10">
+                        Ctrl
+                      </kbd>
+                      <kbd className="text-[10px] bg-primary-foreground/20 px-sm py-xs rounded text-primary-foreground/90 font-sans border border-primary-foreground/10">
+                        T
+                      </kbd>
+                    </span>
                   </div>
                 )}
               </button>

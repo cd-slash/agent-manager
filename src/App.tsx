@@ -104,7 +104,111 @@ function App() {
       id: 1,
       name: "E-Commerce Platform",
       description: "A full-stack e-commerce solution with user authentication, product catalog, shopping cart, and Stripe payment integration. Includes an admin dashboard for inventory management.",
-      tasks: analyzeAndGenerateTasks("e-commerce shop with login and stripe", "E-Commerce Platform"),
+      tasks: [
+        // Original generated tasks
+        ...analyzeAndGenerateTasks("e-commerce shop with login and stripe", "E-Commerce Platform"),
+        // 20 additional example tasks for table formatting testing
+        {
+          id: 1001, title: "Implement product search with filters", category: "done", tag: "frontend",
+          complexity: "High", description: "Add search functionality with category, price, and rating filters.",
+          chatHistory: generateMockChat(), history: generateMockHistory(), prCreated: true, prNumber: 42, prStatus: "merged", dependencies: []
+        },
+        {
+          id: 1002, title: "Setup Redis caching layer", category: "done", tag: "backend",
+          complexity: "Medium", description: "Implement Redis for session and product data caching.",
+          chatHistory: generateMockChat(), history: generateMockHistory(), prCreated: true, prNumber: 38, prStatus: "merged", dependencies: []
+        },
+        {
+          id: 1003, title: "Create inventory management API", category: "in-progress", tag: "backend",
+          complexity: "High", description: "RESTful API endpoints for inventory CRUD operations.",
+          chatHistory: generateMockChat(), history: generateMockHistory(), prCreated: true, prNumber: 45, prStatus: "open", dependencies: []
+        },
+        {
+          id: 1004, title: "Design mobile-responsive checkout", category: "in-progress", tag: "design",
+          complexity: "Medium", description: "Figma mockups for mobile checkout experience.",
+          chatHistory: generateMockChat(), history: generateMockHistory(), prCreated: false, dependencies: []
+        },
+        {
+          id: 1005, title: "Implement Stripe webhook handlers", category: "in-progress", tag: "backend",
+          complexity: "High", description: "Handle payment success, failure, and refund webhooks.",
+          chatHistory: generateMockChat(), history: generateMockHistory(), prCreated: true, prNumber: 47, prStatus: "open", dependencies: []
+        },
+        {
+          id: 1006, title: "Add unit tests for cart service", category: "todo", tag: "testing",
+          complexity: "Medium", description: "Comprehensive test coverage for shopping cart logic.",
+          chatHistory: generateMockChat(), history: generateMockHistory(), prCreated: false, dependencies: []
+        },
+        {
+          id: 1007, title: "Optimize product image loading", category: "todo", tag: "frontend",
+          complexity: "Low", description: "Implement lazy loading and WebP format support.",
+          chatHistory: generateMockChat(), history: generateMockHistory(), prCreated: false, dependencies: []
+        },
+        {
+          id: 1008, title: "Create admin dashboard wireframes", category: "done", tag: "design",
+          complexity: "Low", description: "Low-fidelity wireframes for admin panel layout.",
+          chatHistory: generateMockChat(), history: generateMockHistory(), prCreated: true, prNumber: 31, prStatus: "merged", dependencies: []
+        },
+        {
+          id: 1009, title: "Setup Kubernetes deployment", category: "backlog", tag: "devops",
+          complexity: "High", description: "K8s manifests for production deployment.",
+          chatHistory: generateMockChat(), history: generateMockHistory(), prCreated: false, dependencies: []
+        },
+        {
+          id: 1010, title: "Implement order tracking system", category: "backlog", tag: "backend",
+          complexity: "High", description: "Real-time order status updates with email notifications.",
+          chatHistory: generateMockChat(), history: generateMockHistory(), prCreated: false, dependencies: []
+        },
+        {
+          id: 1011, title: "Add product review system", category: "todo", tag: "frontend",
+          complexity: "Medium", description: "User reviews with star ratings and image uploads.",
+          chatHistory: generateMockChat(), history: generateMockHistory(), prCreated: false, dependencies: []
+        },
+        {
+          id: 1012, title: "Setup monitoring with Grafana", category: "backlog", tag: "devops",
+          complexity: "Medium", description: "Prometheus metrics and Grafana dashboards.",
+          chatHistory: generateMockChat(), history: generateMockHistory(), prCreated: false, dependencies: []
+        },
+        {
+          id: 1013, title: "Implement wish list feature", category: "done", tag: "frontend",
+          complexity: "Low", description: "Allow users to save products to a wish list.",
+          chatHistory: generateMockChat(), history: generateMockHistory(), prCreated: true, prNumber: 33, prStatus: "merged", dependencies: []
+        },
+        {
+          id: 1014, title: "Create product recommendation engine", category: "backlog", tag: "backend",
+          complexity: "High", description: "ML-based product recommendations using purchase history.",
+          chatHistory: generateMockChat(), history: generateMockHistory(), prCreated: false, dependencies: []
+        },
+        {
+          id: 1015, title: "Add multi-language support", category: "backlog", tag: "frontend",
+          complexity: "Medium", description: "i18n implementation for English, Spanish, and French.",
+          chatHistory: generateMockChat(), history: generateMockHistory(), prCreated: false, dependencies: []
+        },
+        {
+          id: 1016, title: "Implement coupon code system", category: "in-progress", tag: "backend",
+          complexity: "Medium", description: "Discount codes with various rules and expiration.",
+          chatHistory: generateMockChat(), history: generateMockHistory(), prCreated: true, prNumber: 48, prStatus: "open", dependencies: []
+        },
+        {
+          id: 1017, title: "Setup E2E testing with Playwright", category: "todo", tag: "testing",
+          complexity: "Medium", description: "End-to-end tests for critical user flows.",
+          chatHistory: generateMockChat(), history: generateMockHistory(), prCreated: false, dependencies: []
+        },
+        {
+          id: 1018, title: "Add social login (Google, Apple)", category: "todo", tag: "backend",
+          complexity: "Medium", description: "OAuth integration for social sign-in options.",
+          chatHistory: generateMockChat(), history: generateMockHistory(), prCreated: false, dependencies: []
+        },
+        {
+          id: 1019, title: "Create email template system", category: "done", tag: "backend",
+          complexity: "Low", description: "Responsive email templates for order confirmations.",
+          chatHistory: generateMockChat(), history: generateMockHistory(), prCreated: true, prNumber: 36, prStatus: "merged", dependencies: []
+        },
+        {
+          id: 1020, title: "Implement product variant handling", category: "todo", tag: "backend",
+          complexity: "High", description: "Support for size, color, and other product variants.",
+          chatHistory: generateMockChat(), history: generateMockHistory(), prCreated: false, dependencies: []
+        },
+      ],
       projectChatHistory: generateMockProjectChat(),
       plan: `## Project Requirements\n\nA full-stack e-commerce solution with user authentication, product catalog, shopping cart, and Stripe payment integration.\n\n## Acceptance Criteria\n\n- [ ] User can sign up and login\n- [ ] Products are searchable\n- [ ] Stripe integration works in test mode`
     }

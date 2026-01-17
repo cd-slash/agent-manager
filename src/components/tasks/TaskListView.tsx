@@ -31,8 +31,8 @@ const getStatusVariant = (status: string) => {
 
 export function TaskListView({ tasks, onTaskClick }: TaskListViewProps) {
   return (
-    <div className="bg-surface/50 rounded-xl border border-border overflow-hidden w-full h-full flex flex-col">
-      <div className="overflow-auto flex-1">
+    <div className="bg-surface/50 rounded-xl border border-border overflow-hidden w-full h-full flex flex-col max-h-[calc(100vh-18rem)]">
+      <div className="scrollbar-styled overflow-y-scroll flex-1">
         <Table>
           <TableHeader className="bg-surface/90 backdrop-blur sticky top-0 z-10">
             <TableRow>

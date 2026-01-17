@@ -5,8 +5,6 @@ import {
   Info,
   Plus,
   Grid,
-  FileEdit,
-  Save,
   Trash2,
 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -24,6 +22,7 @@ import {
 import { TaskListView } from '@/components/tasks/TaskListView';
 import { KanbanColumn } from '@/components/tasks/KanbanColumn';
 import { AgentChatPanel } from '@/components/chat/AgentChatPanel';
+import { SpecificationView } from './SpecificationView';
 import type { Project, Task } from '@/types';
 
 interface ProjectDetailViewProps {
@@ -193,23 +192,10 @@ export function ProjectDetailView({
                   </TabsContent>
 
                   <TabsContent value="plan" className="!mt-0">
-                    <div className="h-full flex flex-col">
-                      <div className="mb-3 flex justify-between items-center">
-                        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center">
-                          <FileEdit size={16} className="mr-2" />
-                          Project Plan & Requirements
-                        </h3>
-                        <span className="text-xs text-muted-foreground flex items-center">
-                          <Save size={12} className="mr-1" /> Auto-saved
-                        </span>
-                      </div>
-                      <Textarea
-                        value={planText}
-                        onChange={(e) => setPlanText(e.target.value)}
-                        className="flex-1 font-mono text-sm leading-relaxed resize-none min-h-[400px] rounded-lg"
-                        placeholder="Define your project requirements here..."
-                      />
-                    </div>
+                    <SpecificationView
+                      value={planText}
+                      onChange={setPlanText}
+                    />
                   </TabsContent>
 
                   <TabsContent value="details" className="!mt-0">
