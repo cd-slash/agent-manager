@@ -5,8 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "bun --hot src/index.ts",
+    "dev:convex": "bunx convex dev",
     "start": "NODE_ENV=production bun src/index.ts",
-    "build": "bun run build.ts"
+    "build": "bun run build.ts",
+    "convex:codegen": "bunx convex codegen",
+    "convex:deploy": "bunx convex deploy"
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.1.11",
@@ -25,6 +28,7 @@
     "bun-plugin-tailwind": "^0.1.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "convex": "^1.31.5",
     "lucide-react": "^0.562.0",
     "react": "^19",
     "react-dom": "^19",

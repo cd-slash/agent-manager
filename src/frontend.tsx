@@ -7,13 +7,21 @@
 
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import { ConvexProvider, ConvexReactClient } from "convex/react";
 import App from "./App";
 import "./index.css";
+
+// Initialize Convex client
+// In production, use environment variable for the URL
+const convexUrl = import.meta.env.VITE_CONVEX_URL ?? "https://your-convex-deployment.convex.cloud";
+const convex = new ConvexReactClient(convexUrl);
 
 const elem = document.getElementById("root")!;
 const app = (
   <StrictMode>
-    <App />
+    <ConvexProvider client={convex}>
+      <App />
+    </ConvexProvider>
   </StrictMode>
 );
 
