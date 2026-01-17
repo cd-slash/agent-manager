@@ -83,7 +83,10 @@ export function Sidebar({
         </div>
 
         {/* Nav Items */}
-        <nav className="flex-1 p-sidebar space-y-item overflow-y-auto">
+        <nav className={cn(
+          "flex-1 space-y-item overflow-y-auto py-sidebar",
+          isCollapsed ? "px-2 flex flex-col items-center" : "px-sidebar"
+        )}>
           {menuItems.map((item) => {
             const isActive =
               activeView === item.id ||
@@ -94,11 +97,11 @@ export function Sidebar({
                 key={item.id}
                 onClick={() => onViewChange(item.id)}
                 className={cn(
-                  'w-full flex items-center p-item rounded-lg transition-all duration-200 group relative',
+                  'flex items-center rounded-lg transition-all duration-200 group relative h-12',
                   isActive
                     ? 'bg-sidebar-primary text-sidebar-primary-foreground shadow-md shadow-primary/20'
                     : 'text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
-                  isCollapsed && 'justify-center'
+                  isCollapsed ? 'justify-center w-12' : 'w-full px-item'
                 )}
               >
                 <div className="w-8 h-8 flex items-center justify-center shrink-0">
@@ -134,14 +137,16 @@ export function Sidebar({
         </nav>
 
         {/* Quick Task Button */}
-        <div className="px-sidebar pb-sidebar">
+        <div className={cn(
+          isCollapsed ? "px-2 pb-2 flex justify-center" : "px-sidebar pb-sidebar"
+        )}>
           <Tooltip>
             <TooltipTrigger asChild>
               <button
                 onClick={onQuickTask}
                 className={cn(
-                  'w-full flex items-center p-item rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition-all shadow-lg shadow-primary/20 group border border-primary-foreground/10',
-                  isCollapsed && 'justify-center'
+                  'flex items-center rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition-all shadow-lg shadow-primary/20 group border border-primary-foreground/10 h-12',
+                  isCollapsed ? 'justify-center w-12' : 'w-full px-item'
                 )}
               >
                 <div className="w-8 h-8 flex items-center justify-center shrink-0">
@@ -169,15 +174,15 @@ export function Sidebar({
         </div>
 
         {/* Bottom Actions */}
-        <div className="px-sidebar py-footer border-t border-sidebar-border">
+        <div className="px-sidebar pb-page">
           <div
             className={cn(
-              'flex items-center p-item rounded-lg hover:bg-sidebar-accent/50 cursor-pointer transition-colors',
+              'flex items-center py-3 px-item rounded-lg hover:bg-sidebar-accent/50 cursor-pointer transition-colors',
               isCollapsed && 'justify-center'
             )}
           >
-            <Avatar className="h-8 w-8 border-2 border-sidebar">
-              <AvatarFallback className="bg-feature-purple text-primary-foreground text-xs font-bold">
+            <Avatar className="h-12 w-12 border-2 border-sidebar">
+              <AvatarFallback className="bg-feature-purple text-primary-foreground text-sm font-bold">
                 JD
               </AvatarFallback>
             </Avatar>

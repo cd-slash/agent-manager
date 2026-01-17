@@ -110,13 +110,12 @@ export function DataTable<TData, TValue>({
 
   return (
     <div className={cn(
-      "flex flex-col",
+      "flex flex-col border border-border rounded-xl overflow-hidden",
       fillHeight && "h-full min-h-0",
       className
     )}>
       <div className={cn(
-        "border border-border rounded-xl overflow-hidden",
-        fillHeight ? "flex-1 min-h-0 overflow-y-auto" : "overflow-x-auto"
+        fillHeight ? "flex-1 min-h-0 overflow-y-auto scrollbar-styled" : "overflow-x-auto"
       )}>
         <Table className={tableClassName}>
           <TableHeader className="bg-background sticky top-0 z-10">
@@ -190,7 +189,7 @@ export function DataTable<TData, TValue>({
       </div>
 
       {enablePagination && (
-        <div className="flex items-center justify-between gap-8 pt-4 flex-shrink-0">
+        <div className="flex items-center justify-between gap-8 px-card py-3 border-t border-border bg-surface flex-shrink-0">
           <div className="flex items-center gap-3">
             <span className="text-sm text-muted-foreground max-sm:sr-only">Rows per page</span>
             <Select

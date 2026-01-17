@@ -87,10 +87,10 @@ export function ProjectDetailView({
   return (
     <div className="flex flex-col h-full bg-background animate-in fade-in duration-300">
       <div className="flex-1 flex overflow-hidden">
-        <div className="flex-1 overflow-y-auto min-w-0">
-          <div className="px-page pt-section shrink-0">
-            <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList className="w-full justify-start">
+        <div className="flex-1 min-w-0 flex flex-col">
+          <div className="p-page flex-1 flex flex-col min-h-0">
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col h-full">
+              <TabsList className="w-full justify-start shrink-0 mb-section">
                 <TabsTrigger value="tasks" className="flex items-center">
                   <List size={14} className="mr-1.5" />
                   Tasks
@@ -108,10 +108,9 @@ export function ProjectDetailView({
                 </TabsTrigger>
               </TabsList>
 
-              <div className="py-6 flex gap-page items-start">
-                <div className="flex-1 min-w-0">
-                  <TabsContent value="tasks" className="!mt-0">
-                    <div className="h-full flex flex-col">
+              <div className="flex gap-page items-stretch flex-1 min-h-0">
+                <div className="flex-1 min-w-0 flex flex-col">
+                  <TabsContent value="tasks" className="!mt-0 flex-1 min-h-0 flex flex-col">
                       <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center">
                         <List size={16} className="mr-2" />
                         Tasks
@@ -149,7 +148,7 @@ export function ProjectDetailView({
                           </Button>
                         </div>
                       </div>
-                      <div className="flex-1 overflow-hidden">
+                      <div className="flex-1 min-h-0">
                         {taskViewMode === 'list' ? (
                           <TaskListView
                             tasks={project.tasks}
@@ -188,7 +187,6 @@ export function ProjectDetailView({
                           </div>
                         )}
                       </div>
-                    </div>
                   </TabsContent>
 
                   <TabsContent value="plan" className="!mt-0">
@@ -260,7 +258,7 @@ export function ProjectDetailView({
                   </TabsContent>
                 </div>
 
-                <div className="w-1/3 shrink-0 sticky top-0 self-start h-[calc(100vh-12rem)]">
+                <div className="w-1/3 shrink-0">
                   <AgentChatPanel
                     chatHistory={project.projectChatHistory}
                     onSendMessage={handleChatSend}

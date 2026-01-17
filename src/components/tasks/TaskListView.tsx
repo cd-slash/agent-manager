@@ -1,12 +1,7 @@
+import { useMemo } from 'react';
 import { Edit2, GitPullRequest, Link as LinkIcon } from 'lucide-react';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+import type { ColumnDef } from '@tanstack/react-table';
+import { DataTable } from '@/components/ui/data-table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import type { Task } from '@/types';
@@ -30,80 +25,90 @@ const getStatusVariant = (status: string) => {
 };
 
 export function TaskListView({ tasks, onTaskClick }: TaskListViewProps) {
+  const columns: ColumnDef<Task>[] = useMemo(
+    () => [
+      {
+        accessorKey: 'title',
+        header: 'Task',
+        size: 400,
+        cell: ({ row }) => {
+          const task = row.original;
+          return (
+            <div className="font-medium text-foreground">
+              <div className="flex flex-col">
+                <span>{task.title}</span>
+                {task.dependencies && task.dependencies.length > 0 && (
+                  <span className="text-[10px] text-warning flex items-center mt-1">
+                    <LinkIcon size={10} className="mr-1" />
+                    Waiting on {task.dependencies.length} tasks
+                  </span>
+                )}
+              </div>
+              {task.prCreated && (
+                <Badge variant="purple" className="ml-2 text-[10px]">
+                  <GitPullRequest size={10} className="mr-1" /> PR #
+                  {task.prNumber || '4829'}
+                </Badge>
+              )}
+            </div>
+          );
+        },
+      },
+      {
+        accessorKey: 'category',
+        header: 'Status',
+        cell: ({ row }) => {
+          const category = row.getValue('category') as string;
+          return (
+            <Badge
+              variant={getStatusVariant(category)}
+              className="text-[10px] uppercase font-bold"
+            >
+              {category}
+            </Badge>
+          );
+        },
+      },
+      {
+        accessorKey: 'tag',
+        header: 'Tag',
+        cell: ({ row }) => (
+          <Badge variant="outline" className="text-xs">
+            {row.getValue('tag')}
+          </Badge>
+        ),
+      },
+      {
+        id: 'actions',
+        header: () => <span className="sr-only">Actions</span>,
+        enableSorting: false,
+        cell: () => (
+          <div className="text-right">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="text-feature-blue hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <Edit2 size={16} />
+            </Button>
+          </div>
+        ),
+      },
+    ],
+    []
+  );
+
   return (
-    <div className="bg-surface/50 rounded-xl border border-border overflow-hidden w-full h-full flex flex-col max-h-[calc(100vh-18rem)]">
-      <div className="scrollbar-styled overflow-y-scroll flex-1">
-        <Table>
-          <TableHeader className="bg-surface sticky top-0 z-10" style={{ boxShadow: '0 1px 0 var(--border)' }}>
-            <TableRow>
-              <TableHead className="w-1/2">Task</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Tag</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {tasks.map((task) => (
-              <TableRow
-                key={task.id}
-                onClick={() => onTaskClick(task)}
-                className="cursor-pointer group"
-              >
-                <TableCell className="font-medium text-foreground">
-                  <div className="flex flex-col">
-                    <span>{task.title}</span>
-                    {task.dependencies?.length > 0 && (
-                      <span className="text-[10px] text-warning flex items-center mt-1">
-                        <LinkIcon size={10} className="mr-1" />
-                        Waiting on {task.dependencies.length} tasks
-                      </span>
-                    )}
-                  </div>
-                  {task.prCreated && (
-                    <Badge variant="purple" className="ml-2 text-[10px]">
-                      <GitPullRequest size={10} className="mr-1" /> PR #
-                      {task.prNumber || '4829'}
-                    </Badge>
-                  )}
-                </TableCell>
-                <TableCell>
-                  <Badge
-                    variant={getStatusVariant(task.category)}
-                    className="text-[10px] uppercase font-bold"
-                  >
-                    {task.category}
-                  </Badge>
-                </TableCell>
-                <TableCell>
-                  <Badge variant="outline" className="text-xs">
-                    {task.tag}
-                  </Badge>
-                </TableCell>
-                <TableCell className="text-right">
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    className="text-feature-blue hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <Edit2 size={16} />
-                  </Button>
-                </TableCell>
-              </TableRow>
-            ))}
-            {tasks.length === 0 && (
-              <TableRow>
-                <TableCell
-                  colSpan={4}
-                  className="p-12 text-center text-muted-foreground"
-                >
-                  No tasks found. Add one to get started!
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </div>
-    </div>
+    <DataTable
+      columns={columns}
+      data={tasks}
+      onRowClick={onTaskClick}
+      enablePagination
+      fillHeight
+      pageSize={10}
+      emptyMessage="No tasks found. Add one to get started!"
+      getRowId={(row) => row.id.toString()}
+    />
   );
 }
