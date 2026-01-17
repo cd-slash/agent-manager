@@ -34,7 +34,7 @@ export function TaskListView({ tasks, onTaskClick }: TaskListViewProps) {
     <div className="bg-surface/50 rounded-xl border border-border overflow-hidden w-full h-full flex flex-col max-h-[calc(100vh-18rem)]">
       <div className="scrollbar-styled overflow-y-scroll flex-1">
         <Table>
-          <TableHeader className="bg-surface/90 backdrop-blur sticky top-0 z-10">
+          <TableHeader className="bg-surface sticky top-0 z-10" style={{ boxShadow: '0 1px 0 var(--border)' }}>
             <TableRow>
               <TableHead className="w-1/2">Task</TableHead>
               <TableHead>Status</TableHead>
