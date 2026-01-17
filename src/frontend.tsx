@@ -12,8 +12,10 @@ import App from "./App";
 import "./index.css";
 
 // Initialize Convex client
-// In production, use environment variable for the URL
-const convexUrl = import.meta.env.VITE_CONVEX_URL ?? "https://your-convex-deployment.convex.cloud";
+// Bun doesn't expose env vars to client bundle, so we use the URL directly
+// In production, this would be configured via build-time replacement
+const convexUrl = (typeof import.meta.env !== 'undefined' && import.meta.env.VITE_CONVEX_URL)
+  || "https://brazen-skunk-217.convex.cloud";
 const convex = new ConvexReactClient(convexUrl);
 
 const elem = document.getElementById("root")!;

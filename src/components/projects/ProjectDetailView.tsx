@@ -1,4 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useQuery, useMutation } from 'convex/react';
+import { api } from '../../../convex/_generated/api';
+import type { Id } from '../../../convex/_generated/dataModel';
 import {
   List,
   FileText,
@@ -23,7 +26,21 @@ import { TaskListView } from '@/components/tasks/TaskListView';
 import { KanbanColumn } from '@/components/tasks/KanbanColumn';
 import { AgentChatPanel } from '@/components/chat/AgentChatPanel';
 import { SpecificationView } from './SpecificationView';
-import type { Project, Task } from '@/types';
+import type { Project, Task, ChatMessage } from '@/types';
+
+// Helper to format timestamps
+const formatTime = (timestamp: number): string => {
+  const now = Date.now();
+  const diff = now - timestamp;
+  const minutes = Math.floor(diff / 60000);
+  const hours = Math.floor(diff / 3600000);
+  const days = Math.floor(diff / 86400000);
+
+  if (minutes < 1) return 'Just now';
+  if (minutes < 60) return `${minutes}m ago`;
+  if (hours < 24) return `${hours}h ago`;
+  return `${days}d ago`;
+};
 
 interface ProjectDetailViewProps {
   project: Project;
@@ -48,6 +65,28 @@ export function ProjectDetailView({
       `## Project Requirements\n\n${project.description}\n\n## Acceptance Criteria\n\n- [ ] System must be scalable\n- [ ] UI must be responsive`
   );
 
+  // Get the Convex project ID
+  const projectId = project.id as unknown as Id<"projects">;
+
+  // Fetch chat messages from Convex
+  const chatMessagesData = useQuery(api.chat.listByProject, { projectId }) ?? [];
+
+  // Convert Convex chat messages to legacy format
+  const chatHistory: ChatMessage[] = chatMessagesData.map(msg => ({
+    id: msg._id as unknown as number,
+    sender: msg.sender,
+    text: msg.text,
+    time: formatTime(msg.createdAt),
+  }));
+
+  // Mutation to send messages
+  const sendMessage = useMutation(api.chat.sendProjectMessage);
+
+  // Update plan text when project changes
+  useEffect(() => {
+    setPlanText(project.plan || `## Project Requirements\n\n${project.description}\n\n## Acceptance Criteria\n\n- [ ] System must be scalable\n- [ ] UI must be responsive`);
+  }, [project.plan, project.description]);
+
   const handleQuickAdd = (e: React.FormEvent) => {
     e.preventDefault();
     if (!quickTaskTitle.trim()) return;
@@ -55,33 +94,22 @@ export function ProjectDetailView({
     setQuickTaskTitle('');
   };
 
-  const handleChatSend = (text: string) => {
-    const userMsg = {
-      id: Date.now(),
-      sender: 'user' as const,
-      text: text,
-      time: 'Just now',
-    };
-    let updatedChat = [...(project.projectChatHistory || []), userMsg];
+  const handleChatSend = async (text: string) => {
+    // Send user message to Convex
+    await sendMessage({
+      projectId,
+      text,
+      sender: 'user',
+    });
 
-    setTimeout(() => {
-      const aiMsg = {
-        id: Date.now() + 1,
-        sender: 'ai' as const,
+    // Simulate AI response (in production this would be handled by a Convex action)
+    setTimeout(async () => {
+      await sendMessage({
+        projectId,
         text: "I've updated the plan based on your request. I also suggest breaking this down into 3 new tasks.",
-        time: 'Just now',
-      };
-      const updatedProject = {
-        ...project,
-        projectChatHistory: [...updatedChat, aiMsg],
-        plan: planText + `\n\n- Added requirement: ${text}`,
-      };
-      onUpdateProject(updatedProject);
-      setPlanText(updatedProject.plan!);
+        sender: 'ai',
+      });
     }, 1000);
-
-    const tempProject = { ...project, projectChatHistory: updatedChat };
-    onUpdateProject(tempProject);
   };
 
   return (
@@ -260,7 +288,7 @@ export function ProjectDetailView({
 
                 <div className="w-1/3 shrink-0">
                   <AgentChatPanel
-                    chatHistory={project.projectChatHistory}
+                    chatHistory={chatHistory}
                     onSendMessage={handleChatSend}
                   />
                 </div>

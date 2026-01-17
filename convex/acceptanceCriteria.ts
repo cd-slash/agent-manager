@@ -100,7 +100,8 @@ export const reorder = mutation({
   },
   handler: async (ctx, args) => {
     for (let i = 0; i < args.criteriaIds.length; i++) {
-      await ctx.db.patch(args.criteriaIds[i], { order: i + 1 });
+      const id = args.criteriaIds[i]!;
+      await ctx.db.patch(id, { order: i + 1 });
     }
   },
 });

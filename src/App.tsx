@@ -1,4 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { useQuery, useMutation } from 'convex/react';
+import { api } from '../convex/_generated/api';
+import type { Id } from '../convex/_generated/dataModel';
 import { ChevronLeft, GitPullRequest } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -18,79 +21,18 @@ import { SettingsView } from '@/components/settings/SettingsView';
 
 import type { Project, Task, Server, Container, ChatMessage, HistoryEvent } from '@/types';
 
-/**
- * Mock AI Logic & Data Generators
- */
-const generateMockChat = (): ChatMessage[] => [
-  { id: 1, sender: 'ai', text: "I've analyzed the requirements. Shall I set up the initial scaffold?", time: '10:00 AM' },
-  { id: 2, sender: 'user', text: "Yes, please use the latest version of Next.js.", time: '10:05 AM' },
-  { id: 3, sender: 'ai', text: "Understood. I'll also configure Tailwind CSS as requested.", time: '10:06 AM' }
-];
+// Helper to format timestamps to readable time strings
+const formatTime = (timestamp: number): string => {
+  const now = Date.now();
+  const diff = now - timestamp;
+  const minutes = Math.floor(diff / 60000);
+  const hours = Math.floor(diff / 3600000);
+  const days = Math.floor(diff / 86400000);
 
-const generateMockHistory = (): HistoryEvent[] => [
-  { id: 1, action: 'Created task', user: 'System', time: '2 days ago' },
-  { id: 2, action: 'Changed status to "In Progress"', user: 'User', time: '1 day ago' },
-  { id: 3, action: 'Updated requirements', user: 'AI Agent', time: '5 hours ago' }
-];
-
-const generateMockProjectChat = (): ChatMessage[] => [
-  { id: 1, sender: 'ai', text: "Hello! I'm here to help you plan your project. Tell me about what you want to build, and I'll help draft the requirements.", time: '09:00 AM' },
-];
-
-const analyzeAndGenerateTasks = (description: string, name: string): Task[] => {
-  const tasks: Task[] = [];
-  const text = description.toLowerCase();
-
-  const addTask = (title: string, category: Task['category'], tag: string): Task => {
-    const newTask: Task = {
-      id: Date.now() + Math.random(),
-      title,
-      category,
-      tag,
-      complexity: 'Medium',
-      description: `Implementation details for ${title}. This task involves setting up the core architecture and ensuring scalability.`,
-      prompt: `Generate production-ready code for ${title} using best practices. Focus on error handling and modularity.`,
-      acceptanceCriteria: [
-        { id: 1, text: "Unit tests must pass with >80% coverage", done: false },
-        { id: 2, text: "Code must follow linting rules", done: true },
-        { id: 3, text: "Feature must be responsive on mobile", done: false }
-      ],
-      tests: [
-        { id: 1, name: "should_render_component_correctly", status: "passed" },
-        { id: 2, name: "should_handle_invalid_input", status: "pending" },
-        { id: 3, name: "should_call_api_on_submit", status: "passed" }
-      ],
-      chatHistory: generateMockChat(),
-      history: generateMockHistory(),
-      prCreated: false,
-      dependencies: []
-    };
-    tasks.push(newTask);
-    return newTask;
-  };
-
-  addTask(`Initialize repository for ${name}`, 'backlog', 'devops');
-  addTask('Setup React & Tailwind environment', 'todo', 'frontend');
-  addTask('Configure CI/CD Pipeline', 'backlog', 'devops');
-
-  if (text.includes('login') || text.includes('auth')) {
-    const designTask = addTask('Design Login & Sign Up screens', 'todo', 'design');
-    const authTask = addTask('Implement Authentication logic', 'backlog', 'backend');
-    authTask.dependencies.push(designTask.id);
-  }
-
-  if (text.includes('database') || text.includes('data')) {
-    const dbDesignTask = addTask('Design Database Schema', 'todo', 'database');
-    const dbSetupTask = addTask('Setup Firestore/SQL Database', 'backlog', 'backend');
-    dbSetupTask.dependencies.push(dbDesignTask.id);
-  }
-
-  if (tasks.length < 5) {
-    addTask('Draft initial UI Mockups', 'todo', 'design');
-    addTask('Define core user stories', 'todo', 'design');
-  }
-
-  return tasks;
+  if (minutes < 1) return 'Just now';
+  if (minutes < 60) return `${minutes}m ago`;
+  if (hours < 24) return `${hours}h ago`;
+  return `${days}d ago`;
 };
 
 function App() {
@@ -99,138 +41,98 @@ function App() {
   const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState(false);
   const [isQuickTaskModalOpen, setIsQuickTaskModalOpen] = useState(false);
 
-  const [projects, setProjects] = useState<Project[]>([
-    {
-      id: 1,
-      name: "E-Commerce Platform",
-      description: "A full-stack e-commerce solution with user authentication, product catalog, shopping cart, and Stripe payment integration. Includes an admin dashboard for inventory management.",
-      tasks: [
-        // Original generated tasks
-        ...analyzeAndGenerateTasks("e-commerce shop with login and stripe", "E-Commerce Platform"),
-        // 20 additional example tasks for table formatting testing
-        {
-          id: 1001, title: "Implement product search with filters", category: "done", tag: "frontend",
-          complexity: "High", description: "Add search functionality with category, price, and rating filters.",
-          chatHistory: generateMockChat(), history: generateMockHistory(), prCreated: true, prNumber: 42, prStatus: "merged", dependencies: []
-        },
-        {
-          id: 1002, title: "Setup Redis caching layer", category: "done", tag: "backend",
-          complexity: "Medium", description: "Implement Redis for session and product data caching.",
-          chatHistory: generateMockChat(), history: generateMockHistory(), prCreated: true, prNumber: 38, prStatus: "merged", dependencies: []
-        },
-        {
-          id: 1003, title: "Create inventory management API", category: "in-progress", tag: "backend",
-          complexity: "High", description: "RESTful API endpoints for inventory CRUD operations.",
-          chatHistory: generateMockChat(), history: generateMockHistory(), prCreated: true, prNumber: 45, prStatus: "open", dependencies: []
-        },
-        {
-          id: 1004, title: "Design mobile-responsive checkout", category: "in-progress", tag: "design",
-          complexity: "Medium", description: "Figma mockups for mobile checkout experience.",
-          chatHistory: generateMockChat(), history: generateMockHistory(), prCreated: false, dependencies: []
-        },
-        {
-          id: 1005, title: "Implement Stripe webhook handlers", category: "in-progress", tag: "backend",
-          complexity: "High", description: "Handle payment success, failure, and refund webhooks.",
-          chatHistory: generateMockChat(), history: generateMockHistory(), prCreated: true, prNumber: 47, prStatus: "open", dependencies: []
-        },
-        {
-          id: 1006, title: "Add unit tests for cart service", category: "todo", tag: "testing",
-          complexity: "Medium", description: "Comprehensive test coverage for shopping cart logic.",
-          chatHistory: generateMockChat(), history: generateMockHistory(), prCreated: false, dependencies: []
-        },
-        {
-          id: 1007, title: "Optimize product image loading", category: "todo", tag: "frontend",
-          complexity: "Low", description: "Implement lazy loading and WebP format support.",
-          chatHistory: generateMockChat(), history: generateMockHistory(), prCreated: false, dependencies: []
-        },
-        {
-          id: 1008, title: "Create admin dashboard wireframes", category: "done", tag: "design",
-          complexity: "Low", description: "Low-fidelity wireframes for admin panel layout.",
-          chatHistory: generateMockChat(), history: generateMockHistory(), prCreated: true, prNumber: 31, prStatus: "merged", dependencies: []
-        },
-        {
-          id: 1009, title: "Setup Kubernetes deployment", category: "backlog", tag: "devops",
-          complexity: "High", description: "K8s manifests for production deployment.",
-          chatHistory: generateMockChat(), history: generateMockHistory(), prCreated: false, dependencies: []
-        },
-        {
-          id: 1010, title: "Implement order tracking system", category: "backlog", tag: "backend",
-          complexity: "High", description: "Real-time order status updates with email notifications.",
-          chatHistory: generateMockChat(), history: generateMockHistory(), prCreated: false, dependencies: []
-        },
-        {
-          id: 1011, title: "Add product review system", category: "todo", tag: "frontend",
-          complexity: "Medium", description: "User reviews with star ratings and image uploads.",
-          chatHistory: generateMockChat(), history: generateMockHistory(), prCreated: false, dependencies: []
-        },
-        {
-          id: 1012, title: "Setup monitoring with Grafana", category: "backlog", tag: "devops",
-          complexity: "Medium", description: "Prometheus metrics and Grafana dashboards.",
-          chatHistory: generateMockChat(), history: generateMockHistory(), prCreated: false, dependencies: []
-        },
-        {
-          id: 1013, title: "Implement wish list feature", category: "done", tag: "frontend",
-          complexity: "Low", description: "Allow users to save products to a wish list.",
-          chatHistory: generateMockChat(), history: generateMockHistory(), prCreated: true, prNumber: 33, prStatus: "merged", dependencies: []
-        },
-        {
-          id: 1014, title: "Create product recommendation engine", category: "backlog", tag: "backend",
-          complexity: "High", description: "ML-based product recommendations using purchase history.",
-          chatHistory: generateMockChat(), history: generateMockHistory(), prCreated: false, dependencies: []
-        },
-        {
-          id: 1015, title: "Add multi-language support", category: "backlog", tag: "frontend",
-          complexity: "Medium", description: "i18n implementation for English, Spanish, and French.",
-          chatHistory: generateMockChat(), history: generateMockHistory(), prCreated: false, dependencies: []
-        },
-        {
-          id: 1016, title: "Implement coupon code system", category: "in-progress", tag: "backend",
-          complexity: "Medium", description: "Discount codes with various rules and expiration.",
-          chatHistory: generateMockChat(), history: generateMockHistory(), prCreated: true, prNumber: 48, prStatus: "open", dependencies: []
-        },
-        {
-          id: 1017, title: "Setup E2E testing with Playwright", category: "todo", tag: "testing",
-          complexity: "Medium", description: "End-to-end tests for critical user flows.",
-          chatHistory: generateMockChat(), history: generateMockHistory(), prCreated: false, dependencies: []
-        },
-        {
-          id: 1018, title: "Add social login (Google, Apple)", category: "todo", tag: "backend",
-          complexity: "Medium", description: "OAuth integration for social sign-in options.",
-          chatHistory: generateMockChat(), history: generateMockHistory(), prCreated: false, dependencies: []
-        },
-        {
-          id: 1019, title: "Create email template system", category: "done", tag: "backend",
-          complexity: "Low", description: "Responsive email templates for order confirmations.",
-          chatHistory: generateMockChat(), history: generateMockHistory(), prCreated: true, prNumber: 36, prStatus: "merged", dependencies: []
-        },
-        {
-          id: 1020, title: "Implement product variant handling", category: "todo", tag: "backend",
-          complexity: "High", description: "Support for size, color, and other product variants.",
-          chatHistory: generateMockChat(), history: generateMockHistory(), prCreated: false, dependencies: []
-        },
-      ],
-      projectChatHistory: generateMockProjectChat(),
-      plan: `## Project Requirements\n\nA full-stack e-commerce solution with user authentication, product catalog, shopping cart, and Stripe payment integration.\n\n## Acceptance Criteria\n\n- [ ] User can sign up and login\n- [ ] Products are searchable\n- [ ] Stripe integration works in test mode`
-    }
-  ]);
+  const [selectedProjectId, setSelectedProjectId] = useState<Id<"projects"> | null>(null);
+  const [selectedTaskId, setSelectedTaskId] = useState<Id<"tasks"> | null>(null);
+  const [selectedServerId, setSelectedServerId] = useState<Id<"servers"> | null>(null);
+  const [selectedContainerId, setSelectedContainerId] = useState<Id<"containers"> | null>(null);
 
-  const [servers] = useState<Server[]>([
-    { id: 1, name: 'production-api-01', ip: '10.0.0.45', region: 'us-east-1', status: 'online', cpu: 45, mem: 62 },
-    { id: 2, name: 'production-db-primary', ip: '10.0.0.12', region: 'us-east-1', status: 'online', cpu: 28, mem: 84 },
-    { id: 3, name: 'staging-cluster-01', ip: '10.0.1.05', region: 'us-west-2', status: 'maintenance', cpu: 5, mem: 12 },
-  ]);
+  // Convex queries
+  const projectsData = useQuery(api.projects.list) ?? [];
+  const tasksData = useQuery(
+    api.tasks.listByProject,
+    selectedProjectId ? { projectId: selectedProjectId } : "skip"
+  ) ?? [];
+  const allTasksData = useQuery(api.tasks.listAllWithProjects) ?? [];
+  const serversData = useQuery(api.servers.list) ?? [];
+  const containersData = useQuery(api.containers.list) ?? [];
 
-  const [containers] = useState<Container[]>([
-    { id: 'c1', name: 'api-gateway', image: 'nginx:latest', status: 'running', port: '80:8080', server: 'production-api-01' },
-    { id: 'c2', name: 'auth-service', image: 'node:18-alpine', status: 'running', port: '3000:3000', server: 'production-api-01' },
-    { id: 'c3', name: 'payment-worker', image: 'python:3.9-slim', status: 'stopped', port: '-', server: 'staging-cluster-01' },
-    { id: 'c4', name: 'redis-cache', image: 'redis:6', status: 'running', port: '6379:6379', server: 'production-db-primary' },
-  ]);
+  // Get selected task with full details
+  const selectedTaskDetails = useQuery(
+    api.tasks.get,
+    selectedTaskId ? { id: selectedTaskId } : "skip"
+  );
 
-  const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
-  const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
-  const [selectedServerId, setSelectedServerId] = useState<number | null>(null);
-  const [selectedContainerId, setSelectedContainerId] = useState<string | null>(null);
+  // Get pull request for selected task
+  const selectedTaskPR = useQuery(
+    api.pullRequests.getByTask,
+    selectedTaskId ? { taskId: selectedTaskId } : "skip"
+  );
+
+  // Convex mutations
+  const createProject = useMutation(api.projects.create);
+  const updateProject = useMutation(api.projects.update);
+  const updateProjectPlan = useMutation(api.projects.updatePlan);
+  const createTask = useMutation(api.tasks.create);
+  const updateTask = useMutation(api.tasks.update);
+  const updateTaskCategory = useMutation(api.tasks.updateCategory);
+  const sendProjectMessage = useMutation(api.chat.sendProjectMessage);
+  const sendTaskMessage = useMutation(api.chat.sendTaskMessage);
+
+  // Transform Convex data to legacy format for compatibility with existing components
+  const projects: Project[] = useMemo(() => {
+    return projectsData.map(p => {
+      // Get tasks for this project from all tasks data
+      const projectTasks = allTasksData
+        .filter(t => t.projectId === p._id)
+        .map(t => ({
+          id: t._id as unknown as number, // Cast for legacy compatibility
+          title: t.title,
+          category: t.category,
+          tag: t.tag,
+          complexity: t.complexity,
+          description: t.description,
+          prompt: t.prompt,
+          chatHistory: [],
+          history: [],
+          prCreated: false,
+          dependencies: [],
+        } as Task));
+
+      return {
+        id: p._id as unknown as number, // Cast for legacy compatibility
+        name: p.name,
+        description: p.description,
+        tasks: projectTasks,
+        projectChatHistory: [],
+        plan: p.plan,
+      } as Project;
+    });
+  }, [projectsData, allTasksData]);
+
+  // Transform servers data
+  const servers: Server[] = useMemo(() => {
+    return serversData.map(s => ({
+      id: s._id as unknown as number,
+      name: s.name,
+      ip: s.ip,
+      region: s.region,
+      status: s.status,
+      cpu: s.cpu,
+      mem: s.mem,
+    }));
+  }, [serversData]);
+
+  // Transform containers data
+  const containers: Container[] = useMemo(() => {
+    return containersData.map(c => ({
+      id: c._id as unknown as string,
+      name: c.name,
+      image: c.image,
+      status: c.status as 'running' | 'stopped',
+      port: c.port,
+      server: c.serverName ?? '',
+    }));
+  }, [containersData]);
 
   // Keyboard shortcut for Quick Task
   useEffect(() => {
@@ -245,59 +147,76 @@ function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  const handleCreateProject = (projectData: { name: string; description: string }) => {
-    const newTasks = analyzeAndGenerateTasks(projectData.description, projectData.name);
-    const newProject: Project = {
-      id: Date.now(),
+  const handleCreateProject = async (projectData: { name: string; description: string }) => {
+    const projectId = await createProject({
       name: projectData.name,
       description: projectData.description,
-      tasks: newTasks,
-      projectChatHistory: generateMockProjectChat(),
-      plan: `## Project Requirements\n\n${projectData.description}\n\n## Acceptance Criteria\n\n- [ ] Initial scaffold created`
-    };
-    setProjects([...projects, newProject]);
+      plan: `## Project Requirements\n\n${projectData.description}\n\n## Acceptance Criteria\n\n- [ ] Initial scaffold created`,
+    });
+
+    // Create some initial tasks
+    await createTask({
+      projectId,
+      title: `Initialize repository for ${projectData.name}`,
+      description: 'Set up the initial project repository and structure.',
+      category: 'backlog',
+      tag: 'devops',
+      complexity: 'Low',
+    });
+
+    await createTask({
+      projectId,
+      title: 'Setup development environment',
+      description: 'Configure development tools and dependencies.',
+      category: 'todo',
+      tag: 'devops',
+      complexity: 'Medium',
+    });
+
     setIsNewProjectModalOpen(false);
-    setSelectedProjectId(newProject.id);
+    setSelectedProjectId(projectId);
     setActiveView('projects');
   };
 
-  const handleTaskUpdate = (updatedTask: Task) => {
-    setProjects(prevProjects => prevProjects.map(p => {
-      if (p.id === selectedProjectId) {
-        return {
-          ...p,
-          tasks: p.tasks.map(t => t.id === updatedTask.id ? updatedTask : t)
-        };
-      }
-      return p;
-    }));
+  const handleTaskUpdate = async (updatedTask: Task) => {
+    const taskId = updatedTask.id as unknown as Id<"tasks">;
+    await updateTask({
+      id: taskId,
+      title: updatedTask.title,
+      description: updatedTask.description,
+      prompt: updatedTask.prompt,
+      tag: updatedTask.tag,
+      complexity: updatedTask.complexity,
+    });
   };
 
-  const handleProjectUpdate = (updatedProject: Project) => {
-    setProjects(prevProjects => prevProjects.map(p => p.id === updatedProject.id ? updatedProject : p));
+  const handleProjectUpdate = async (updatedProject: Project) => {
+    const projectId = updatedProject.id as unknown as Id<"projects">;
+    await updateProject({
+      id: projectId,
+      name: updatedProject.name,
+      description: updatedProject.description,
+    });
+    if (updatedProject.plan) {
+      await updateProjectPlan({
+        id: projectId,
+        plan: updatedProject.plan,
+      });
+    }
   };
 
-  const handleAddTask = (projectId: number, taskTitle: string) => {
-    if (!projectId || !taskTitle.trim()) return;
+  const handleAddTask = async (projectId: number, taskTitle: string) => {
+    if (!taskTitle.trim()) return;
 
-    setProjects(prevProjects => prevProjects.map(p => {
-      if (p.id === projectId) {
-        const newTask: Task = {
-          id: Date.now(),
-          title: taskTitle,
-          category: 'backlog',
-          tag: 'manual',
-          complexity: 'Low',
-          description: 'Manually added task.',
-          chatHistory: [],
-          history: [{ id: Date.now(), action: 'Created task', user: 'User', time: 'Just now' }],
-          prCreated: false,
-          dependencies: []
-        };
-        return { ...p, tasks: [...p.tasks, newTask] };
-      }
-      return p;
-    }));
+    const convexProjectId = projectId as unknown as Id<"projects">;
+    await createTask({
+      projectId: convexProjectId,
+      title: taskTitle,
+      description: 'Manually added task.',
+      category: 'backlog',
+      tag: 'manual',
+      complexity: 'Low',
+    });
   };
 
   const handleQuickTaskCreate = (projectId: number, title: string) => {
@@ -305,10 +224,51 @@ function App() {
   };
 
   // Derived state helpers
-  const selectedProject = projects.find(p => p.id === selectedProjectId);
-  const selectedTask = selectedProject?.tasks.find(t => t.id === selectedTaskId);
-  const selectedServer = servers.find(s => s.id === selectedServerId);
-  const selectedContainer = containers.find(c => c.id === selectedContainerId);
+  const selectedProject = projects.find(p => (p.id as unknown as Id<"projects">) === selectedProjectId);
+  const selectedTask = useMemo(() => {
+    if (!selectedTaskDetails) return undefined;
+
+    // Transform to legacy format
+    const task: Task = {
+      id: selectedTaskDetails._id as unknown as number,
+      title: selectedTaskDetails.title,
+      category: selectedTaskDetails.category,
+      tag: selectedTaskDetails.tag,
+      complexity: selectedTaskDetails.complexity,
+      description: selectedTaskDetails.description,
+      prompt: selectedTaskDetails.prompt,
+      acceptanceCriteria: selectedTaskDetails.acceptanceCriteria?.map(ac => ({
+        id: ac._id as unknown as number,
+        text: ac.text,
+        done: ac.done,
+      })),
+      tests: selectedTaskDetails.tests?.map(t => ({
+        id: t._id as unknown as number,
+        name: t.name,
+        status: t.status,
+      })),
+      chatHistory: selectedTaskDetails.chatHistory?.map(ch => ({
+        id: ch._id as unknown as number,
+        sender: ch.sender,
+        text: ch.text,
+        time: formatTime(ch.createdAt),
+      })),
+      history: selectedTaskDetails.history?.map(h => ({
+        id: h._id as unknown as number,
+        action: h.action,
+        user: h.user,
+        time: formatTime(h.createdAt),
+      })),
+      prCreated: !!selectedTaskPR,
+      prNumber: selectedTaskPR?.prNumber,
+      prStatus: selectedTaskPR?.status,
+      dependencies: selectedTaskDetails.dependencies?.filter(d => d !== null).map(d => d._id as unknown as number) ?? [],
+    };
+    return task;
+  }, [selectedTaskDetails, selectedTaskPR]);
+
+  const selectedServer = servers.find(s => (s.id as unknown as Id<"servers">) === selectedServerId);
+  const selectedContainer = containers.find(c => (c.id as unknown as Id<"containers">) === selectedContainerId);
 
   // View Resolution Logic
   const renderContent = () => {
@@ -318,14 +278,14 @@ function App() {
       if (selectedServerId && selectedServer) {
         return <ServerDetailView server={selectedServer} containers={containers} />;
       }
-      return <ServerView servers={servers} onSelectServer={setSelectedServerId} />;
+      return <ServerView servers={servers} onSelectServer={(id) => setSelectedServerId(id as unknown as Id<"servers">)} />;
     }
 
     if (activeView === 'containers') {
       if (selectedContainerId && selectedContainer) {
         return <ContainerDetailView container={selectedContainer} onBack={() => setSelectedContainerId(null)} />;
       }
-      return <ContainerView containers={containers} onSelectContainer={setSelectedContainerId} />;
+      return <ContainerView containers={containers} onSelectContainer={(id) => setSelectedContainerId(id as unknown as Id<"containers">)} />;
     }
 
     if (activeView === 'tasks') {
@@ -346,8 +306,8 @@ function App() {
         <AllTasksView
           projects={projects}
           onTaskClick={(task, projectId) => {
-            setSelectedProjectId(projectId);
-            setSelectedTaskId(task.id);
+            setSelectedProjectId(projectId as unknown as Id<"projects">);
+            setSelectedTaskId(task.id as unknown as Id<"tasks">);
           }}
         />
       );
@@ -368,7 +328,7 @@ function App() {
         return (
           <ProjectDetailView
             project={selectedProject!}
-            onTaskClick={(task) => setSelectedTaskId(task.id)}
+            onTaskClick={(task) => setSelectedTaskId(task.id as unknown as Id<"tasks">)}
             onBack={() => setSelectedProjectId(null)}
             onUpdateProject={handleProjectUpdate}
             onAddTask={handleAddTask}
@@ -378,7 +338,7 @@ function App() {
       return (
         <ProjectListView
           projects={projects}
-          onSelectProject={(p) => setSelectedProjectId(p.id)}
+          onSelectProject={(p) => setSelectedProjectId(p.id as unknown as Id<"projects">)}
           onNewProject={() => setIsNewProjectModalOpen(true)}
         />
       );

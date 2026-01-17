@@ -1,4 +1,7 @@
 import { useState } from 'react';
+import { useQuery, useMutation } from 'convex/react';
+import { api } from '../../../convex/_generated/api';
+import type { Id } from '../../../convex/_generated/dataModel';
 import {
   Layout,
   Link as LinkIcon,
@@ -32,7 +35,21 @@ import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { AgentChatPanel } from '@/components/chat/AgentChatPanel';
 import { DependencyPickerModal } from '@/components/modals/DependencyPickerModal';
-import type { Task, Project } from '@/types';
+import type { Task, Project, ChatMessage } from '@/types';
+
+// Helper to format timestamps
+const formatTime = (timestamp: number): string => {
+  const now = Date.now();
+  const diff = now - timestamp;
+  const minutes = Math.floor(diff / 60000);
+  const hours = Math.floor(diff / 3600000);
+  const days = Math.floor(diff / 86400000);
+
+  if (minutes < 1) return 'Just now';
+  if (minutes < 60) return `${minutes}m ago`;
+  if (hours < 24) return `${hours}h ago`;
+  return `${days}d ago`;
+};
 
 interface TaskDetailViewProps {
   task: Task;
@@ -101,20 +118,35 @@ export function TaskDetailView({
   });
   const [showDependencyPicker, setShowDependencyPicker] = useState(false);
 
-  const handleAddDependency = (depId: number) => {
-    const updatedTask = {
-      ...task,
-      dependencies: [...(task.dependencies || []), depId],
-    };
-    onUpdate(updatedTask);
+  // Get the Convex task ID
+  const taskId = task.id as unknown as Id<"tasks">;
+
+  // Fetch chat messages from Convex
+  const chatMessagesData = useQuery(api.chat.listByTask, { taskId }) ?? [];
+
+  // Convert Convex chat messages to legacy format
+  const chatHistory: ChatMessage[] = chatMessagesData.map(msg => ({
+    id: msg._id as unknown as number,
+    sender: msg.sender,
+    text: msg.text,
+    time: formatTime(msg.createdAt),
+  }));
+
+  // Mutation to send messages
+  const sendMessage = useMutation(api.chat.sendTaskMessage);
+
+  // Convex mutations for dependencies
+  const addDependency = useMutation(api.tasks.addDependency);
+  const removeDependency = useMutation(api.tasks.removeDependency);
+
+  const handleAddDependency = async (depId: number) => {
+    const dependsOnTaskId = depId as unknown as Id<"tasks">;
+    await addDependency({ taskId, dependsOnTaskId });
   };
 
-  const handleRemoveDependency = (depId: number) => {
-    const updatedTask = {
-      ...task,
-      dependencies: task.dependencies?.filter((id) => id !== depId) || [],
-    };
-    onUpdate(updatedTask);
+  const handleRemoveDependency = async (depId: number) => {
+    const dependsOnTaskId = depId as unknown as Id<"tasks">;
+    await removeDependency({ taskId, dependsOnTaskId });
   };
 
   const toggleFile = (filename: string) =>
@@ -131,18 +163,22 @@ export function TaskDetailView({
     setActiveTab('pr');
   };
 
-  const handleSendMessage = (text: string) => {
-    const newMessage = {
-      id: Date.now(),
-      sender: 'user' as const,
-      text: text,
-      time: 'Just now',
-    };
-    const updatedTask = {
-      ...task,
-      chatHistory: [...(task.chatHistory || []), newMessage],
-    };
-    onUpdate(updatedTask);
+  const handleSendMessage = async (text: string) => {
+    // Send user message to Convex
+    await sendMessage({
+      taskId,
+      text,
+      sender: 'user',
+    });
+
+    // Simulate AI response (in production this would be handled by a Convex action)
+    setTimeout(async () => {
+      await sendMessage({
+        taskId,
+        text: "I'm analyzing your request and will help you with the task. Is there anything specific you'd like me to focus on?",
+        sender: 'ai',
+      });
+    }, 1000);
   };
 
   return (
@@ -977,7 +1013,7 @@ export function TaskDetailView({
 
                 <div className="w-1/3 shrink-0 sticky top-0 self-start h-[calc(100vh-12rem)]">
                   <AgentChatPanel
-                    chatHistory={task.chatHistory}
+                    chatHistory={chatHistory}
                     onSendMessage={handleSendMessage}
                   />
                 </div>

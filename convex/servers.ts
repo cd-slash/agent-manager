@@ -75,11 +75,12 @@ export const getMetricsHistory = query({
         q.eq("serverId", args.serverId)
       );
 
-    if (args.since) {
+    if (args.since !== undefined) {
+      const since = args.since;
       query = ctx.db
         .query("serverMetrics")
         .withIndex("by_server_and_timestamp", (q) =>
-          q.eq("serverId", args.serverId).gte("timestamp", args.since)
+          q.eq("serverId", args.serverId).gte("timestamp", since)
         );
     }
 
