@@ -2,7 +2,7 @@ import { Plus, Server, Terminal, FileText } from 'lucide-react';
 import type { ColumnDef } from '@tanstack/react-table';
 import { DataTable, createSelectionColumn } from '@/components/ui/data-table';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/ui/status-badge';
 import type { Server as ServerType } from '@/types';
 
 interface ServerViewProps {
@@ -45,15 +45,8 @@ const columns: ColumnDef<ServerType>[] = [
     accessorKey: 'status',
     header: 'Status',
     cell: ({ row }) => {
-      const status = row.getValue('status') as string;
-      return (
-        <Badge
-          variant={status === 'online' ? 'success' : 'warning'}
-          className="uppercase"
-        >
-          {status}
-        </Badge>
-      );
+      const status = row.getValue('status') as 'online' | 'maintenance' | 'offline';
+      return <StatusBadge type="server" status={status} uppercase />;
     },
   },
   {

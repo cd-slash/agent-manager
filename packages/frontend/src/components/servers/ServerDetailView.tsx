@@ -1,5 +1,5 @@
 import { Globe, Network, Cpu, HardDrive } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/ui/status-badge';
 import {
   Table,
   TableBody,
@@ -102,12 +102,11 @@ export function ServerDetailView({
                   {c.image}
                 </TableCell>
                 <TableCell>
-                  <Badge
-                    variant={c.status === 'running' ? 'success' : 'destructive'}
-                    className="capitalize"
-                  >
-                    {c.status}
-                  </Badge>
+                  <StatusBadge
+                    type="container"
+                    status={c.status as 'running' | 'stopped' | 'restarting' | 'paused' | 'exited'}
+                    capitalize
+                  />
                 </TableCell>
                 <TableCell className="font-mono text-muted-foreground">
                   {c.port}

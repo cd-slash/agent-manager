@@ -1,6 +1,6 @@
 import { ChevronLeft, Box, Server, Terminal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import type { Container } from '@/types';
 
@@ -37,12 +37,12 @@ export function ContainerDetailView({
             </span>
           </div>
         </div>
-        <Badge
-          variant={container.status === 'running' ? 'success' : 'destructive'}
-          className="px-4 py-1.5 text-sm uppercase"
-        >
-          {container.status}
-        </Badge>
+        <StatusBadge
+          type="container"
+          status={container.status as 'running' | 'stopped' | 'restarting' | 'paused' | 'exited'}
+          uppercase
+          className="px-4 py-1.5 text-sm"
+        />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">

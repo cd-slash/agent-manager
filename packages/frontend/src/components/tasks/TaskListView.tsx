@@ -6,6 +6,7 @@ import { Edit2, GitPullRequest, Link as LinkIcon, Trash2 } from 'lucide-react';
 import type { ColumnDef } from '@tanstack/react-table';
 import { DataTable, createSelectionColumn } from '@/components/ui/data-table';
 import { Badge } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { Button } from '@/components/ui/button';
 import type { Task } from '@/types';
 
@@ -13,19 +14,6 @@ interface TaskListViewProps {
   tasks: Task[];
   onTaskClick: (task: Task) => void;
 }
-
-const getStatusVariant = (status: string) => {
-  switch (status) {
-    case 'done':
-      return 'success';
-    case 'in-progress':
-      return 'info';
-    case 'todo':
-      return 'warning';
-    default:
-      return 'secondary';
-  }
-};
 
 export function TaskListView({ tasks, onTaskClick }: TaskListViewProps) {
   const [selectedTasks, setSelectedTasks] = useState<Task[]>([]);
@@ -81,14 +69,14 @@ export function TaskListView({ tasks, onTaskClick }: TaskListViewProps) {
         accessorKey: 'category',
         header: 'Status',
         cell: ({ row }) => {
-          const category = row.getValue('category') as string;
+          const category = row.getValue('category') as 'backlog' | 'todo' | 'in-progress' | 'done';
           return (
-            <Badge
-              variant={getStatusVariant(category)}
-              className="text-[10px] uppercase font-bold"
-            >
-              {category}
-            </Badge>
+            <StatusBadge
+              type="task"
+              status={category}
+              uppercase
+              className="text-[10px] font-bold"
+            />
           );
         },
       },
