@@ -192,7 +192,7 @@ function App() {
     await createTask({
       projectId: projectId as Id<"projects">,
       title: taskTitle,
-      description: 'Manually added task.',
+      description: taskTitle,
       category: 'backlog',
       tag: 'manual',
       complexity: 'Low',
