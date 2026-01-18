@@ -8,6 +8,12 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import {
+  DetailViewLayout,
+  InfoCard,
+  InfoItem,
+  ResourceBar,
+} from '@/components/layouts/DetailViewLayout';
 import type { Server, Container } from '@/types';
 
 interface ServerDetailViewProps {
@@ -21,67 +27,47 @@ export function ServerDetailView({
 }: ServerDetailViewProps) {
   const serverContainers = containers.filter((c) => c.server === server.name);
 
+  const infoCards = (
+    <>
+      <InfoCard title="Resource Usage" wide className="space-y-6">
+        <ResourceBar
+          label="CPU"
+          value={server.cpu}
+          max="8 Cores"
+          color="blue"
+          icon={<Cpu size={14} />}
+        />
+        <ResourceBar
+          label="Memory"
+          value={server.mem}
+          max="16GB"
+          color="purple"
+          icon={<HardDrive size={14} />}
+        />
+      </InfoCard>
+
+      <InfoCard title="Server Details" className="space-y-4">
+        <InfoItem
+          label="Region"
+          value={server.region}
+          icon={<Globe size={14} />}
+          mono
+        />
+        <InfoItem
+          label="IP Address"
+          value={server.ip}
+          icon={<Network size={14} />}
+          mono
+        />
+      </InfoCard>
+    </>
+  );
+
   return (
-    <div className="h-full overflow-y-auto bg-background p-page">
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-        <div className="bg-surface border border-border rounded-xl p-6 lg:col-span-2">
-          <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">
-            Resource Usage
-          </h3>
-          <div className="space-y-6">
-            <div>
-              <div className="flex items-center justify-between text-sm text-foreground mb-2">
-                <span className="flex items-center">
-                  <Cpu size={14} className="mr-2" /> CPU
-                </span>
-                <span>{server.cpu}% <span className="text-muted-foreground">/ 8 Cores</span></span>
-              </div>
-              <div className="w-full bg-surface-elevated rounded-full h-3">
-                <div
-                  className="h-full bg-feature-blue rounded-full"
-                  style={{ width: `${server.cpu}%` }}
-                ></div>
-              </div>
-            </div>
-            <div>
-              <div className="flex items-center justify-between text-sm text-foreground mb-2">
-                <span className="flex items-center">
-                  <HardDrive size={14} className="mr-2" /> Memory
-                </span>
-                <span>{server.mem}% <span className="text-muted-foreground">/ 16GB</span></span>
-              </div>
-              <div className="w-full bg-surface-elevated rounded-full h-3">
-                <div
-                  className="h-full bg-feature-purple rounded-full"
-                  style={{ width: `${server.mem}%` }}
-                ></div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-surface border border-border rounded-xl p-6">
-          <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">
-            Server Details
-          </h3>
-          <div className="space-y-4">
-            <div>
-              <div className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Region</div>
-              <div className="flex items-center text-sm text-foreground font-mono">
-                <Globe size={14} className="mr-2 text-muted-foreground" /> {server.region}
-              </div>
-            </div>
-            <div>
-              <div className="text-xs text-muted-foreground uppercase tracking-wider mb-1">IP Address</div>
-              <div className="flex items-center text-sm text-foreground font-mono">
-                <Network size={14} className="mr-2 text-muted-foreground" /> {server.ip}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <h2 className="text-xl font-bold text-foreground mb-4">Running Containers</h2>
+    <DetailViewLayout infoCards={infoCards} gridColumns={3}>
+      <h2 className="text-xl font-bold text-foreground mb-4">
+        Running Containers
+      </h2>
       <div className="bg-surface border border-border rounded-xl overflow-hidden">
         <Table>
           <TableHeader className="bg-background">
@@ -104,7 +90,14 @@ export function ServerDetailView({
                 <TableCell>
                   <StatusBadge
                     type="container"
-                    status={c.status as 'running' | 'stopped' | 'restarting' | 'paused' | 'exited'}
+                    status={
+                      c.status as
+                        | 'running'
+                        | 'stopped'
+                        | 'restarting'
+                        | 'paused'
+                        | 'exited'
+                    }
                     capitalize
                   />
                 </TableCell>
@@ -126,6 +119,6 @@ export function ServerDetailView({
           </TableBody>
         </Table>
       </div>
-    </div>
+    </DetailViewLayout>
   );
 }
