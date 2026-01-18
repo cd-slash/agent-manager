@@ -99,7 +99,7 @@ export function Sidebar({
                 className={cn(
                   'flex items-center rounded-lg transition-all duration-200 group relative h-12',
                   isActive
-                    ? 'bg-sidebar-primary text-sidebar-primary-foreground shadow-md shadow-primary/20'
+                    ? 'border border-input bg-surface-elevated text-sidebar-foreground'
                     : 'text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
                   isCollapsed ? 'justify-center w-12' : 'w-full px-item'
                 )}
@@ -109,7 +109,7 @@ export function Sidebar({
                     size={20}
                     className={cn(
                       isActive
-                        ? 'text-sidebar-primary-foreground'
+                        ? 'text-sidebar-foreground'
                         : 'text-muted-foreground group-hover:text-sidebar-accent-foreground'
                     )}
                   />
@@ -142,30 +142,29 @@ export function Sidebar({
         )}>
           <Tooltip>
             <TooltipTrigger asChild>
-              <button
+              <Button
+                variant="outline"
                 onClick={onQuickTask}
                 className={cn(
-                  'flex items-center rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition-all shadow-lg shadow-primary/20 group border border-primary-foreground/10 h-12',
-                  isCollapsed ? 'justify-center w-12' : 'w-full px-item'
+                  'h-10',
+                  isCollapsed ? 'w-10 px-0' : 'w-full justify-between'
                 )}
               >
-                <div className="w-8 h-8 flex items-center justify-center shrink-0">
-                  <Plus size={20} />
-                </div>
+                <span className="flex items-center gap-2">
+                  <Plus size={16} />
+                  {!isCollapsed && <span>New Task</span>}
+                </span>
                 {!isCollapsed && (
-                  <div className="ml-3 mr-1 flex items-center justify-between flex-1 overflow-hidden">
-                    <span className="font-semibold text-sm">New Task</span>
-                    <span className="flex items-center gap-0.5">
-                      <kbd className="text-[10px] bg-primary-foreground/20 px-sm py-xs rounded text-primary-foreground/90 font-sans border border-primary-foreground/10">
-                        Ctrl
-                      </kbd>
-                      <kbd className="text-[10px] bg-primary-foreground/20 px-sm py-xs rounded text-primary-foreground/90 font-sans border border-primary-foreground/10">
-                        T
-                      </kbd>
-                    </span>
-                  </div>
+                  <span className="flex items-center gap-0.5">
+                    <kbd className="pointer-events-none h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium opacity-100 inline-flex">
+                      Ctrl
+                    </kbd>
+                    <kbd className="pointer-events-none h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium opacity-100 inline-flex">
+                      T
+                    </kbd>
+                  </span>
                 )}
-              </button>
+              </Button>
             </TooltipTrigger>
             {isCollapsed && (
               <TooltipContent side="right">Quick Task (Ctrl+T)</TooltipContent>

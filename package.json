@@ -1,17 +1,19 @@
 {
   "name": "agent-manager",
   "private": true,
+  "packageManager": "bun@1.3.4",
   "workspaces": ["packages/*"],
   "scripts": {
-    "dev": "bun run --filter '*' dev",
+    "dev": "turbo dev --filter=@agent-manager/frontend --filter=@agent-manager/backend",
     "dev:backend": "bun run --filter @agent-manager/backend dev",
     "dev:frontend": "bun run --filter @agent-manager/frontend dev",
-    "dev:convex": "bun run --filter @agent-manager/convex dev",
-    "build": "bun run --filter @agent-manager/frontend build",
+    "dev:convex": "bunx convex dev",
+    "build": "turbo build",
     "start": "bun run --filter @agent-manager/backend start",
     "convex:deploy": "bun run --filter @agent-manager/convex deploy"
   },
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "turbo": "^2.7.5"
   }
 }

@@ -5,6 +5,7 @@ const isProduction = process.env.NODE_ENV === "production";
 const frontendDistPath = path.resolve(import.meta.dir, "../../frontend/dist");
 
 const server = serve({
+  port: 3001,
   routes: {
     "/api/hello": {
       async GET(req) {
