@@ -245,3 +245,47 @@ export const moveToServer = mutation({
     });
   },
 });
+
+// Update agent status (called by agent-gateway)
+export const updateAgentStatus = mutation({
+  args: {
+    containerId: v.string(),
+    hostname: v.string(),
+    agentStatus: v.union(v.literal("online"), v.literal("offline")),
+    lastSeenAt: v.number(),
+  },
+  handler: async (ctx, args) => {
+    // Find container by containerId (Docker ID or tailscale ID)
+    const container = await ctx.db
+      .query("containers")
+      .filter((q) => q.eq(q.field("containerId"), args.containerId))
+      .first();
+
+    if (!container) {
+      // Container not found - could be a new container, log and return
+      console.log(`Container not found: ${args.containerId}`);
+      return null;
+    }
+
+    // Update the container status based on agent connection
+    const status = args.agentStatus === "online" ? "running" : container.status;
+
+    await ctx.db.patch(container._id, {
+      status,
+      updatedAt: args.lastSeenAt,
+    });
+
+    return container._id;
+  },
+});
+
+// Get container by containerId (Docker/Tailscale ID)
+export const getByContainerId = query({
+  args: { containerId: v.string() },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("containers")
+      .filter((q) => q.eq(q.field("containerId"), args.containerId))
+      .first();
+  },
+});

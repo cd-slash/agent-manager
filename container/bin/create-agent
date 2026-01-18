@@ -1,0 +1,372 @@
+#!/usr/bin/env bash
+# Create a slim agent container for task execution
+#
+# Usage:
+#   create-agent --repo owner/repo --branch feature-x --name my-agent
+#
+# This script is designed for fast container creation with minimal overhead.
+
+set -euo pipefail
+
+ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+
+# 3-letter words for random name generation
+WORDS=(
+    ace act add age ago aid aim air all ant ape apt arc are ark arm art ash
+    ask ate awe axe bad bag ban bar bat bay bed bee beg bet bid big bin bit
+    bog bow box boy bud bug bun bus but buy cab can cap car cat cob cod cog
+    cop cot cow cry cub cud cup cur cut dab dad dam day den dew did die dig
+    dim dip doe dog dot dry dub dud due dug dye ear eat eel egg ego elf elk
+    elm emu end era eve ewe eye fab fad fan far fat fax fed fee few fig fin
+    fir fit fix fly foe fog for fox fry fun fur gag gap gas gel gem get gig
+    gin god got gum gun gut guy gym had ham has hat hay hem hen her hid him
+    hip his hit hob hog hop hot how hub hue hug hum hut ice icy ill imp ink
+    inn ion ire irk ivy jab jag jam jar jaw jay jet jig job jog jot joy jug
+    jut keg ken key kid kin kit lab lac lad lag lap law lax lay lea led leg
+    let lid lie lip lit log lop lot low lug mad man map mar mat maw max may
+    men met mid mix mob mod mom mop mow mud mug mum nab nag nap nay net new
+    nip nit nob nod nor not now nub nun nut oak oar oat odd ode off oft oil
+    old one opt orb ore our out ova owe owl own pad pal pan pap par pat paw
+    pay pea peg pen pep per pet pew pie pig pin pit ply pod pop pot pow pox
+    pro pry pub pug pun pup put quo rag ram ran rap rat raw ray red ref rib
+    rid rig rim rip rob rod roe rot row rub rug run rut rye sac sad sag sap
+    sat saw say sea set sew she shy sin sip sir sit six ski sky sly sob sod
+    son sop sot sow soy spa spy sty sub sue sum sun sup tab tad tag tan tap
+    tar tat tax tea ten the thy tic tie tin tip tit toe tog tom ton too top
+    tot tow toy try tub tug two urn use van vat vet vex via vie vim vow wad
+    wag war was wax way web wed wee wet who wig win wit woe wok won woo wow
+    yak yam yap yaw yea yen yes yet yew yon you zap zed zen zip zit zoo
+)
+
+generate_random_name() {
+    local word1=${WORDS[$RANDOM % ${#WORDS[@]}]}
+    local word2=${WORDS[$RANDOM % ${#WORDS[@]}]}
+    local word3=${WORDS[$RANDOM % ${#WORDS[@]}]}
+    echo "${word1}-${word2}-${word3}"
+}
+
+usage() {
+    cat <<'USAGE'
+Usage: create-agent [options]
+
+Creates a slim agent container for executing a single task.
+
+Options:
+  -r, --repo        GitHub repository (owner/repo)
+  -b, --branch      Git branch to work on (default: main)
+  -n, --name        Container name (default: random 3-word name like tar-bat-sag)
+  -s, --server      Remote server SSH host (default: localhost)
+  -q, --quiet       Suppress status messages, output only JSON
+  -h, --help        Show this help
+
+Examples:
+  create-agent --repo myorg/myapp --branch task/FE-001
+  create-agent -r myorg/myapp -n my-agent
+  create-agent -r myorg/myapp -q | jq .name
+USAGE
+}
+
+# Defaults
+REPO=""
+BRANCH="main"
+NAME=""
+SERVER="localhost"
+QUIET=false
+
+# Log to stderr unless quiet mode
+log() { $QUIET || echo "$@" >&2; }
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -r|--repo) REPO="$2"; shift 2 ;;
+        -b|--branch) BRANCH="$2"; shift 2 ;;
+        -n|--name) NAME="$2"; shift 2 ;;
+        -s|--server) SERVER="$2"; shift 2 ;;
+        -q|--quiet) QUIET=true; shift ;;
+        -h|--help) usage; exit 0 ;;
+        *) echo "Unknown option: $1" >&2; usage >&2; exit 1 ;;
+    esac
+done
+
+# Validate required args
+if [[ -z "$REPO" ]]; then
+    echo "Error: --repo is required" >&2
+    exit 1
+fi
+
+# Generate random name if not provided
+if [[ -z "$NAME" ]]; then
+    NAME=$(generate_random_name)
+fi
+
+# Set hostname and project name
+HOSTNAME="$NAME"
+PROJECT_NAME="$HOSTNAME"
+
+# Generate unique WireGuard port from hostname hash (range: 42000-42999)
+# This enables direct Tailscale connections from other LAN machines
+host_hash=$(printf '%s' "$HOSTNAME" | sha1sum | head -c4)
+TS_WG_PORT=$((42000 + (16#$host_hash % 1000)))
+
+# Generate short TUN interface name (Linux limit: 15 chars)
+# Take first 7 chars of hostname, prefix with "ts-"
+TS_TUN_NAME="ts-${HOSTNAME:0:7}"
+
+# Check for macvlan network (enables direct LAN connections for Tailscale)
+# Macvlan gives containers their own LAN IP, allowing Tailscale to advertise
+# the IP directly instead of relying on hairpin NAT through the router
+MACVLAN_NETWORK="agent-macvlan"
+USE_MACVLAN=false
+MACVLAN_IP=""
+
+check_macvlan_network() {
+    local server="$1"
+    if [[ "$server" == "localhost" ]]; then
+        docker network inspect "$MACVLAN_NETWORK" &>/dev/null
+    else
+        ssh "$server" "docker network inspect $MACVLAN_NETWORK" &>/dev/null
+    fi
+}
+
+allocate_macvlan_ip() {
+    local server="$1"
+    # Get the IP range from the macvlan network and allocate based on hostname hash
+    # This ensures consistent IP allocation for the same hostname
+    local network_info
+    if [[ "$server" == "localhost" ]]; then
+        network_info=$(docker network inspect "$MACVLAN_NETWORK" 2>/dev/null)
+    else
+        network_info=$(ssh "$server" "docker network inspect $MACVLAN_NETWORK" 2>/dev/null)
+    fi
+
+    # Extract subnet info (e.g., 192.168.1.224/28 -> base 224, range 16)
+    local ip_range=$(echo "$network_info" | grep -oP '"IPRange":\s*"\K[^"]+' | head -1)
+    if [[ -z "$ip_range" ]]; then
+        # Fallback: use subnet if no IPRange specified
+        ip_range=$(echo "$network_info" | grep -oP '"Subnet":\s*"\K[^"]+' | head -1)
+    fi
+
+    if [[ -z "$ip_range" ]]; then
+        return 1
+    fi
+
+    # Parse CIDR: 192.168.1.224/28 -> base=192.168.1, start=224, size=16
+    local base_ip="${ip_range%.*}"
+    local last_octet="${ip_range##*.}"
+    last_octet="${last_octet%%/*}"
+    local cidr="${ip_range##*/}"
+    local range_size=$((1 << (32 - cidr)))
+
+    # Use hostname hash to pick an IP in the range (skip .0 network address)
+    local hash_num=$((16#$host_hash))
+    local offset=$(( (hash_num % (range_size - 2)) + 1 ))  # +1 to skip network addr
+    local allocated_ip="$base_ip.$((last_octet + offset))"
+
+    echo "$allocated_ip"
+}
+
+if check_macvlan_network "$SERVER"; then
+    MACVLAN_IP=$(allocate_macvlan_ip "$SERVER")
+    if [[ -n "$MACVLAN_IP" ]]; then
+        USE_MACVLAN=true
+        log "  Macvlan   : $MACVLAN_IP (direct LAN)"
+    fi
+fi
+
+log "Creating agent container..."
+log "  Name       : $NAME"
+log "  Repository : $REPO"
+log "  Branch     : $BRANCH"
+log "  Hostname   : $HOSTNAME"
+if $USE_MACVLAN; then
+    log "  Network    : macvlan ($MACVLAN_IP) - direct LAN"
+else
+    log "  Network    : bridge (port $TS_WG_PORT/udp)"
+fi
+log "  Server     : $SERVER"
+
+# Load base env
+BASE_ENV="$ROOT_DIR/.env"
+if [[ ! -f "$BASE_ENV" ]]; then
+    echo "Error: .env file not found at $BASE_ENV" >&2
+    exit 1
+fi
+
+# Create external volumes if they don't exist
+# These volumes persist credentials across container restarts
+create_volume_if_missing() {
+    local volume_name="$1"
+    local server="$2"
+    if [[ "$server" == "localhost" ]]; then
+        if ! docker volume inspect "$volume_name" &>/dev/null; then
+            log "Creating volume: $volume_name"
+            docker volume create "$volume_name" >/dev/null
+        fi
+    else
+        if ! ssh "$server" "docker volume inspect $volume_name" &>/dev/null; then
+            log "Creating volume on $server: $volume_name"
+            ssh "$server" "docker volume create $volume_name" >/dev/null
+        fi
+    fi
+}
+
+log "Ensuring shared volumes exist..."
+create_volume_if_missing "opencode-config" "$SERVER"
+create_volume_if_missing "dotfiles" "$SERVER"
+
+# Create temp env file
+TMP_ENV=$(mktemp)
+TMP_OVERRIDE=$(mktemp --suffix=.yml)
+trap 'rm -f "$TMP_ENV" "$TMP_OVERRIDE"' EXIT
+
+cat "$BASE_ENV" > "$TMP_ENV"
+{
+    echo "WORKSPACE_REPO=$REPO"
+    echo "WORKSPACE_BRANCH=$BRANCH"
+    echo "DEV_HOSTNAME=$HOSTNAME"
+    echo "TS_WG_PORT=$TS_WG_PORT"
+    echo "TS_TUN_NAME=$TS_TUN_NAME"
+} >> "$TMP_ENV"
+
+# Generate compose override for macvlan if available
+if $USE_MACVLAN; then
+    cat > "$TMP_OVERRIDE" <<EOF
+# Auto-generated macvlan override for direct LAN connectivity
+services:
+  server:
+    networks:
+      default: null
+      macvlan:
+        ipv4_address: $MACVLAN_IP
+    # Remove port mapping - not needed with macvlan (container has its own LAN IP)
+    ports: []
+
+networks:
+  macvlan:
+    external: true
+    name: $MACVLAN_NETWORK
+EOF
+    COMPOSE_FILES="-f docker-compose.yml -f $TMP_OVERRIDE"
+else
+    COMPOSE_FILES="-f docker-compose.yml"
+fi
+
+# Build and start container
+cd "$ROOT_DIR"
+
+if [[ "$SERVER" == "localhost" ]]; then
+    # Local execution
+    if $QUIET; then
+        docker compose $COMPOSE_FILES \
+            --env-file "$TMP_ENV" \
+            --project-name "$PROJECT_NAME" \
+            up --build -d &>/dev/null
+    else
+        docker compose $COMPOSE_FILES \
+            --env-file "$TMP_ENV" \
+            --project-name "$PROJECT_NAME" \
+            up --build -d >&2
+    fi
+
+    # Wait for container to be ready, showing status at each stage
+    log "Waiting for container..."
+    
+    # Stage 1: Wait for container to be running
+    for i in {1..30}; do
+        if docker inspect -f '{{.State.Running}}' "$HOSTNAME" 2>/dev/null | grep -q true; then
+            break
+        fi
+        sleep 0.5
+    done
+    log "  Container started"
+    
+    # Stage 2: Wait for Tailscale to connect
+    for i in {1..30}; do
+        if docker exec "$HOSTNAME" tailscale status 2>/dev/null | grep -q "$HOSTNAME"; then
+            break
+        fi
+        sleep 1
+    done
+    log "  Tailscale connected"
+    
+    # Stage 3: Wait for repo to be cloned
+    log "  Cloning $REPO..."
+    for i in {1..60}; do
+        if docker exec "$HOSTNAME" test -f /workspace/.git/HEAD 2>/dev/null; then
+            break
+        fi
+        sleep 1
+    done
+    log "  Repository cloned"
+
+    log ""
+    log "Container ready!"
+    log "  SSH:  ssh root@$HOSTNAME"
+    log "  Logs: docker compose --project-name $PROJECT_NAME logs -f"
+else
+    # Remote execution via SSH
+    log "Deploying to remote server: $SERVER"
+
+    # Build remote compose files argument
+    REMOTE_COMPOSE_FILES="-f docker-compose.yml"
+    REMOTE_CLEANUP="rm -f /tmp/agent-$HOSTNAME.env"
+
+    if $USE_MACVLAN; then
+        REMOTE_COMPOSE_FILES="$REMOTE_COMPOSE_FILES -f /tmp/agent-$HOSTNAME-override.yml"
+        REMOTE_CLEANUP="$REMOTE_CLEANUP /tmp/agent-$HOSTNAME-override.yml"
+    fi
+
+    # Copy files to remote
+    if $QUIET; then
+        scp "$TMP_ENV" "$SERVER:/tmp/agent-$HOSTNAME.env" &>/dev/null
+        $USE_MACVLAN && scp "$TMP_OVERRIDE" "$SERVER:/tmp/agent-$HOSTNAME-override.yml" &>/dev/null
+        ssh "$SERVER" "cd $ROOT_DIR && \
+            docker compose $REMOTE_COMPOSE_FILES \
+                --env-file /tmp/agent-$HOSTNAME.env \
+                --project-name $PROJECT_NAME \
+                up --build -d && \
+            $REMOTE_CLEANUP" &>/dev/null
+    else
+        scp "$TMP_ENV" "$SERVER:/tmp/agent-$HOSTNAME.env" >&2
+        $USE_MACVLAN && scp "$TMP_OVERRIDE" "$SERVER:/tmp/agent-$HOSTNAME-override.yml" >&2
+        ssh "$SERVER" "cd $ROOT_DIR && \
+            docker compose $REMOTE_COMPOSE_FILES \
+                --env-file /tmp/agent-$HOSTNAME.env \
+                --project-name $PROJECT_NAME \
+                up --build -d && \
+            $REMOTE_CLEANUP" >&2
+    fi
+
+    log ""
+    log "Remote container ready!"
+    log "  SSH: ssh -J $SERVER root@$HOSTNAME"
+fi
+
+# Output JSON for coordinator
+if $USE_MACVLAN; then
+    cat <<EOF
+{
+  "name": "$NAME",
+  "containerId": "$PROJECT_NAME",
+  "hostname": "$HOSTNAME",
+  "repo": "$REPO",
+  "branch": "$BRANCH",
+  "server": "$SERVER",
+  "network": "macvlan",
+  "lanIp": "$MACVLAN_IP"
+}
+EOF
+else
+    cat <<EOF
+{
+  "name": "$NAME",
+  "containerId": "$PROJECT_NAME",
+  "hostname": "$HOSTNAME",
+  "repo": "$REPO",
+  "branch": "$BRANCH",
+  "server": "$SERVER",
+  "network": "bridge",
+  "wgPort": $TS_WG_PORT
+}
+EOF
+fi

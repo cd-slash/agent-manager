@@ -12,6 +12,25 @@
         "turbo": "^2.7.5",
       },
     },
+    "packages/agent-gateway": {
+      "name": "@agent-manager/agent-gateway",
+      "version": "0.1.0",
+      "dependencies": {
+        "@agent-manager/agent-shared": "workspace:*",
+        "convex": "^1.31.5",
+      },
+    },
+    "packages/agent-runner": {
+      "name": "@agent-manager/agent-runner",
+      "version": "0.1.0",
+      "dependencies": {
+        "@agent-manager/agent-shared": "workspace:*",
+      },
+    },
+    "packages/agent-shared": {
+      "name": "@agent-manager/agent-shared",
+      "version": "0.1.0",
+    },
     "packages/backend": {
       "name": "@agent-manager/backend",
       "version": "0.1.0",
@@ -63,6 +82,12 @@
     },
   },
   "packages": {
+    "@agent-manager/agent-gateway": ["@agent-manager/agent-gateway@workspace:packages/agent-gateway"],
+
+    "@agent-manager/agent-runner": ["@agent-manager/agent-runner@workspace:packages/agent-runner"],
+
+    "@agent-manager/agent-shared": ["@agent-manager/agent-shared@workspace:packages/agent-shared"],
+
     "@agent-manager/backend": ["@agent-manager/backend@workspace:packages/backend"],
 
     "@agent-manager/convex": ["@agent-manager/convex@workspace:packages/convex"],

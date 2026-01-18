@@ -274,4 +274,45 @@ export default defineSchema({
   })
     .index("by_task", ["taskId"])
     .index("by_status", ["status"]),
+
+  // Agent sessions - Claude Code CLI sessions via agent-gateway
+  agentSessions: defineTable({
+    sessionId: v.string(), // UUID from gateway
+    containerId: v.string(), // Container running the session
+    taskId: v.optional(v.id("tasks")),
+    projectId: v.optional(v.id("projects")),
+    prompt: v.string(), // Initial prompt sent to CLI
+    status: v.union(
+      v.literal("starting"),
+      v.literal("running"),
+      v.literal("completed"),
+      v.literal("failed"),
+      v.literal("cancelled")
+    ),
+    result: v.optional(v.string()), // Final result text
+    error: v.optional(v.string()), // Error message if failed
+    totalCostUsd: v.optional(v.number()),
+    numTurns: v.optional(v.number()),
+    startedAt: v.number(),
+    completedAt: v.optional(v.number()),
+  })
+    .index("by_session_id", ["sessionId"])
+    .index("by_container", ["containerId"])
+    .index("by_task", ["taskId"])
+    .index("by_project", ["projectId"])
+    .index("by_status", ["status"]),
+
+  // Agent messages - streaming output from Claude Code CLI
+  agentMessages: defineTable({
+    sessionId: v.string(), // References agentSessions.sessionId
+    messageType: v.union(
+      v.literal("assistant"),
+      v.literal("result"),
+      v.literal("system")
+    ),
+    content: v.string(), // JSON stringified CliOutputMessage
+    timestamp: v.number(),
+  })
+    .index("by_session", ["sessionId"])
+    .index("by_session_and_timestamp", ["sessionId", "timestamp"]),
 });

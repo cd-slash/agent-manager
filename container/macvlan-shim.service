@@ -1,0 +1,17 @@
+[Unit]
+Description=Macvlan Shim Interface for Docker Container Communication
+Documentation=https://docs.docker.com/network/macvlan/
+After=network-online.target docker.service
+Wants=network-online.target
+Before=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/home/cd-slash/devel/containers/dev-bun/setup-macvlan-shim.sh
+ExecStop=/usr/sbin/ip link delete lan-shim
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
