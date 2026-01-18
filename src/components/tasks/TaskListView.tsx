@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useMutation } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
 import type { Id } from '../../../convex/_generated/dataModel';
@@ -28,18 +28,23 @@ const getStatusVariant = (status: string) => {
 };
 
 export function TaskListView({ tasks, onTaskClick }: TaskListViewProps) {
+  const [selectedTasks, setSelectedTasks] = useState<Task[]>([]);
+  const [clearSelection, setClearSelection] = useState<(() => void) | null>(null);
+
   const deleteTask = useMutation(api.tasks.deleteTask);
 
-  const handleDeleteSelected = async (
-    selectedTasks: Task[],
-    clearSelection: () => void
-  ) => {
+  const handleDeleteSelected = async () => {
     await Promise.all(
       selectedTasks.map((task) =>
         deleteTask({ id: task.id as unknown as Id<'tasks'> })
       )
     );
-    clearSelection();
+    clearSelection?.();
+  };
+
+  const handleSelectionChange = (rows: Task[], clear: () => void) => {
+    setSelectedTasks(rows);
+    setClearSelection(() => clear);
   };
 
   const columns: ColumnDef<Task>[] = useMemo(
@@ -118,27 +123,32 @@ export function TaskListView({ tasks, onTaskClick }: TaskListViewProps) {
   );
 
   return (
-    <DataTable
-      columns={columns}
-      data={tasks}
-      onRowClick={onTaskClick}
-      enableRowSelection
-      enablePagination
-      fillHeight
-      pageSize={10}
-      emptyMessage="No tasks found. Add one to get started!"
-      getRowId={(row) => row.id.toString()}
-      selectionActions={(selectedRows, clearSelection) => (
-        <Button
-          variant="ghost"
-          size="sm"
-          className="text-destructive hover:text-destructive hover:bg-destructive/10"
-          onClick={() => handleDeleteSelected(selectedRows, clearSelection)}
-        >
-          <Trash2 size={16} className="mr-2" />
-          Delete
-        </Button>
+    <div className="h-full flex flex-col">
+      {selectedTasks.length > 0 && (
+        <div className="flex items-center justify-end mb-3">
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-destructive hover:text-destructive hover:bg-destructive/10"
+            onClick={handleDeleteSelected}
+          >
+            <Trash2 size={16} className="mr-2" />
+            Delete ({selectedTasks.length})
+          </Button>
+        </div>
       )}
-    />
+      <DataTable
+        columns={columns}
+        data={tasks}
+        onRowClick={onTaskClick}
+        enableRowSelection
+        enablePagination
+        fillHeight
+        pageSize={10}
+        emptyMessage="No tasks found. Add one to get started!"
+        getRowId={(row) => row.id.toString()}
+        onSelectionChange={handleSelectionChange}
+      />
+    </div>
   );
 }

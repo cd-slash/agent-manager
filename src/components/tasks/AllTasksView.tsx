@@ -51,19 +51,23 @@ export function AllTasksView({ projects, onTaskClick }: AllTasksViewProps) {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [tagFilter, setTagFilter] = useState<string>('all');
   const [projectFilter, setProjectFilter] = useState<string>('all');
+  const [selectedTasks, setSelectedTasks] = useState<TaskWithProject[]>([]);
+  const [clearSelection, setClearSelection] = useState<(() => void) | null>(null);
 
   const deleteTask = useMutation(api.tasks.deleteTask);
 
-  const handleDeleteSelected = async (
-    selectedTasks: TaskWithProject[],
-    clearSelection: () => void
-  ) => {
+  const handleDeleteSelected = async () => {
     await Promise.all(
       selectedTasks.map((task) =>
         deleteTask({ id: task.id as unknown as Id<'tasks'> })
       )
     );
-    clearSelection();
+    clearSelection?.();
+  };
+
+  const handleSelectionChange = (rows: TaskWithProject[], clear: () => void) => {
+    setSelectedTasks(rows);
+    setClearSelection(() => clear);
   };
 
   const allTasks = useMemo(
@@ -239,9 +243,17 @@ export function AllTasksView({ projects, onTaskClick }: AllTasksViewProps) {
           </SelectContent>
         </Select>
 
-        <div className="ml-auto text-sm text-muted-foreground">
-          {filteredTasks.length} task{filteredTasks.length !== 1 ? 's' : ''}
-        </div>
+        {selectedTasks.length > 0 && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="ml-auto text-destructive hover:text-destructive hover:bg-destructive/10"
+            onClick={handleDeleteSelected}
+          >
+            <Trash2 size={16} className="mr-2" />
+            Delete ({selectedTasks.length})
+          </Button>
+        )}
       </div>
 
       {/* Table */}
@@ -259,17 +271,7 @@ export function AllTasksView({ projects, onTaskClick }: AllTasksViewProps) {
             : 'No tasks match your filters.'
         }
         getRowId={(row) => `${row.projectId}-${row.id}`}
-        selectionActions={(selectedRows, clearSelection) => (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-destructive hover:text-destructive hover:bg-destructive/10"
-            onClick={() => handleDeleteSelected(selectedRows, clearSelection)}
-          >
-            <Trash2 size={16} className="mr-2" />
-            Delete
-          </Button>
-        )}
+        onSelectionChange={handleSelectionChange}
       />
     </div>
   );

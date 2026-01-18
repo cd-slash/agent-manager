@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import {
   flexRender,
   getCoreRowModel,
@@ -56,7 +56,7 @@ interface DataTableProps<TData, TValue> {
   tableClassName?: string
   getRowId?: (row: TData) => string
   fillHeight?: boolean
-  selectionActions?: (selectedRows: TData[], clearSelection: () => void) => React.ReactNode
+  onSelectionChange?: (selectedRows: TData[], clearSelection: () => void) => void
 }
 
 export function DataTable<TData, TValue>({
@@ -73,7 +73,7 @@ export function DataTable<TData, TValue>({
   tableClassName,
   getRowId,
   fillHeight = false,
-  selectionActions,
+  onSelectionChange,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>([])
   const [pagination, setPagination] = useState<PaginationState>({
@@ -113,29 +113,23 @@ export function DataTable<TData, TValue>({
   const selectedRows = table.getFilteredSelectedRowModel().rows.map(row => row.original)
   const clearSelection = () => setRowSelection({})
 
+  useEffect(() => {
+    onSelectionChange?.(selectedRows, clearSelection)
+  }, [rowSelection])
+
   return (
     <div className={cn(
       "flex flex-col border border-border rounded-xl overflow-hidden",
       fillHeight && "h-full min-h-0",
       className
     )}>
-      {selectionActions && selectedRows.length > 0 && (
-        <div className="flex items-center justify-between px-card py-2 bg-primary/5 border-b border-border">
-          <span className="text-sm text-muted-foreground">
-            {selectedRows.length} selected
-          </span>
-          <div className="flex items-center gap-2">
-            {selectionActions(selectedRows, clearSelection)}
-          </div>
-        </div>
-      )}
       <div className={cn(
         fillHeight ? "flex-1 min-h-0 overflow-y-auto scrollbar-styled" : "overflow-x-auto"
       )}>
         <Table className={tableClassName}>
           <TableHeader className="bg-background sticky top-0 z-10" style={{ boxShadow: '0 1px 0 var(--border)' }}>
             {table.getHeaderGroups().map((headerGroup) => (
-              <TableRow key={headerGroup.id} className="hover:bg-transparent">
+              <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
                   <TableHead
                     key={header.id}
