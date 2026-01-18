@@ -1,9 +1,13 @@
 import { useMemo } from 'react';
-import { Plus, Layout, List, Clock, MoreHorizontal } from 'lucide-react';
+import { Plus, Layout, List, Clock, Edit2, Trash2 } from 'lucide-react';
 import type { ColumnDef } from '@tanstack/react-table';
 import { GenericListView } from '@/components/layouts/GenericListView';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
+import {
+  TableSelectionActions,
+  SelectionActionButton,
+} from '@/components/ui/table-actions';
 import type { Project } from '@/types';
 
 interface ProjectListViewProps {
@@ -82,31 +86,39 @@ export function ProjectListView({
           </div>
         ),
       },
-      {
-        id: 'actions',
-        header: () => <span className="sr-only">Actions</span>,
-        enableSorting: false,
-        cell: () => (
-          <div className="text-right">
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <MoreHorizontal size={16} />
-            </Button>
-          </div>
-        ),
-      },
     ],
     []
   );
 
   const headerActions = (
-    <Button onClick={onNewProject}>
+    <Button variant="outline" onClick={onNewProject}>
       <Plus size={16} className="mr-2" />
       New Project
     </Button>
+  );
+
+  const selectionActions = (
+    selectedProjects: Project[],
+    clearSelection: () => void
+  ) => (
+    <TableSelectionActions selectedCount={selectedProjects.length}>
+      <SelectionActionButton
+        icon={<Edit2 size={16} />}
+        label="Edit"
+        onClick={() => {
+          // TODO: Implement bulk edit
+        }}
+      />
+      <SelectionActionButton
+        icon={<Trash2 size={16} />}
+        label="Delete"
+        variant="destructive"
+        onClick={() => {
+          // TODO: Implement bulk delete
+          clearSelection();
+        }}
+      />
+    </TableSelectionActions>
   );
 
   return (
@@ -116,7 +128,11 @@ export function ProjectListView({
       onRowClick={onSelectProject}
       enableRowSelection
       includeSelectionColumn
+      enableSearch
+      searchPlaceholder="Search projects..."
+      searchFields={['name', 'description']}
       headerActions={headerActions}
+      selectionActions={selectionActions}
       getRowId={(row) => row.id.toString()}
     />
   );

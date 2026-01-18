@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useMemo } from 'react';
 import { useMutation } from 'convex/react';
 import { api } from '@agent-manager/convex/api';
 import type { Id } from '@agent-manager/convex/dataModel';
@@ -6,21 +6,18 @@ import {
   Edit2,
   GitPullRequest,
   Link as LinkIcon,
-  Search,
   Trash2,
 } from 'lucide-react';
 import type { ColumnDef } from '@tanstack/react-table';
-import { DataTable, createSelectionColumn } from '@/components/ui/data-table';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { Input } from '@/components/ui/input';
+  GenericListView,
+  type FilterConfig,
+} from '@/components/layouts/GenericListView';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import {
+  TableSelectionActions,
+  SelectionActionButton,
+} from '@/components/ui/table-actions';
 import type { Project, Task } from '@/types';
 
 interface AllTasksViewProps {
@@ -47,28 +44,7 @@ const getStatusVariant = (status: string) => {
 };
 
 export function AllTasksView({ projects, onTaskClick }: AllTasksViewProps) {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [tagFilter, setTagFilter] = useState<string>('all');
-  const [projectFilter, setProjectFilter] = useState<string>('all');
-  const [selectedTasks, setSelectedTasks] = useState<TaskWithProject[]>([]);
-  const [clearSelection, setClearSelection] = useState<(() => void) | null>(null);
-
   const deleteTask = useMutation(api.tasks.deleteTask);
-
-  const handleDeleteSelected = async () => {
-    await Promise.all(
-      selectedTasks.map((task) =>
-        deleteTask({ id: task.id as unknown as Id<'tasks'> })
-      )
-    );
-    clearSelection?.();
-  };
-
-  const handleSelectionChange = (rows: TaskWithProject[], clear: () => void) => {
-    setSelectedTasks(rows);
-    setClearSelection(() => clear);
-  };
 
   const allTasks = useMemo(
     () =>
@@ -87,23 +63,40 @@ export function AllTasksView({ projects, onTaskClick }: AllTasksViewProps) {
     [allTasks]
   );
 
-  const filteredTasks = useMemo(() => {
-    return allTasks.filter((task) => {
-      const matchesSearch = task.title
-        .toLowerCase()
-        .includes(searchQuery.toLowerCase());
-      const matchesStatus =
-        statusFilter === 'all' || task.category === statusFilter;
-      const matchesTag = tagFilter === 'all' || task.tag === tagFilter;
-      const matchesProject =
-        projectFilter === 'all' || task.projectId.toString() === projectFilter;
-      return matchesSearch && matchesStatus && matchesTag && matchesProject;
-    });
-  }, [allTasks, searchQuery, statusFilter, tagFilter, projectFilter]);
+  const filters: FilterConfig[] = useMemo(
+    () => [
+      {
+        key: 'projectId',
+        label: 'Project',
+        options: projects.map((p) => ({
+          value: p.id.toString(),
+          label: p.name,
+        })),
+      },
+      {
+        key: 'category',
+        label: 'Status',
+        options: [
+          { value: 'backlog', label: 'Backlog' },
+          { value: 'todo', label: 'To Do' },
+          { value: 'in-progress', label: 'In Progress' },
+          { value: 'done', label: 'Done' },
+        ],
+      },
+      {
+        key: 'tag',
+        label: 'Tag',
+        options: uniqueTags.map((tag) => ({
+          value: tag,
+          label: tag,
+        })),
+      },
+    ],
+    [projects, uniqueTags]
+  );
 
   const columns: ColumnDef<TaskWithProject>[] = useMemo(
     () => [
-      createSelectionColumn<TaskWithProject>(),
       {
         accessorKey: 'title',
         header: 'Task',
@@ -164,115 +157,61 @@ export function AllTasksView({ projects, onTaskClick }: AllTasksViewProps) {
           </Badge>
         ),
       },
-      {
-        id: 'actions',
-        header: () => <span className="sr-only">Actions</span>,
-        enableSorting: false,
-        cell: () => (
-          <div className="text-right">
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              className="text-feature-blue hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <Edit2 size={16} />
-            </Button>
-          </div>
-        ),
-      },
     ],
     []
   );
 
-  return (
-    <div className="h-full flex flex-col p-page">
-      {/* Filters */}
-      <div className="flex items-center gap-3 mb-4 flex-wrap">
-        <div className="relative flex-1 min-w-[200px] max-w-[300px]">
-          <Search
-            size={16}
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-          />
-          <Input
-            placeholder="Search tasks..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9"
-          />
-        </div>
+  const handleDeleteSelected = async (
+    selectedTasks: TaskWithProject[],
+    clearSelection: () => void
+  ) => {
+    await Promise.all(
+      selectedTasks.map((task) =>
+        deleteTask({ id: task.id as unknown as Id<'tasks'> })
+      )
+    );
+    clearSelection();
+  };
 
-        <Select value={projectFilter} onValueChange={setProjectFilter}>
-          <SelectTrigger className="w-[160px]">
-            <SelectValue placeholder="All Projects" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Projects</SelectItem>
-            {projects.map((project) => (
-              <SelectItem key={project.id} value={project.id.toString()}>
-                {project.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-[140px]">
-            <SelectValue placeholder="All Statuses" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Statuses</SelectItem>
-            <SelectItem value="backlog">Backlog</SelectItem>
-            <SelectItem value="todo">To Do</SelectItem>
-            <SelectItem value="in-progress">In Progress</SelectItem>
-            <SelectItem value="done">Done</SelectItem>
-          </SelectContent>
-        </Select>
-
-        <Select value={tagFilter} onValueChange={setTagFilter}>
-          <SelectTrigger className="w-[140px]">
-            <SelectValue placeholder="All Tags" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Tags</SelectItem>
-            {uniqueTags.map((tag) => (
-              <SelectItem key={tag} value={tag}>
-                {tag}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        {selectedTasks.length > 0 && (
-          <Button
-            variant="outline"
-            size="sm"
-            className="ml-auto text-destructive hover:text-destructive hover:bg-destructive/10"
-            onClick={handleDeleteSelected}
-          >
-            <Trash2 size={16} className="mr-2" />
-            Delete ({selectedTasks.length})
-          </Button>
-        )}
-      </div>
-
-      {/* Table */}
-      <DataTable
-        columns={columns}
-        data={filteredTasks}
-        onRowClick={(task) => onTaskClick(task, task.projectId)}
-        enableRowSelection
-        enablePagination
-        fillHeight
-        pageSize={10}
-        emptyMessage={
-          allTasks.length === 0
-            ? 'No tasks found. Create a project to get started!'
-            : 'No tasks match your filters.'
-        }
-        getRowId={(row) => `${row.projectId}-${row.id}`}
-        onSelectionChange={handleSelectionChange}
+  const selectionActions = (
+    selectedTasks: TaskWithProject[],
+    clearSelection: () => void
+  ) => (
+    <TableSelectionActions selectedCount={selectedTasks.length}>
+      <SelectionActionButton
+        icon={<Edit2 size={16} />}
+        label="Edit"
+        onClick={() => {
+          // TODO: Implement bulk edit
+        }}
       />
-    </div>
+      <SelectionActionButton
+        icon={<Trash2 size={16} />}
+        label="Delete"
+        variant="destructive"
+        onClick={() => handleDeleteSelected(selectedTasks, clearSelection)}
+      />
+    </TableSelectionActions>
+  );
+
+  return (
+    <GenericListView
+      columns={columns}
+      data={allTasks}
+      onRowClick={(task) => onTaskClick(task, task.projectId)}
+      enableRowSelection
+      includeSelectionColumn
+      enableSearch
+      searchPlaceholder="Search tasks..."
+      searchFields={['title']}
+      filters={filters}
+      selectionActions={selectionActions}
+      emptyMessage={
+        allTasks.length === 0
+          ? 'No tasks found. Create a project to get started!'
+          : 'No tasks match your filters.'
+      }
+      getRowId={(row) => `${row.projectId}-${row.id}`}
+    />
   );
 }

@@ -1,13 +1,19 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { useMutation } from 'convex/react';
 import { api } from '@agent-manager/convex/api';
 import type { Id } from '@agent-manager/convex/dataModel';
 import { Edit2, GitPullRequest, Link as LinkIcon, Trash2 } from 'lucide-react';
 import type { ColumnDef } from '@tanstack/react-table';
-import { DataTable, createSelectionColumn } from '@/components/ui/data-table';
+import {
+  GenericListView,
+  type FilterConfig,
+} from '@/components/layouts/GenericListView';
 import { Badge } from '@/components/ui/badge';
 import { StatusBadge } from '@/components/ui/status-badge';
-import { Button } from '@/components/ui/button';
+import {
+  TableSelectionActions,
+  SelectionActionButton,
+} from '@/components/ui/table-actions';
 import type { Task } from '@/types';
 
 interface TaskListViewProps {
@@ -16,28 +22,39 @@ interface TaskListViewProps {
 }
 
 export function TaskListView({ tasks, onTaskClick }: TaskListViewProps) {
-  const [selectedTasks, setSelectedTasks] = useState<Task[]>([]);
-  const [clearSelection, setClearSelection] = useState<(() => void) | null>(null);
-
   const deleteTask = useMutation(api.tasks.deleteTask);
 
-  const handleDeleteSelected = async () => {
-    await Promise.all(
-      selectedTasks.map((task) =>
-        deleteTask({ id: task.id as unknown as Id<'tasks'> })
-      )
-    );
-    clearSelection?.();
-  };
+  const uniqueTags = useMemo(
+    () => [...new Set(tasks.map((t) => t.tag))],
+    [tasks]
+  );
 
-  const handleSelectionChange = (rows: Task[], clear: () => void) => {
-    setSelectedTasks(rows);
-    setClearSelection(() => clear);
-  };
+  const filters: FilterConfig[] = useMemo(
+    () => [
+      {
+        key: 'category',
+        label: 'Status',
+        options: [
+          { value: 'backlog', label: 'Backlog' },
+          { value: 'todo', label: 'To Do' },
+          { value: 'in-progress', label: 'In Progress' },
+          { value: 'done', label: 'Done' },
+        ],
+      },
+      {
+        key: 'tag',
+        label: 'Tag',
+        options: uniqueTags.map((tag) => ({
+          value: tag,
+          label: tag,
+        })),
+      },
+    ],
+    [uniqueTags]
+  );
 
   const columns: ColumnDef<Task>[] = useMemo(
     () => [
-      createSelectionColumn<Task>(),
       {
         accessorKey: 'title',
         header: 'Task',
@@ -89,54 +106,58 @@ export function TaskListView({ tasks, onTaskClick }: TaskListViewProps) {
           </Badge>
         ),
       },
-      {
-        id: 'actions',
-        header: () => <span className="sr-only">Actions</span>,
-        enableSorting: false,
-        cell: () => (
-          <div className="text-right">
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              className="text-feature-blue hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <Edit2 size={16} />
-            </Button>
-          </div>
-        ),
-      },
     ],
     []
   );
 
-  return (
-    <div className="h-full flex flex-col">
-      {selectedTasks.length > 0 && (
-        <div className="flex items-center justify-end mb-3">
-          <Button
-            variant="outline"
-            size="sm"
-            className="text-destructive hover:text-destructive hover:bg-destructive/10"
-            onClick={handleDeleteSelected}
-          >
-            <Trash2 size={16} className="mr-2" />
-            Delete ({selectedTasks.length})
-          </Button>
-        </div>
-      )}
-      <DataTable
-        columns={columns}
-        data={tasks}
-        onRowClick={onTaskClick}
-        enableRowSelection
-        enablePagination
-        fillHeight
-        pageSize={10}
-        emptyMessage="No tasks found. Add one to get started!"
-        getRowId={(row) => row.id.toString()}
-        onSelectionChange={handleSelectionChange}
+  const handleDeleteSelected = async (
+    selectedTasks: Task[],
+    clearSelection: () => void
+  ) => {
+    await Promise.all(
+      selectedTasks.map((task) =>
+        deleteTask({ id: task.id as unknown as Id<'tasks'> })
+      )
+    );
+    clearSelection();
+  };
+
+  const selectionActions = (
+    selectedTasks: Task[],
+    clearSelection: () => void
+  ) => (
+    <TableSelectionActions selectedCount={selectedTasks.length}>
+      <SelectionActionButton
+        icon={<Edit2 size={16} />}
+        label="Edit"
+        onClick={() => {
+          // TODO: Implement bulk edit
+        }}
       />
-    </div>
+      <SelectionActionButton
+        icon={<Trash2 size={16} />}
+        label="Delete"
+        variant="destructive"
+        onClick={() => handleDeleteSelected(selectedTasks, clearSelection)}
+      />
+    </TableSelectionActions>
+  );
+
+  return (
+    <GenericListView
+      columns={columns}
+      data={tasks}
+      onRowClick={onTaskClick}
+      enableRowSelection
+      includeSelectionColumn
+      enableSearch
+      searchPlaceholder="Search tasks..."
+      searchFields={['title']}
+      filters={filters}
+      selectionActions={selectionActions}
+      emptyMessage="No tasks found. Add one to get started!"
+      getRowId={(row) => row.id.toString()}
+      className="p-0"
+    />
   );
 }

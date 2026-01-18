@@ -1,15 +1,7 @@
 import { useState, useMemo, type ReactNode } from 'react';
-import { Search, Filter } from 'lucide-react';
 import type { ColumnDef } from '@tanstack/react-table';
 import { DataTable, createSelectionColumn } from '@/components/ui/data-table';
-import { Input } from '@/components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { TableFilter } from '@/components/ui/table-filter';
 import { cn } from '@/lib/utils';
 
 export interface FilterOption {
@@ -47,13 +39,15 @@ export interface GenericListViewProps<TData extends Record<string, unknown>> {
   filters?: FilterConfig[];
   /** Header actions (buttons, etc.) to show on the right side of header */
   headerActions?: ReactNode;
+  /** Selection actions rendered when rows are selected */
+  selectionActions?: (selectedRows: TData[], clearSelection: () => void) => ReactNode;
   /** Message to show when there's no data */
   emptyMessage?: string;
   /** Fill the available height */
   fillHeight?: boolean;
   /** Get unique row ID */
   getRowId?: (row: TData) => string;
-  /** Handler called when selection changes */
+  /** Handler called when selection changes (use selectionActions instead for rendering) */
   onSelectionChange?: (selectedRows: TData[], clearSelection: () => void) => void;
   /** Additional class names */
   className?: string;
@@ -73,6 +67,7 @@ export function GenericListView<TData extends Record<string, unknown>>({
   searchFields = [],
   filters = [],
   headerActions,
+  selectionActions,
   emptyMessage = 'No results found.',
   fillHeight = true,
   getRowId,
@@ -88,6 +83,8 @@ export function GenericListView<TData extends Record<string, unknown>>({
     }
     return initial;
   });
+  const [selectedRows, setSelectedRows] = useState<TData[]>([]);
+  const [clearSelectionFn, setClearSelectionFn] = useState<(() => void) | null>(null);
 
   const filteredData = useMemo(() => {
     return data.filter((item) => {
@@ -126,58 +123,58 @@ export function GenericListView<TData extends Record<string, unknown>>({
     return columns;
   }, [columns, includeSelectionColumn, enableRowSelection]);
 
+  const handleFilterChange = (key: string, value: string) => {
+    setFilterValues((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleClearFilters = () => {
+    setSearchTerm('');
+    const clearedFilters: Record<string, string> = {};
+    for (const filter of filters) {
+      clearedFilters[filter.key] = 'all';
+    }
+    setFilterValues(clearedFilters);
+  };
+
+  const handleSelectionChange = (rows: TData[], clear: () => void) => {
+    setSelectedRows(rows);
+    setClearSelectionFn(() => clear);
+    onSelectionChange?.(rows, clear);
+  };
+
   const hasHeader = headerActions || enableSearch || filters.length > 0;
+  const hasSelectionActions = selectionActions && selectedRows.length > 0;
 
   return (
     <div className={cn('p-page h-full flex flex-col bg-background', className)}>
       {hasHeader && (
         <div className="flex flex-col sm:flex-row gap-card mb-section">
           {/* Search and filters on the left */}
-          <div className="flex flex-col sm:flex-row gap-card flex-1">
-            {enableSearch && (
-              <div className="relative flex-1 max-w-md">
-                <Search
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-                  size={16}
-                />
-                <Input
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder={searchPlaceholder}
-                  className="pl-10"
-                />
-              </div>
+          <div className="flex-1">
+            {(enableSearch || filters.length > 0) && (
+              <TableFilter
+                searchValue={searchTerm}
+                onSearchChange={setSearchTerm}
+                searchPlaceholder={searchPlaceholder}
+                filters={filters}
+                filterValues={filterValues}
+                onFilterChange={handleFilterChange}
+                onClearFilters={handleClearFilters}
+              />
             )}
-
-            {filters.map((filter) => (
-              <div key={filter.key} className="relative w-full sm:w-48">
-                <Select
-                  value={filterValues[filter.key] ?? 'all'}
-                  onValueChange={(value) =>
-                    setFilterValues((prev) => ({ ...prev, [filter.key]: value }))
-                  }
-                >
-                  <SelectTrigger>
-                    <Filter size={16} className="mr-2 text-muted-foreground" />
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All {filter.label}</SelectItem>
-                    {filter.options.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            ))}
           </div>
 
           {/* Actions on the right */}
           {headerActions && (
             <div className="flex justify-end">{headerActions}</div>
           )}
+        </div>
+      )}
+
+      {/* Selection actions toolbar */}
+      {hasSelectionActions && (
+        <div className="mb-card">
+          {selectionActions(selectedRows, clearSelectionFn!)}
         </div>
       )}
 
@@ -191,7 +188,7 @@ export function GenericListView<TData extends Record<string, unknown>>({
         pageSize={pageSize}
         emptyMessage={emptyMessage}
         getRowId={getRowId}
-        onSelectionChange={onSelectionChange}
+        onSelectionChange={handleSelectionChange}
       />
     </div>
   );

@@ -5,7 +5,10 @@ import {
   GenericListView,
   type FilterConfig,
 } from '@/components/layouts/GenericListView';
-import { Button } from '@/components/ui/button';
+import {
+  TableSelectionActions,
+  SelectionActionButton,
+} from '@/components/ui/table-actions';
 import type { Container } from '@/types';
 
 interface ContainerViewProps {
@@ -89,59 +92,57 @@ export function ContainerView({
           <span className="text-muted-foreground">{row.getValue('server')}</span>
         ),
       },
-      {
-        id: 'actions',
-        header: () => <span className="sr-only">Actions</span>,
-        enableSorting: false,
-        cell: ({ row }) => {
-          const container = row.original;
-          return (
-            <div className="flex items-center justify-end space-x-item">
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={(e) => e.stopPropagation()}
-                title="Logs"
-                className="text-muted-foreground hover:text-feature-blue"
-              >
-                <FileText size={16} />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={(e) => e.stopPropagation()}
-                title="Terminal"
-              >
-                <Terminal size={16} />
-              </Button>
-              {container.status === 'running' ? (
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={(e) => e.stopPropagation()}
-                  title="Stop"
-                  className="text-muted-foreground hover:text-destructive"
-                >
-                  <StopCircle size={16} />
-                </Button>
-              ) : (
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={(e) => e.stopPropagation()}
-                  title="Start"
-                  className="text-muted-foreground hover:text-success"
-                >
-                  <Play size={16} />
-                </Button>
-              )}
-            </div>
-          );
-        },
-      },
     ],
     []
   );
+
+  const selectionActions = (
+    selectedContainers: Container[],
+    clearSelection: () => void
+  ) => {
+    const canStop = selectedContainers.some((c) => c.status === 'running');
+    const canStart = selectedContainers.some((c) => c.status === 'stopped');
+
+    return (
+      <TableSelectionActions selectedCount={selectedContainers.length}>
+        <SelectionActionButton
+          icon={<FileText size={16} />}
+          label="Logs"
+          onClick={() => {
+            // TODO: Implement view logs
+          }}
+        />
+        <SelectionActionButton
+          icon={<Terminal size={16} />}
+          label="Terminal"
+          onClick={() => {
+            // TODO: Implement open terminal
+          }}
+        />
+        {canStop && (
+          <SelectionActionButton
+            icon={<StopCircle size={16} />}
+            label="Stop"
+            variant="destructive"
+            onClick={() => {
+              // TODO: Implement stop containers
+              clearSelection();
+            }}
+          />
+        )}
+        {canStart && (
+          <SelectionActionButton
+            icon={<Play size={16} />}
+            label="Start"
+            onClick={() => {
+              // TODO: Implement start containers
+              clearSelection();
+            }}
+          />
+        )}
+      </TableSelectionActions>
+    );
+  };
 
   return (
     <GenericListView
@@ -154,6 +155,7 @@ export function ContainerView({
       searchPlaceholder="Search containers..."
       searchFields={['name', 'image', 'server']}
       filters={statusFilters}
+      selectionActions={selectionActions}
       emptyMessage="No containers found matching your filters."
       getRowId={(row) => row.id}
     />

@@ -1,15 +1,34 @@
 import { useMemo } from 'react';
 import { Plus, Server, Terminal, FileText } from 'lucide-react';
 import type { ColumnDef } from '@tanstack/react-table';
-import { GenericListView } from '@/components/layouts/GenericListView';
+import {
+  GenericListView,
+  type FilterConfig,
+} from '@/components/layouts/GenericListView';
 import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/ui/status-badge';
+import {
+  TableSelectionActions,
+  SelectionActionButton,
+} from '@/components/ui/table-actions';
 import type { Server as ServerType } from '@/types';
 
 interface ServerViewProps {
   servers: ServerType[];
   onSelectServer: (serverId: string) => void;
 }
+
+const statusFilters: FilterConfig[] = [
+  {
+    key: 'status',
+    label: 'Status',
+    options: [
+      { value: 'online', label: 'Online' },
+      { value: 'maintenance', label: 'Maintenance' },
+      { value: 'offline', label: 'Offline' },
+    ],
+  },
+];
 
 export function ServerView({ servers, onSelectServer }: ServerViewProps) {
   const columns: ColumnDef<ServerType>[] = useMemo(
@@ -87,31 +106,6 @@ export function ServerView({ servers, onSelectServer }: ServerViewProps) {
           );
         },
       },
-      {
-        id: 'actions',
-        header: () => <span className="sr-only">Actions</span>,
-        enableSorting: false,
-        cell: () => (
-          <div className="flex justify-end space-x-item">
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={(e) => e.stopPropagation()}
-              title="Terminal"
-            >
-              <Terminal size={16} />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={(e) => e.stopPropagation()}
-              title="Logs"
-            >
-              <FileText size={16} />
-            </Button>
-          </div>
-        ),
-      },
     ],
     []
   );
@@ -123,6 +117,28 @@ export function ServerView({ servers, onSelectServer }: ServerViewProps) {
     </Button>
   );
 
+  const selectionActions = (
+    selectedServers: ServerType[],
+    _clearSelection: () => void
+  ) => (
+    <TableSelectionActions selectedCount={selectedServers.length}>
+      <SelectionActionButton
+        icon={<Terminal size={16} />}
+        label="Terminal"
+        onClick={() => {
+          // TODO: Implement open terminal
+        }}
+      />
+      <SelectionActionButton
+        icon={<FileText size={16} />}
+        label="Logs"
+        onClick={() => {
+          // TODO: Implement view logs
+        }}
+      />
+    </TableSelectionActions>
+  );
+
   return (
     <GenericListView
       columns={columns}
@@ -130,7 +146,12 @@ export function ServerView({ servers, onSelectServer }: ServerViewProps) {
       onRowClick={(server) => onSelectServer(server.id)}
       enableRowSelection
       includeSelectionColumn
+      enableSearch
+      searchPlaceholder="Search servers..."
+      searchFields={['name', 'ip', 'region']}
+      filters={statusFilters}
       headerActions={headerActions}
+      selectionActions={selectionActions}
       getRowId={(row) => row.id.toString()}
     />
   );
