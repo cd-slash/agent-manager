@@ -1,5 +1,8 @@
-import { useMemo } from 'react';
-import { Box, FileText, Terminal, StopCircle, Play } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { Box, FileText, Terminal, StopCircle, Play, RefreshCw } from 'lucide-react';
+import { useAction } from 'convex/react';
+import { api } from '@agent-manager/convex/api';
+import { Button } from '@/components/ui/button';
 import type { ColumnDef } from '@tanstack/react-table';
 import {
   GenericListView,
@@ -31,6 +34,31 @@ export function ContainerView({
   containers,
   onSelectContainer,
 }: ContainerViewProps) {
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const syncDevices = useAction(api.tailscale.syncDevices);
+
+  const handleRefreshFromTailscale = async () => {
+    setIsRefreshing(true);
+    try {
+      await syncDevices();
+    } catch (error) {
+      console.error('Failed to sync from Tailscale:', error);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  const headerActions = (
+    <Button
+      variant="outline"
+      onClick={handleRefreshFromTailscale}
+      disabled={isRefreshing}
+    >
+      <RefreshCw size={16} className={`mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+      {isRefreshing ? 'Syncing...' : 'Refresh from Tailscale'}
+    </Button>
+  );
+
   const columns: ColumnDef<Container>[] = useMemo(
     () => [
       {
@@ -155,6 +183,7 @@ export function ContainerView({
       searchPlaceholder="Search containers..."
       searchFields={['name', 'image', 'server']}
       filters={statusFilters}
+      headerActions={headerActions}
       selectionActions={selectionActions}
       emptyMessage="No containers found matching your filters."
       getRowId={(row) => row.id}

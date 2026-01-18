@@ -11,8 +11,8 @@ export const list = query({
     // Enrich with server info
     const enriched = await Promise.all(
       containers.map(async (container) => {
-        const server = await ctx.db.get(container.serverId);
-        return { ...container, serverName: server?.name };
+        const server = container.serverId ? await ctx.db.get(container.serverId) : null;
+        return { ...container, serverName: server?.name ?? null };
       })
     );
     return enriched;
@@ -48,8 +48,8 @@ export const get = query({
     const container = await ctx.db.get(args.id);
     if (!container) return null;
 
-    const server = await ctx.db.get(container.serverId);
-    return { ...container, serverName: server?.name };
+    const server = container.serverId ? await ctx.db.get(container.serverId) : null;
+    return { ...container, serverName: server?.name ?? null };
   },
 });
 

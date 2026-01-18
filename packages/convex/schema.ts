@@ -2,6 +2,15 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
 export default defineSchema({
+  // Settings table - global app settings (credentials, config)
+  settings: defineTable({
+    key: v.string(),
+    value: v.any(),
+    lastValidated: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_key", ["key"]),
+
   // Projects table - project metadata and plan
   projects: defineTable({
     name: v.string(),
@@ -171,15 +180,20 @@ export default defineSchema({
     ),
     cpu: v.number(), // percentage 0-100
     mem: v.number(), // percentage 0-100
+    // Tailscale integration fields
+    tailscaleNodeId: v.optional(v.string()),
+    tailscaleHostname: v.optional(v.string()),
+    tailscaleTags: v.optional(v.array(v.string())),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
     .index("by_status", ["status"])
-    .index("by_region", ["region"]),
+    .index("by_region", ["region"])
+    .index("by_tailscale_node_id", ["tailscaleNodeId"]),
 
-  // Containers - Docker containers
+  // Containers - Docker containers (also used for Tailscale code-agent devices)
   containers: defineTable({
-    serverId: v.id("servers"),
+    serverId: v.optional(v.id("servers")), // Optional for Tailscale-managed containers
     containerId: v.string(), // Docker container ID
     name: v.string(),
     image: v.string(),
@@ -191,11 +205,16 @@ export default defineSchema({
       v.literal("exited")
     ),
     port: v.string(),
+    // Tailscale integration fields
+    tailscaleNodeId: v.optional(v.string()),
+    tailscaleHostname: v.optional(v.string()),
+    tailscaleTags: v.optional(v.array(v.string())),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
     .index("by_server", ["serverId"])
-    .index("by_status", ["status"]),
+    .index("by_status", ["status"])
+    .index("by_tailscale_node_id", ["tailscaleNodeId"]),
 
   // Server metrics - time-series metrics
   serverMetrics: defineTable({
@@ -213,7 +232,8 @@ export default defineSchema({
     source: v.union(
       v.literal("github"),
       v.literal("cicd"),
-      v.literal("agent")
+      v.literal("agent"),
+      v.literal("tailscale")
     ),
     eventType: v.string(),
     payload: v.any(),

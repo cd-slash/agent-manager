@@ -1,5 +1,7 @@
-import { useMemo } from 'react';
-import { Plus, Server, Terminal, FileText } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { Plus, Server, Terminal, FileText, RefreshCw } from 'lucide-react';
+import { useAction } from 'convex/react';
+import { api } from '@agent-manager/convex/api';
 import type { ColumnDef } from '@tanstack/react-table';
 import {
   GenericListView,
@@ -31,6 +33,20 @@ const statusFilters: FilterConfig[] = [
 ];
 
 export function ServerView({ servers, onSelectServer }: ServerViewProps) {
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const syncDevices = useAction(api.tailscale.syncDevices);
+
+  const handleRefreshFromTailscale = async () => {
+    setIsRefreshing(true);
+    try {
+      await syncDevices();
+    } catch (error) {
+      console.error('Failed to sync from Tailscale:', error);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
   const columns: ColumnDef<ServerType>[] = useMemo(
     () => [
       {
@@ -111,10 +127,20 @@ export function ServerView({ servers, onSelectServer }: ServerViewProps) {
   );
 
   const headerActions = (
-    <Button variant="outline">
-      <Plus size={16} className="mr-2" />
-      Provision Server
-    </Button>
+    <div className="flex items-center gap-2">
+      <Button
+        variant="outline"
+        onClick={handleRefreshFromTailscale}
+        disabled={isRefreshing}
+      >
+        <RefreshCw size={16} className={`mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+        {isRefreshing ? 'Syncing...' : 'Refresh from Tailscale'}
+      </Button>
+      <Button variant="outline">
+        <Plus size={16} className="mr-2" />
+        Provision Server
+      </Button>
+    </div>
   );
 
   const selectionActions = (

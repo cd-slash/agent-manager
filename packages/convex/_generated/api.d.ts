@@ -14,14 +14,20 @@ import type * as containers from "../containers.js";
 import type * as crons from "../crons.js";
 import type * as http from "../http.js";
 import type * as internal_aiResponses from "../internal/aiResponses.js";
+import type * as internal_cascadeDelete from "../internal/cascadeDelete.js";
 import type * as internal_history from "../internal/history.js";
 import type * as internal_metrics from "../internal/metrics.js";
+import type * as internal_tailscale from "../internal/tailscale.js";
+import type * as internal_updateUtils from "../internal/updateUtils.js";
 import type * as internal_webhookProcessing from "../internal/webhookProcessing.js";
 import type * as projects from "../projects.js";
 import type * as pullRequests from "../pullRequests.js";
 import type * as servers from "../servers.js";
+import type * as settings from "../settings.js";
+import type * as tailscale from "../tailscale.js";
 import type * as tasks from "../tasks.js";
 import type * as tests from "../tests.js";
+import type * as validators from "../validators.js";
 import type * as webhooks from "../webhooks.js";
 
 import type {
@@ -37,14 +43,20 @@ declare const fullApi: ApiFromModules<{
   crons: typeof crons;
   http: typeof http;
   "internal/aiResponses": typeof internal_aiResponses;
+  "internal/cascadeDelete": typeof internal_cascadeDelete;
   "internal/history": typeof internal_history;
   "internal/metrics": typeof internal_metrics;
+  "internal/tailscale": typeof internal_tailscale;
+  "internal/updateUtils": typeof internal_updateUtils;
   "internal/webhookProcessing": typeof internal_webhookProcessing;
   projects: typeof projects;
   pullRequests: typeof pullRequests;
   servers: typeof servers;
+  settings: typeof settings;
+  tailscale: typeof tailscale;
   tasks: typeof tasks;
   tests: typeof tests;
+  validators: typeof validators;
   webhooks: typeof webhooks;
 }>;
 

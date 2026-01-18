@@ -74,6 +74,41 @@ http.route({
   }),
 });
 
+// Tailscale webhook endpoint
+http.route({
+  path: "/webhooks/tailscale",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    try {
+      const payload = await request.json();
+      const eventType = (payload as { type?: string }).type ?? "unknown";
+
+      // Store the webhook event
+      const eventId = await ctx.runMutation(api.webhooks.store, {
+        source: "tailscale",
+        eventType,
+        payload,
+      });
+
+      // Schedule async processing
+      await ctx.scheduler.runAfter(0, internal.internal.webhookProcessing.processTailscaleWebhook, {
+        eventId,
+      });
+
+      return new Response(JSON.stringify({ success: true, eventId }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      return new Response(JSON.stringify({ error: message }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+  }),
+});
+
 // AI agent callback endpoint
 http.route({
   path: "/webhooks/agent/callback",

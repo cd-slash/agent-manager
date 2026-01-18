@@ -65,7 +65,8 @@ export const senderValidator = v.union(v.literal("ai"), v.literal("user"));
 export const webhookSourceValidator = v.union(
   v.literal("github"),
   v.literal("cicd"),
-  v.literal("agent")
+  v.literal("agent"),
+  v.literal("tailscale")
 );
 
 // Webhook status

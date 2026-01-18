@@ -193,6 +193,7 @@ export const getStats = query({
       github: events.filter((e) => e.source === "github").length,
       cicd: events.filter((e) => e.source === "cicd").length,
       agent: events.filter((e) => e.source === "agent").length,
+      tailscale: events.filter((e) => e.source === "tailscale").length,
     };
 
     return {
