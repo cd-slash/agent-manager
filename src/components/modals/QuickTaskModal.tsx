@@ -48,7 +48,7 @@ export function QuickTaskModal({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || !projectId) return;
-    onCreate(Number(projectId), title);
+    onCreate(projectId as unknown as number, title);
     onClose();
   };
 
