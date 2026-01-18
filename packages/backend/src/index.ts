@@ -1,11 +1,11 @@
 import { serve } from "bun";
-import index from "./index.html";
+import path from "path";
+
+const isProduction = process.env.NODE_ENV === "production";
+const frontendDistPath = path.resolve(import.meta.dir, "../../frontend/dist");
 
 const server = serve({
   routes: {
-    // Serve index.html for all unmatched routes.
-    "/*": index,
-
     "/api/hello": {
       async GET(req) {
         return Response.json({
@@ -29,13 +29,13 @@ const server = serve({
     },
   },
 
-  development: process.env.NODE_ENV !== "production" && {
-    // Enable browser hot reloading in development
-    hmr: true,
+  // Serve static files from frontend dist in production
+  static: isProduction ? frontendDistPath : undefined,
 
-    // Echo console logs from the browser to the server
+  development: !isProduction && {
+    hmr: true,
     console: true,
   },
 });
 
-console.log(`🚀 Server running at ${server.url}`);
+console.log(`Backend server running at ${server.url}`);

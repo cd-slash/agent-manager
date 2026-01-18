@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useMutation } from 'convex/react';
-import { api } from '../../../convex/_generated/api';
-import type { Id } from '../../../convex/_generated/dataModel';
+import { api } from '@agent-manager/convex/api';
+import type { Id } from '@agent-manager/convex/dataModel';
 import {
   Edit2,
   GitPullRequest,

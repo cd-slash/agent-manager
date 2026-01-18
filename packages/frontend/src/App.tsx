@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useQuery, useMutation } from 'convex/react';
-import { api } from '../convex/_generated/api';
-import type { Id } from '../convex/_generated/dataModel';
+import { api } from '@agent-manager/convex/api';
+import type { Id } from '@agent-manager/convex/dataModel';
 import { ChevronLeft, GitPullRequest } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';

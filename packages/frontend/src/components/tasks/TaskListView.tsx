@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useMutation } from 'convex/react';
-import { api } from '../../../convex/_generated/api';
-import type { Id } from '../../../convex/_generated/dataModel';
+import { api } from '@agent-manager/convex/api';
+import type { Id } from '@agent-manager/convex/dataModel';
 import { Edit2, GitPullRequest, Link as LinkIcon, Trash2 } from 'lucide-react';
 import type { ColumnDef } from '@tanstack/react-table';
 import { DataTable, createSelectionColumn } from '@/components/ui/data-table';

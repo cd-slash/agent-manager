@@ -1,0 +1,23 @@
+{
+  "name": "@agent-manager/convex",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./api": {
+      "types": "./_generated/api.d.ts",
+      "import": "./_generated/api.js"
+    },
+    "./dataModel": {
+      "types": "./_generated/dataModel.d.ts"
+    }
+  },
+  "scripts": {
+    "dev": "bunx convex dev",
+    "codegen": "bunx convex codegen",
+    "deploy": "bunx convex deploy"
+  },
+  "dependencies": {
+    "convex": "^1.31.5"
+  }
+}
