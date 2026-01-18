@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { Plus, Layout, List, Clock, MoreHorizontal } from 'lucide-react';
 import type { ColumnDef } from '@tanstack/react-table';
-import { DataTable, createSelectionColumn } from '@/components/ui/data-table';
+import { GenericListView } from '@/components/layouts/GenericListView';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import type { Project } from '@/types';
@@ -19,7 +19,6 @@ export function ProjectListView({
 }: ProjectListViewProps) {
   const columns: ColumnDef<Project>[] = useMemo(
     () => [
-      createSelectionColumn<Project>(),
       {
         accessorKey: 'name',
         header: 'Project Name',
@@ -103,23 +102,22 @@ export function ProjectListView({
     []
   );
 
+  const headerActions = (
+    <Button onClick={onNewProject}>
+      <Plus size={16} className="mr-2" />
+      New Project
+    </Button>
+  );
+
   return (
-    <div className="p-page h-full flex flex-col bg-background">
-      <div className="flex justify-end mb-section">
-        <Button onClick={onNewProject}>
-          <Plus size={16} className="mr-2" />
-          New Project
-        </Button>
-      </div>
-      <DataTable
-        columns={columns}
-        data={projects}
-        onRowClick={onSelectProject}
-        enableRowSelection
-        enablePagination
-        fillHeight
-        getRowId={(row) => row.id.toString()}
-      />
-    </div>
+    <GenericListView
+      columns={columns}
+      data={projects}
+      onRowClick={onSelectProject}
+      enableRowSelection
+      includeSelectionColumn
+      headerActions={headerActions}
+      getRowId={(row) => row.id.toString()}
+    />
   );
 }
