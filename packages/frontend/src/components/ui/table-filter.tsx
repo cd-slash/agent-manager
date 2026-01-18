@@ -75,6 +75,7 @@ export function TableFilter({
                 <DropdownMenuCheckboxItem
                   checked={!filterValues[filter.key] || filterValues[filter.key] === 'all'}
                   onCheckedChange={() => onFilterChange(filter.key, 'all')}
+                  onSelect={(e) => e.preventDefault()}
                 >
                   All
                 </DropdownMenuCheckboxItem>
@@ -83,28 +84,28 @@ export function TableFilter({
                     key={option.value}
                     checked={filterValues[filter.key] === option.value}
                     onCheckedChange={() => onFilterChange(filter.key, option.value)}
+                    onSelect={(e) => e.preventDefault()}
                   >
                     {option.label}
                   </DropdownMenuCheckboxItem>
                 ))}
               </div>
             ))}
+            <DropdownMenuSeparator />
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onClearFilters}
+              disabled={!hasActiveFilters}
+              className="w-full justify-center text-muted-foreground hover:text-foreground"
+            >
+              <X size={16} className="mr-1" />
+              Clear all
+            </Button>
           </DropdownMenuContent>
         </DropdownMenu>
       )}
 
-      {/* Clear filters */}
-      {hasActiveFilters && (
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={onClearFilters}
-          className="text-muted-foreground hover:text-foreground"
-        >
-          <X size={16} className="mr-1" />
-          Clear
-        </Button>
-      )}
     </div>
   );
 }
