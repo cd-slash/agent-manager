@@ -1,615 +1,444 @@
 # Agent System Design
 
-This document describes the AI agent integration architecture for the Agent Manager platform. The system is designed to orchestrate multiple AI coding agents, track their work, and facilitate human-AI collaboration on software development tasks.
+This document describes the AI agent integration architecture for the Agent Manager platform. The system orchestrates multiple Docker containers running Claude Code CLI, connected via a WebSocket gateway.
 
 ## Overview
 
-The Agent Manager serves as a control plane for AI coding agents, providing:
-
-- **Task Assignment**: Dispatch tasks to AI agents with full context
-- **Progress Tracking**: Monitor agent work in real-time
-- **Conversation Interface**: Chat with agents at project and task levels
-- **Code Review Integration**: Manage agent-created pull requests
-- **Feedback Loop**: Human review and correction of agent outputs
-
-## Agent Interaction Model
+The Agent Manager uses a distributed architecture:
 
 ```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                          AGENT MANAGER UI                                │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐    │
-│  │   Project   │  │    Task     │  │    Chat     │  │     PR      │    │
-│  │    View     │  │    View     │  │   Panel     │  │   Review    │    │
-│  └─────────────┘  └─────────────┘  └─────────────┘  └─────────────┘    │
-└─────────────────────────────────────────────────────────────────────────┘
-                               │
-                               ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│                         CONVEX BACKEND                                   │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐    │
-│  │  agentJobs  │  │chatMessages │  │    tasks    │  │ pullRequests│    │
-│  └─────────────┘  └─────────────┘  └─────────────┘  └─────────────┘    │
-└─────────────────────────────────────────────────────────────────────────┘
-                               │
-            ┌──────────────────┼──────────────────┐
-            ▼                  ▼                  ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              Frontend (React 19)                              │
+│                          Real-time subscriptions via Convex                   │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                        │
+                                        ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                             Convex Backend                                    │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐     │
+│  │agentSessions │  │agentMessages │  │  containers  │  │    tasks     │     │
+│  └──────────────┘  └──────────────┘  └──────────────┘  └──────────────┘     │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                        │
+                                        ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         Agent Gateway (Bun WebSocket)                         │
+│                    packages/agent-gateway - Port 3100                         │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐                       │
+│  │ConnectionMgr │  │  HTTP API    │  │ Convex Sync  │                       │
+│  └──────────────┘  └──────────────┘  └──────────────┘                       │
+└─────────────────────────────────────────────────────────────────────────────┘
+          │                    │                    │
+          ▼                    ▼                    ▼
 ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐
-│   AI Agent 1    │  │   AI Agent 2    │  │   AI Agent N    │
-│  (Claude Code)  │  │   (Codex)       │  │  (Custom Agent) │
+│   Container 1   │  │   Container 2   │  │   Container N   │
+│  container-api  │  │  container-api  │  │  container-api  │
+│  + Claude CLI   │  │  + Claude CLI   │  │  + Claude CLI   │
 └─────────────────┘  └─────────────────┘  └─────────────────┘
-            │                  │                  │
-            └──────────────────┴──────────────────┘
-                               │
-                               ▼
+         │                    │                    │
+         └────────────────────┴────────────────────┘
+                              │
+                              ▼
                     ┌─────────────────┐
-                    │  GitHub/GitLab  │
-                    │   Repository    │
+                    │  Git Repository │
+                    │    (cloned)     │
                     └─────────────────┘
 ```
 
-## Data Model
+## Package Structure
 
-### Agent Jobs Table
+### packages/agent-shared
 
-The `agentJobs` table tracks all work assigned to AI agents:
+Shared TypeScript types for the WebSocket protocol:
 
 ```typescript
-agentJobs: defineTable({
-  taskId: v.id("tasks"),              // Associated task
-  agentType: v.string(),              // "claude-code", "codex", "custom"
+// Message types for container <-> gateway communication
+export type MessageType =
+  | "connect" | "connected" | "heartbeat" | "disconnect"
+  | "auth:request" | "auth:status" | "auth:flow:start" | "auth:flow:url" | "auth:flow:complete"
+  | "exec:start" | "exec:stream" | "exec:complete" | "exec:abort" | "exec:aborted"
+  | "session:list" | "session:data" | "session:delete"
+  | "status:process" | "status:health" | "status:resource"
+  | "error";
+
+// Base message structure
+export interface WebSocketMessage<T = unknown> {
+  id: string;
+  type: MessageType;
+  payload: T;
+  timestamp: number;
+  correlationId?: string;
+}
+```
+
+### packages/agent-gateway
+
+Central WebSocket server that containers connect to:
+
+- **ConnectionManager**: Tracks connected containers, health status, heartbeats
+- **HTTP API**: REST endpoints for frontend to interact with containers
+- **ConvexSync**: Writes events to Convex for persistence and real-time updates
+
+### packages/container-api
+
+Runs inside each Docker container:
+
+- **ProcessManager**: Wraps Claude Code CLI with process lifecycle management
+- **ManagerConnection**: WebSocket client that connects to the gateway
+- **AuthManager**: Handles OAuth flow for Claude authentication
+
+## WebSocket Protocol
+
+### Message Structure
+
+All messages follow this structure:
+
+```typescript
+{
+  id: "uuid",              // Unique message ID
+  type: "exec:start",      // Message type
+  payload: { ... },        // Type-specific data
+  timestamp: 1234567890,   // Unix milliseconds
+  correlationId?: "uuid"   // For request/response pairing
+}
+```
+
+### Connection Lifecycle
+
+1. **Container connects** → Sends `connect` message
+2. **Gateway registers** → Sends `connected` response
+3. **Heartbeat loop** → Container sends periodic `heartbeat`
+4. **Health updates** → Container sends `status:health` with metrics
+5. **Disconnect** → Connection cleanup on close
+
+### Execution Flow
+
+```
+Frontend                    Gateway                     Container
+   │                          │                            │
+   │  POST /exec              │                            │
+   │─────────────────────────▶│                            │
+   │                          │  exec:start                │
+   │                          │───────────────────────────▶│
+   │                          │                            │
+   │                          │                     [Claude CLI runs]
+   │                          │                            │
+   │                          │  exec:stream (stdout)      │
+   │                          │◀───────────────────────────│
+   │  [Convex subscription]   │                            │
+   │◀─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ │                            │
+   │                          │  exec:stream (assistant)   │
+   │                          │◀───────────────────────────│
+   │  [Convex subscription]   │                            │
+   │◀─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ │                            │
+   │                          │  exec:complete             │
+   │                          │◀───────────────────────────│
+   │  [Convex subscription]   │                            │
+   │◀─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ │                            │
+```
+
+### Message Types Reference
+
+#### Connection Messages
+
+| Type | Direction | Payload |
+|------|-----------|---------|
+| `connect` | Container → Gateway | `{ containerId, hostname, version, capabilities }` |
+| `connected` | Gateway → Container | `{ serverId, timestamp }` |
+| `heartbeat` | Bidirectional | `{ seq, sentAt }` |
+| `disconnect` | Either | `{ reason?, code? }` |
+
+#### Execution Messages
+
+| Type | Direction | Payload |
+|------|-----------|---------|
+| `exec:start` | Gateway → Container | `{ prompt, sessionId?, cwd?, taskId?, projectId? }` |
+| `exec:stream` | Container → Gateway | `{ streamType, data: CliOutputMessage }` |
+| `exec:complete` | Container → Gateway | `{ result, sessionId?, totalCostUsd?, numTurns? }` |
+| `exec:abort` | Gateway → Container | `{ processId }` |
+| `exec:aborted` | Container → Gateway | `{ processId, reason }` |
+
+#### Status Messages
+
+| Type | Direction | Payload |
+|------|-----------|---------|
+| `status:health` | Container → Gateway | `{ cpuUsage, memoryUsage, activeSessions }` |
+| `status:process` | Container → Gateway | `{ processes: ProcessInfo[] }` |
+
+## Container Architecture
+
+### Docker Image (images/agent/)
+
+The container image includes:
+
+- **Debian bookworm-slim** base
+- **Tailscale** for mesh networking and SSH access
+- **Bun** runtime for container-api
+- **Claude Code CLI** (`@anthropic-ai/claude-code`)
+- **Git, GitHub CLI** for repository operations
+- **Development tools** (Node.js, tmux, starship)
+
+### Entrypoint Flow
+
+```bash
+# 1. Start Tailscale daemon
+tailscaled &
+tailscale up --authkey=$TS_AUTHKEY --hostname=$TS_HOSTNAME
+
+# 2. Clone workspace repository
+git clone https://$GH_TOKEN@github.com/$WORKSPACE_REPO /workspace
+
+# 3. Setup dotfiles (optional)
+if [ -n "$DOTFILES_REPO" ]; then
+  git clone $DOTFILES_REPO ~/.config/dotfiles
+  stow -d ~/.config/dotfiles -t ~ .
+fi
+
+# 4. Start container-api
+cd /opt/container-api && bun run src/index.ts
+```
+
+### Container API Endpoints
+
+The Elysia HTTP server inside containers provides:
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/health` | GET | Container health check |
+| `/status` | GET | Current processes and system info |
+| `/exec` | POST | Start local execution (direct, not via gateway) |
+| `/exec/:id` | DELETE | Abort running execution |
+| `/auth/status` | GET | Claude authentication status |
+| `/auth/login` | POST | Start OAuth flow |
+
+## Creating Containers
+
+### Using create-agent Script
+
+```bash
+# Basic usage
+bun run create-agent --repo owner/repo-name
+
+# Full options
+bun run create-agent \
+  --repo owner/repo-name \      # Required: GitHub repo to clone
+  --branch feature-branch \      # Optional: Branch to checkout
+  --name my-agent \              # Optional: Custom container name
+  --server ws://gateway:3100     # Optional: Gateway WebSocket URL
+```
+
+### What the Script Does
+
+1. **Generates unique name** (e.g., `proud-blue-falcon`)
+2. **Allocates WireGuard port** for direct Tailscale connections
+3. **Creates docker-compose override** with environment variables
+4. **Starts container** with `docker compose up`
+5. **Outputs JSON** with container details
+
+### Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `TS_AUTHKEY` | Yes | Tailscale authentication key |
+| `GH_USERNAME` | Yes | GitHub username for cloning |
+| `GH_TOKEN` | Yes | GitHub personal access token |
+| `WORKSPACE_REPO` | Yes | Repository to clone (set by script) |
+| `WORKSPACE_BRANCH` | No | Branch to checkout (default: main) |
+| `MANAGER_WS_URL` | No | Gateway WebSocket URL |
+| `DOTFILES_REPO` | No | Dotfiles repository for shell config |
+
+## Convex Integration
+
+### Database Tables
+
+#### agentSessions
+
+Tracks Claude Code CLI sessions:
+
+```typescript
+agentSessions: defineTable({
+  sessionId: v.string(),           // UUID from gateway
+  containerId: v.string(),         // Container running the session
+  taskId: v.optional(v.id("tasks")),
+  projectId: v.optional(v.id("projects")),
+  prompt: v.string(),              // Initial prompt
   status: v.union(
-    v.literal("queued"),              // Waiting to start
-    v.literal("running"),             // Agent actively working
-    v.literal("completed"),           // Successfully finished
-    v.literal("failed"),              // Error occurred
-    v.literal("cancelled")            // Manually stopped
-  ),
-  prompt: v.string(),                 // Initial prompt sent to agent
-  result: v.optional(v.string()),     // Agent's final output
-  error: v.optional(v.string()),      // Error message if failed
-  startedAt: v.optional(v.number()),  // When agent began work
-  completedAt: v.optional(v.number()),// When agent finished
-  createdAt: v.number(),
-})
-  .index("by_task", ["taskId"])
-  .index("by_status", ["status"])
-```
-
-### Chat Messages Table
-
-Chat messages support both project-level and task-level conversations:
-
-```typescript
-chatMessages: defineTable({
-  projectId: v.optional(v.id("projects")),  // Project-level chat
-  taskId: v.optional(v.id("tasks")),        // Task-level chat
-  sender: v.union(v.literal("user"), v.literal("ai")),
-  text: v.string(),
-  createdAt: v.number(),
-})
-  .index("by_project", ["projectId"])
-  .index("by_task", ["taskId"])
-```
-
-## Agent Job Lifecycle
-
-### 1. Job Creation
-
-When a user assigns work to an agent:
-
-```typescript
-// tasks.ts - Assign agent to task
-export const assignAgent = mutation({
-  args: {
-    taskId: v.id("tasks"),
-    agentType: v.string(),
-    prompt: v.optional(v.string()),
-  },
-  handler: async (ctx, args) => {
-    const task = await ctx.db.get(args.taskId);
-    if (!task) throw new Error("Task not found");
-
-    // Build prompt from task context
-    const prompt = args.prompt || buildAgentPrompt(task);
-
-    // Create job record
-    const jobId = await ctx.db.insert("agentJobs", {
-      taskId: args.taskId,
-      agentType: args.agentType,
-      status: "queued",
-      prompt,
-      createdAt: Date.now(),
-    });
-
-    // Update task status
-    await ctx.db.patch(args.taskId, {
-      category: "in-progress",
-      updatedAt: Date.now(),
-    });
-
-    // Trigger agent via external service
-    await ctx.scheduler.runAfter(0, internal.internal.aiResponses.dispatchAgent, {
-      jobId,
-    });
-
-    return jobId;
-  },
-});
-```
-
-### 2. Agent Dispatch
-
-The internal action calls the external agent service:
-
-```typescript
-// internal/aiResponses.ts
-export const dispatchAgent = internalAction({
-  args: { jobId: v.id("agentJobs") },
-  handler: async (ctx, args) => {
-    const job = await ctx.runQuery(internal.internal.aiResponses.getJob, {
-      jobId: args.jobId,
-    });
-
-    // Mark as running
-    await ctx.runMutation(internal.internal.aiResponses.updateJobStatus, {
-      jobId: args.jobId,
-      status: "running",
-      startedAt: Date.now(),
-    });
-
-    // Call external agent API
-    // The agent will call back to /webhooks/agent/callback when done
-    await fetch(process.env.AGENT_DISPATCH_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${process.env.AGENT_API_KEY}`,
-      },
-      body: JSON.stringify({
-        jobId: args.jobId,
-        taskId: job.taskId,
-        prompt: job.prompt,
-        callbackUrl: `${process.env.CONVEX_SITE_URL}/webhooks/agent/callback`,
-      }),
-    });
-  },
-});
-```
-
-### 3. Agent Callback
-
-When the agent completes, it calls back with results:
-
-```typescript
-// http.ts - Agent callback endpoint
-const agentCallback = httpAction(async (ctx, request) => {
-  const body = await request.json();
-  const { jobId, status, result, error } = body;
-
-  // Store the raw webhook
-  await ctx.runMutation(internal.webhooks.store, {
-    source: "agent",
-    payload: JSON.stringify(body),
-    status: "pending",
-  });
-
-  // Process the callback
-  await ctx.scheduler.runAfter(0, internal.internal.webhookProcessing.processAgentCallback, {
-    jobId,
-    status,
-    result,
-    error,
-  });
-
-  return new Response(JSON.stringify({ received: true }), {
-    status: 200,
-    headers: { "Content-Type": "application/json" },
-  });
-});
-```
-
-### 4. Result Processing
-
-```typescript
-// internal/webhookProcessing.ts
-export const processAgentCallback = internalMutation({
-  args: {
-    jobId: v.id("agentJobs"),
-    status: v.string(),
-    result: v.optional(v.string()),
-    error: v.optional(v.string()),
-  },
-  handler: async (ctx, args) => {
-    const job = await ctx.db.get(args.jobId);
-    if (!job) return;
-
-    // Update job status
-    await ctx.db.patch(args.jobId, {
-      status: args.status === "success" ? "completed" : "failed",
-      result: args.result,
-      error: args.error,
-      completedAt: Date.now(),
-    });
-
-    // If successful, may create PR
-    if (args.status === "success" && args.result) {
-      const resultData = JSON.parse(args.result);
-      if (resultData.prUrl) {
-        await ctx.db.insert("pullRequests", {
-          taskId: job.taskId,
-          prNumber: resultData.prNumber,
-          prUrl: resultData.prUrl,
-          title: resultData.prTitle,
-          status: "open",
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-        });
-      }
-    }
-
-    // Record in history
-    await ctx.scheduler.runAfter(0, internal.internal.history.recordEvent, {
-      taskId: job.taskId,
-      action: args.status === "success"
-        ? "Agent completed work"
-        : `Agent failed: ${args.error}`,
-      user: "agent",
-    });
-  },
-});
-```
-
-## Chat System
-
-### Architecture
-
-The chat system supports contextual conversations:
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                      Chat Panel                              │
-├─────────────────────────────────────────────────────────────┤
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │ [AI] I've analyzed the codebase. The auth module    │   │
-│  │      needs refactoring to support OAuth2.           │   │
-│  └─────────────────────────────────────────────────────┘   │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │ [User] Can you create acceptance criteria for this? │   │
-│  └─────────────────────────────────────────────────────┘   │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │ [AI] Sure! I've added 5 acceptance criteria:        │   │
-│  │      1. OAuth2 provider configuration               │   │
-│  │      2. Token refresh handling...                   │   │
-│  └─────────────────────────────────────────────────────┘   │
-├─────────────────────────────────────────────────────────────┤
-│  [Type a message...]                          [Send]        │
-└─────────────────────────────────────────────────────────────┘
-```
-
-### Context Levels
-
-**Project-level Chat**: High-level planning and specification discussions
-
-```typescript
-// Query project chat
-const messages = useQuery(api.chat.listByProject, { projectId });
-
-// Send project message
-await sendProjectMessage({
-  projectId,
-  text: "What's the best approach for implementing caching?",
-  sender: "user",
-});
-```
-
-**Task-level Chat**: Focused discussion on specific implementation
-
-```typescript
-// Query task chat
-const messages = useQuery(api.chat.listByTask, { taskId });
-
-// Send task message
-await sendTaskMessage({
-  taskId,
-  text: "The tests are failing, can you investigate?",
-  sender: "user",
-});
-```
-
-### AI Response Generation
-
-When a user sends a message, the system can trigger AI response generation:
-
-```typescript
-// chat.ts
-export const sendTaskMessage = mutation({
-  args: {
-    taskId: v.id("tasks"),
-    text: v.string(),
-    sender: v.union(v.literal("user"), v.literal("ai")),
-  },
-  handler: async (ctx, args) => {
-    const messageId = await ctx.db.insert("chatMessages", {
-      taskId: args.taskId,
-      sender: args.sender,
-      text: args.text,
-      createdAt: Date.now(),
-    });
-
-    // If user message, optionally trigger AI response
-    if (args.sender === "user") {
-      await ctx.scheduler.runAfter(0, internal.internal.aiResponses.generateChatResponse, {
-        messageId,
-      });
-    }
-
-    return messageId;
-  },
-});
-```
-
-### Context Loading
-
-AI responses include relevant context:
-
-```typescript
-// internal/aiResponses.ts
-export const loadChatContext = internalQuery({
-  args: { messageId: v.id("chatMessages") },
-  handler: async (ctx, args) => {
-    const message = await ctx.db.get(args.messageId);
-    if (!message) return null;
-
-    let context = {
-      recentMessages: [] as ChatMessage[],
-      task: null as Task | null,
-      project: null as Project | null,
-      acceptanceCriteria: [] as AcceptanceCriteria[],
-    };
-
-    // Load task context
-    if (message.taskId) {
-      context.task = await ctx.db.get(message.taskId);
-
-      // Load acceptance criteria
-      context.acceptanceCriteria = await ctx.db
-        .query("acceptanceCriteria")
-        .withIndex("by_task", q => q.eq("taskId", message.taskId))
-        .collect();
-
-      // Load recent task messages
-      context.recentMessages = await ctx.db
-        .query("chatMessages")
-        .withIndex("by_task", q => q.eq("taskId", message.taskId))
-        .order("desc")
-        .take(10);
-
-      // Load project
-      if (context.task) {
-        context.project = await ctx.db.get(context.task.projectId);
-      }
-    }
-
-    // Load project context
-    if (message.projectId) {
-      context.project = await ctx.db.get(message.projectId);
-
-      context.recentMessages = await ctx.db
-        .query("chatMessages")
-        .withIndex("by_project", q => q.eq("projectId", message.projectId))
-        .order("desc")
-        .take(10);
-    }
-
-    return context;
-  },
-});
-```
-
-## Pull Request Integration
-
-### PR Lifecycle
-
-```
-┌──────────┐     ┌──────────┐     ┌──────────┐     ┌──────────┐
-│  Agent   │────▶│   Open   │────▶│ Review   │────▶│  Merged  │
-│ Creates  │     │    PR    │     │ Process  │     │          │
-└──────────┘     └──────────┘     └──────────┘     └──────────┘
-                      │                │
-                      ▼                ▼
-               ┌──────────┐     ┌──────────┐
-               │  Issues  │     │ Changes  │
-               │ Detected │     │Requested │
-               └──────────┘     └──────────┘
-```
-
-### Code Review Features
-
-**AI-Detected Issues**: The system can analyze PRs for potential problems:
-
-```typescript
-prIssues: defineTable({
-  pullRequestId: v.id("pullRequests"),
-  severity: v.union(v.literal("error"), v.literal("warning"), v.literal("info")),
-  file: v.string(),
-  line: v.optional(v.number()),
-  message: v.string(),
-  suggestion: v.optional(v.string()),
-  resolved: v.boolean(),
-  createdAt: v.number(),
-})
-```
-
-**CI/CD Checks**: Track external CI/CD results:
-
-```typescript
-prChecks: defineTable({
-  pullRequestId: v.id("pullRequests"),
-  name: v.string(),           // "tests", "lint", "build"
-  status: v.union(
-    v.literal("pending"),
+    v.literal("starting"),
     v.literal("running"),
-    v.literal("passed"),
-    v.literal("failed")
+    v.literal("completed"),
+    v.literal("failed"),
+    v.literal("cancelled")
   ),
-  url: v.optional(v.string()),
-  createdAt: v.number(),
-  updatedAt: v.number(),
+  result: v.optional(v.string()),
+  error: v.optional(v.string()),
+  totalCostUsd: v.optional(v.number()),
+  numTurns: v.optional(v.number()),
+  startedAt: v.number(),
+  completedAt: v.optional(v.number()),
 })
 ```
 
-### GitHub Webhook Integration
+#### agentMessages
 
-GitHub webhooks update PR status in real-time:
+Streaming output storage:
 
 ```typescript
-// internal/webhookProcessing.ts
-export const processGithubWebhook = internalMutation({
-  args: { eventId: v.id("webhookEvents") },
-  handler: async (ctx, args) => {
-    const event = await ctx.db.get(args.eventId);
-    const payload = JSON.parse(event.payload);
-
-    switch (payload.action) {
-      case "opened":
-        // New PR opened - may match existing task
-        break;
-
-      case "closed":
-        if (payload.pull_request.merged) {
-          // PR merged - update task status
-          const pr = await ctx.db
-            .query("pullRequests")
-            .withIndex("by_pr_number", q => q.eq("prNumber", payload.number))
-            .first();
-
-          if (pr) {
-            await ctx.db.patch(pr._id, { status: "merged" });
-            await ctx.db.patch(pr.taskId, { category: "done" });
-          }
-        }
-        break;
-
-      case "review_submitted":
-        // Code review submitted
-        break;
-    }
-
-    await ctx.db.patch(args.eventId, { status: "processed" });
-  },
-});
+agentMessages: defineTable({
+  sessionId: v.string(),           // References agentSessions.sessionId
+  messageType: v.union(
+    v.literal("assistant"),
+    v.literal("result"),
+    v.literal("system")
+  ),
+  content: v.string(),             // JSON stringified CliOutputMessage
+  timestamp: v.number(),
+})
 ```
 
-## Agent Types
+### Real-time Subscriptions
 
-The system is designed to support multiple AI agent backends:
-
-### Supported Agents
-
-| Agent | Use Case | Integration |
-|-------|----------|-------------|
-| **Claude Code** | Complex coding tasks, refactoring | CLI tool with callback |
-| **GitHub Copilot** | Code suggestions, completions | VS Code extension API |
-| **Custom Agents** | Specialized tasks | HTTP callback API |
-
-### Agent Configuration
+Frontend subscribes to session updates:
 
 ```typescript
-// Example agent configuration (stored in environment)
-const agentConfigs = {
-  "claude-code": {
-    dispatchUrl: "https://agent-runner.example.com/claude",
-    timeout: 30 * 60 * 1000,  // 30 minutes
-    capabilities: ["refactor", "implement", "test", "review"],
-  },
-  "quick-fix": {
-    dispatchUrl: "https://agent-runner.example.com/quickfix",
-    timeout: 5 * 60 * 1000,   // 5 minutes
-    capabilities: ["fix-bug", "add-test"],
-  },
-};
+// Subscribe to session status
+const session = useQuery(api.agentSessions.get, { sessionId });
+
+// Subscribe to streaming messages
+const messages = useQuery(api.agentMessages.listBySession, { sessionId });
+```
+
+### Gateway → Convex Flow
+
+```typescript
+// On exec:start
+convexSync.recordExecStart(correlationId, containerId, options, taskId, projectId);
+
+// On exec:stream
+convexSync.recordStreamEvent(correlationId, containerId, payload, taskId, projectId);
+
+// On exec:complete
+convexSync.recordExecComplete(correlationId, containerId, payload, taskId, projectId);
+```
+
+## Claude Code CLI Integration
+
+### Print Mode
+
+The container-api runs Claude Code with `--print` mode for non-interactive streaming:
+
+```bash
+claude --print \
+  --output-format stream-json \
+  --session-id $SESSION_ID \
+  "$PROMPT"
+```
+
+### Output Format
+
+The CLI outputs JSON messages to stdout:
+
+```typescript
+interface CliOutputMessage {
+  type: "assistant" | "result" | "system";
+  message: AssistantMessage | ResultMessage | SystemMessage;
+  session_id?: string;
+}
+
+interface AssistantMessage {
+  type: "text" | "tool_use" | "tool_result";
+  content: string;
+  tool_name?: string;
+}
+
+interface ResultMessage {
+  result: "success" | "error" | "cancelled";
+  cost_usd?: number;
+  num_turns?: number;
+}
+```
+
+### Session Management
+
+Sessions persist across executions using `--session-id`:
+
+```typescript
+// Resume existing session
+await processManager.start({
+  prompt: "Continue with the refactoring",
+  sessionId: "existing-session-id"
+});
+
+// Start new session
+await processManager.start({
+  prompt: "Implement the feature described in task #123"
+});
 ```
 
 ## Security Considerations
 
+### Container Isolation
+
+- Containers run with limited capabilities (`net_admin` for Tailscale only)
+- Memory limits prevent runaway processes (4GB hard limit)
+- Each container has isolated filesystem and network namespace
+
 ### Authentication
 
-- Webhook endpoints validate signatures (GitHub webhook secret)
-- Agent callbacks include job ID that must exist in database
-- API keys stored in Convex environment variables
+- **Tailscale**: Containers authenticate via ephemeral auth keys
+- **GitHub**: Personal access tokens for repo access
+- **Claude**: OAuth flow handled by container-api
 
-### Authorization
+### Network Security
 
-- Agent jobs are scoped to specific tasks
-- Agents only receive context for their assigned task
-- PR operations require matching task ownership
-
-### Rate Limiting
-
-- Webhook endpoints should implement rate limiting
-- Agent dispatch has configurable concurrency limits
-- Chat AI responses can be throttled per user/project
+- Containers communicate via Tailscale mesh (encrypted WireGuard)
+- Gateway accepts connections only from authenticated Tailscale nodes
+- No direct internet exposure of container services
 
 ## Monitoring
 
-### Job Metrics
+### Health Checks
 
-Track agent performance:
+Gateway tracks container health:
 
 ```typescript
-// Query for agent analytics
-export const getAgentStats = query({
-  args: { since: v.number() },
-  handler: async (ctx, args) => {
-    const jobs = await ctx.db
-      .query("agentJobs")
-      .filter(q => q.gte(q.field("createdAt"), args.since))
-      .collect();
-
-    return {
-      total: jobs.length,
-      completed: jobs.filter(j => j.status === "completed").length,
-      failed: jobs.filter(j => j.status === "failed").length,
-      avgDuration: calculateAvgDuration(jobs),
-      byAgent: groupByAgent(jobs),
-    };
-  },
-});
+interface StatusHealthPayload {
+  cpuUsage: number;      // 0-100 percentage
+  memoryUsage: number;   // 0-100 percentage
+  activeSessions: number;
+  uptime: number;        // seconds
+}
 ```
 
-### Error Tracking
+### Connection Pruning
 
-Failed jobs are logged with full context for debugging:
+Stale connections are pruned periodically:
 
 ```typescript
-// View failed jobs
-export const listFailedJobs = query({
-  args: { limit: v.optional(v.number()) },
-  handler: async (ctx, args) => {
-    return await ctx.db
-      .query("agentJobs")
-      .withIndex("by_status", q => q.eq("status", "failed"))
-      .order("desc")
-      .take(args.limit ?? 50);
-  },
-});
+// Every 60 seconds, remove containers that haven't heartbeated
+setInterval(() => {
+  const pruned = connections.pruneStaleConnections();
+  for (const containerId of pruned) {
+    convexSync.updateContainerConnection(containerId, "", false);
+  }
+}, 60000);
+```
+
+### Logging
+
+All components log to stdout for container aggregation:
+
+```
+[gateway] New WebSocket connection
+[gateway] Container registered: proud-blue-falcon
+[gateway] Execution started: abc123 on proud-blue-falcon
+[gateway] Stream from proud-blue-falcon: stdout assistant
+[gateway] Execution complete from proud-blue-falcon: success
 ```
 
 ## Future Enhancements
 
-### Planned Features
-
-1. **Multi-Agent Collaboration**: Multiple agents working on related tasks
-2. **Agent Memory**: Long-term memory across sessions using vector storage
-3. **Human-in-the-Loop**: Approval gates for critical agent actions
-4. **Cost Tracking**: Monitor API usage and costs per project
-5. **Agent Marketplace**: Plugin system for custom agent integrations
-
-### Extension Points
-
-The architecture supports easy extension:
-
-- Add new agent types by implementing the dispatch/callback interface
-- Custom context loaders for domain-specific knowledge
-- Pluggable code review analyzers
-- Webhook handlers for additional services (Jira, Linear, etc.)
+1. **Multi-agent collaboration**: Multiple containers working on related tasks
+2. **Container pools**: Pre-warmed containers for faster task assignment
+3. **Cost tracking**: Per-session and per-project API cost aggregation
+4. **Execution history**: Browse past sessions with full output replay
+5. **Container scaling**: Auto-scale containers based on queue depth

@@ -4,7 +4,7 @@
   "packageManager": "bun@1.3.4",
   "workspaces": ["packages/*"],
   "scripts": {
-    "dev": "turbo dev --filter=@agent-manager/frontend --filter=@agent-manager/backend",
+    "dev": "turbo dev --filter=@agent-manager/frontend --filter=@agent-manager/backend --filter=@agent-manager/agent-gateway",
     "dev:backend": "bun run --filter @agent-manager/backend dev",
     "dev:frontend": "bun run --filter @agent-manager/frontend dev",
     "dev:convex": "bunx convex dev",

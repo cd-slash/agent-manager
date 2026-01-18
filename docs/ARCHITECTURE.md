@@ -35,6 +35,26 @@ We evaluated several backend options for this project:
 - **NoSQL Model**: While Convex supports relational patterns via foreign keys, it's not a traditional SQL database.
 - **Cold Starts**: Like all serverless platforms, there can be cold start latency (mitigated by Convex's architecture).
 
+### Hybrid Architecture: Bun + Convex
+
+For the agent system, we use a hybrid approach:
+
+- **Agent Gateway (Bun WebSocket Server)**: Handles long-running WebSocket connections with containers. Convex has execution time limits that make it unsuitable for streaming CLI output.
+- **Convex Backend**: Stores session data, messages, and provides real-time subscriptions to the frontend.
+
+```
+┌─────────────────┐      ┌─────────────────┐      ┌─────────────────┐
+│    Frontend     │◀────▶│     Convex      │◀────▶│  Agent Gateway  │
+│   (React 19)    │      │  (persistence)  │      │  (Bun WebSocket)│
+└─────────────────┘      └─────────────────┘      └─────────────────┘
+                                                          │
+                                                          ▼
+                                               ┌─────────────────┐
+                                               │   Containers    │
+                                               │ (Claude Code)   │
+                                               └─────────────────┘
+```
+
 ## Database Schema Design
 
 The schema normalizes the frontend's nested data structures into separate tables with proper relationships.
@@ -77,13 +97,21 @@ The schema normalizes the frontend's nested data structures into separate tables
 ┌─────────────────┐       ┌─────────────┐
 │  webhookEvents  │       │  agentJobs  │
 └─────────────────┘       └─────────────┘
+
+┌─────────────────┐       ┌─────────────────┐
+│ agentSessions   │──────▶│ agentMessages   │
+│ (CLI sessions)  │       │ (streaming out) │
+└─────────────────┘       └─────────────────┘
+       │
+       ├──────────────────▶ projects (optional)
+       └──────────────────▶ tasks (optional)
 ```
 
 ### Table Purposes
 
 | Table | Purpose | Key Relationships |
 |-------|---------|-------------------|
-| `projects` | Software project metadata and specifications | Parent of tasks, chatMessages |
+| `projects` | Software project metadata and specifications | Parent of tasks, chatMessages, agentSessions |
 | `tasks` | Individual work items with status tracking | Belongs to project, has criteria/tests/PR |
 | `taskDependencies` | Many-to-many task dependency relationships | Links tasks to dependent tasks |
 | `acceptanceCriteria` | Checklist items for task completion | Belongs to task |
@@ -95,10 +123,12 @@ The schema normalizes the frontend's nested data structures into separate tables
 | `prIssues` | AI-detected code issues | Belongs to pullRequest |
 | `prChecks` | CI/CD check results | Belongs to pullRequest |
 | `servers` | Server infrastructure records | Parent of containers, metrics |
-| `containers` | Docker container instances | Belongs to server |
+| `containers` | Docker container instances | Belongs to server, may have Tailscale info |
 | `serverMetrics` | Time-series performance data | Belongs to server |
 | `webhookEvents` | Incoming webhook storage for processing | Standalone |
 | `agentJobs` | AI agent job tracking | Belongs to task |
+| `agentSessions` | Claude Code CLI sessions via gateway | Belongs to container, optionally task/project |
+| `agentMessages` | Streaming output from CLI sessions | Belongs to agentSession |
 
 ### Index Strategy
 
@@ -167,7 +197,7 @@ Convex provides four function types, each with specific use cases:
 ### File Organization
 
 ```
-convex/
+packages/convex/
 ├── schema.ts              # Database schema definition
 ├── http.ts                # HTTP webhook endpoints
 ├── crons.ts               # Scheduled jobs
@@ -182,17 +212,194 @@ convex/
 ├── containers.ts          # Public container API
 ├── webhooks.ts            # Webhook event storage
 │
+├── agentSessions.ts       # Agent CLI session tracking
+├── agentMessages.ts       # Streaming output storage
+│
 └── internal/              # Internal functions (not exposed to client)
     ├── aiResponses.ts     # AI processing and response generation
     ├── history.ts         # Audit trail recording
     ├── webhookProcessing.ts # Async webhook handlers
     └── metrics.ts         # Metrics recording and cleanup
+
+packages/agent-gateway/    # Bun WebSocket server
+├── src/
+│   ├── index.ts           # Server entry point
+│   ├── connections.ts     # Container connection management
+│   └── convex-sync.ts     # Convex integration
+└── bin/
+    └── create-agent       # Container creation script
+
+packages/container-api/    # Runs inside containers
+├── src/
+│   ├── index.ts           # Elysia HTTP server
+│   ├── process-manager.ts # Claude CLI management
+│   ├── manager-connection.ts # Gateway WebSocket client
+│   └── auth-manager.ts    # OAuth flow handling
+
+packages/agent-shared/     # Shared types
+└── src/
+    └── index.ts           # WebSocket protocol types
 ```
 
 **Organization Principles:**
 - One file per domain entity for public APIs
 - Internal functions grouped by capability, not entity
 - `internal/` directory prefix makes functions inaccessible to clients
+
+## Agent Gateway Architecture
+
+The Agent Gateway (`packages/agent-gateway`) is a Bun WebSocket server that orchestrates communication between the frontend and agent containers running Claude Code CLI.
+
+### Why a Separate Gateway?
+
+Convex has execution time limits (~60 seconds for actions) that make it unsuitable for:
+- Long-running WebSocket connections with containers
+- Streaming CLI output that can run for minutes
+- Managing stateful container connections
+
+The gateway handles these real-time concerns and syncs results to Convex for persistence.
+
+### Gateway Components
+
+```
+packages/agent-gateway/
+├── src/
+│   ├── index.ts           # Main server (Bun.serve with WebSocket)
+│   ├── connections.ts     # ConnectionManager class
+│   └── convex-sync.ts     # ConvexSync for persistence
+└── bin/
+    └── create-agent       # Container creation script
+```
+
+### Connection Flow
+
+```
+1. Container starts
+   └─▶ Container API connects to gateway WebSocket
+       └─▶ Sends "connect" message with containerId, hostname, capabilities
+           └─▶ Gateway registers container in ConnectionManager
+               └─▶ Syncs connection status to Convex
+
+2. Frontend requests execution
+   └─▶ POST /exec to gateway HTTP API
+       └─▶ Gateway creates correlationId
+           └─▶ Sends "exec:start" to container via WebSocket
+               └─▶ Container runs Claude CLI with --print mode
+
+3. Container streams output
+   └─▶ "exec:stream" messages sent to gateway
+       └─▶ Gateway syncs to Convex agentMessages table
+           └─▶ Frontend subscribes to real-time updates
+
+4. Execution completes
+   └─▶ Container sends "exec:complete"
+       └─▶ Gateway updates agentSessions status
+           └─▶ Frontend sees completion via subscription
+```
+
+### ConnectionManager
+
+Tracks all connected containers with health status:
+
+```typescript
+interface ContainerState {
+  ws: ServerWebSocket<ContainerContext>;
+  info: ConnectPayload;           // containerId, hostname, version, capabilities
+  health?: StatusHealthPayload;   // system metrics, process counts
+  connectedAt: number;
+  lastHeartbeat: number;
+}
+```
+
+Key methods:
+- `registerContainer(ws, payload)` - Register new container connection
+- `sendToContainer(containerId, type, payload)` - Send message to specific container
+- `findAvailableContainer()` - Find container for new execution
+- `pruneStaleConnections()` - Remove containers that stopped heartbeating
+
+### Convex Sync
+
+The `ConvexSync` class writes events to Convex:
+
+```typescript
+class ConvexSync {
+  // Record execution start
+  recordExecStart(correlationId, containerId, options, taskId?, projectId?)
+
+  // Record streaming output
+  recordStreamEvent(correlationId, containerId, payload, taskId?, projectId?)
+
+  // Record completion
+  recordExecComplete(correlationId, containerId, payload, taskId?, projectId?)
+
+  // Update container connection status
+  updateContainerConnection(containerId, hostname, connected)
+}
+```
+
+## Container API Architecture
+
+The Container API (`packages/container-api`) runs inside each agent container and manages the Claude Code CLI.
+
+### Components
+
+```
+packages/container-api/
+├── src/
+│   ├── index.ts              # Elysia HTTP server
+│   ├── process-manager.ts    # Claude CLI process manager
+│   ├── manager-connection.ts # Gateway WebSocket client
+│   └── auth-manager.ts       # OAuth flow handling
+```
+
+### Process Manager
+
+Wraps the Claude Code CLI with `--print` and `--output-format stream-json`:
+
+```typescript
+class ProcessManager {
+  // Start a new Claude session
+  start(options: StartOptions): AsyncGenerator<CliOutputMessage>
+
+  // List active processes
+  list(): ProcessInfo[]
+
+  // Abort a running process
+  abort(processId: string): boolean
+}
+```
+
+The CLI outputs JSON messages that are parsed and forwarded to the gateway:
+
+```typescript
+interface CliOutputMessage {
+  type: "assistant" | "result" | "system";
+  message: AssistantMessage | ResultMessage | SystemMessage;
+  session_id?: string;
+}
+```
+
+### Manager Connection
+
+Maintains WebSocket connection to the gateway with automatic reconnection:
+
+```typescript
+class ManagerConnection {
+  // Connect to gateway
+  connect(): Promise<void>
+
+  // Send message to gateway
+  send(type: MessageType, payload: unknown, correlationId?: string): void
+
+  // Handle incoming exec:start messages
+  onExecStart(handler: (options: ExecStartPayload) => void): void
+}
+```
+
+Features:
+- Exponential backoff on reconnection
+- Heartbeat ping/pong for connection health
+- Automatic registration on connect
 
 ## Real-time Subscription Pattern
 
