@@ -47,7 +47,7 @@ interface ProjectDetailViewProps {
   onTaskClick: (task: Task) => void;
   onBack: () => void;
   onUpdateProject: (project: Project) => void;
-  onAddTask: (projectId: number, title: string) => void;
+  onAddTask: (projectId: string, title: string) => void;
 }
 
 export function ProjectDetailView({
@@ -66,14 +66,14 @@ export function ProjectDetailView({
   );
 
   // Get the Convex project ID
-  const projectId = project.id as unknown as Id<"projects">;
+  const projectId = project.id as Id<"projects">;
 
   // Fetch chat messages from Convex
   const chatMessagesData = useQuery(api.chat.listByProject, { projectId }) ?? [];
 
   // Convert Convex chat messages to legacy format
   const chatHistory: ChatMessage[] = chatMessagesData.map(msg => ({
-    id: msg._id as unknown as number,
+    id: msg._id,
     sender: msg.sender,
     text: msg.text,
     time: formatTime(msg.createdAt),

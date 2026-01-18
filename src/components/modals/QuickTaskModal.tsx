@@ -23,7 +23,7 @@ interface QuickTaskModalProps {
   isOpen: boolean;
   onClose: () => void;
   projects: Project[];
-  onCreate: (projectId: number, title: string) => void;
+  onCreate: (projectId: string, title: string) => void;
 }
 
 export function QuickTaskModal({
@@ -48,7 +48,7 @@ export function QuickTaskModal({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || !projectId) return;
-    onCreate(projectId as unknown as number, title);
+    onCreate(projectId, title);
     onClose();
   };
 

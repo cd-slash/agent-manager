@@ -7,7 +7,7 @@ import type { Server as ServerType } from '@/types';
 
 interface ServerViewProps {
   servers: ServerType[];
-  onSelectServer: (serverId: number) => void;
+  onSelectServer: (serverId: string) => void;
 }
 
 const columns: ColumnDef<ServerType>[] = [

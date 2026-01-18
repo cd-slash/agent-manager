@@ -85,7 +85,7 @@ function App() {
       const projectTasks = allTasksData
         .filter(t => t.projectId === p._id)
         .map(t => ({
-          id: t._id as unknown as number, // Cast for legacy compatibility
+          id: t._id,
           title: t.title,
           category: t.category,
           tag: t.tag,
@@ -99,7 +99,7 @@ function App() {
         } as Task));
 
       return {
-        id: p._id as unknown as number, // Cast for legacy compatibility
+        id: p._id,
         name: p.name,
         description: p.description,
         tasks: projectTasks,
@@ -112,7 +112,7 @@ function App() {
   // Transform servers data
   const servers: Server[] = useMemo(() => {
     return serversData.map(s => ({
-      id: s._id as unknown as number,
+      id: s._id,
       name: s.name,
       ip: s.ip,
       region: s.region,
@@ -125,7 +125,7 @@ function App() {
   // Transform containers data
   const containers: Container[] = useMemo(() => {
     return containersData.map(c => ({
-      id: c._id as unknown as string,
+      id: c._id,
       name: c.name,
       image: c.image,
       status: c.status as 'running' | 'stopped',
@@ -186,12 +186,11 @@ function App() {
     }
   };
 
-  const handleAddTask = async (projectId: number, taskTitle: string) => {
+  const handleAddTask = async (projectId: string, taskTitle: string) => {
     if (!taskTitle.trim()) return;
 
-    const convexProjectId = projectId as unknown as Id<"projects">;
     await createTask({
-      projectId: convexProjectId,
+      projectId: projectId as Id<"projects">,
       title: taskTitle,
       description: 'Manually added task.',
       category: 'backlog',
@@ -200,18 +199,18 @@ function App() {
     });
   };
 
-  const handleQuickTaskCreate = (projectId: number, title: string) => {
+  const handleQuickTaskCreate = (projectId: string, title: string) => {
     handleAddTask(projectId, title);
   };
 
   // Derived state helpers
-  const selectedProject = projects.find(p => (p.id as unknown as Id<"projects">) === selectedProjectId);
+  const selectedProject = projects.find(p => p.id === selectedProjectId);
   const selectedTask = useMemo(() => {
     if (!selectedTaskDetails) return undefined;
 
     // Transform to legacy format
     const task: Task = {
-      id: selectedTaskDetails._id as unknown as number,
+      id: selectedTaskDetails._id,
       title: selectedTaskDetails.title,
       category: selectedTaskDetails.category,
       tag: selectedTaskDetails.tag,
@@ -219,23 +218,23 @@ function App() {
       description: selectedTaskDetails.description,
       prompt: selectedTaskDetails.prompt,
       acceptanceCriteria: selectedTaskDetails.acceptanceCriteria?.map(ac => ({
-        id: ac._id as unknown as number,
+        id: ac._id,
         text: ac.text,
         done: ac.done,
       })),
       tests: selectedTaskDetails.tests?.map(t => ({
-        id: t._id as unknown as number,
+        id: t._id,
         name: t.name,
         status: t.status,
       })),
       chatHistory: selectedTaskDetails.chatHistory?.map(ch => ({
-        id: ch._id as unknown as number,
+        id: ch._id,
         sender: ch.sender,
         text: ch.text,
         time: formatTime(ch.createdAt),
       })),
       history: selectedTaskDetails.history?.map(h => ({
-        id: h._id as unknown as number,
+        id: h._id,
         action: h.action,
         user: h.user,
         time: formatTime(h.createdAt),
@@ -243,13 +242,13 @@ function App() {
       prCreated: !!selectedTaskPR,
       prNumber: selectedTaskPR?.prNumber,
       prStatus: selectedTaskPR?.status,
-      dependencies: selectedTaskDetails.dependencies?.filter(d => d !== null).map(d => d._id as unknown as number) ?? [],
+      dependencies: selectedTaskDetails.dependencies?.filter(d => d !== null).map(d => d._id) ?? [],
     };
     return task;
   }, [selectedTaskDetails, selectedTaskPR]);
 
-  const selectedServer = servers.find(s => (s.id as unknown as Id<"servers">) === selectedServerId);
-  const selectedContainer = containers.find(c => (c.id as unknown as Id<"containers">) === selectedContainerId);
+  const selectedServer = servers.find(s => s.id === selectedServerId);
+  const selectedContainer = containers.find(c => c.id === selectedContainerId);
 
   // View Resolution Logic
   const renderContent = () => {
@@ -259,14 +258,14 @@ function App() {
       if (selectedServerId && selectedServer) {
         return <ServerDetailView server={selectedServer} containers={containers} />;
       }
-      return <ServerView servers={servers} onSelectServer={(id) => setSelectedServerId(id as unknown as Id<"servers">)} />;
+      return <ServerView servers={servers} onSelectServer={(id) => setSelectedServerId(id as Id<"servers">)} />;
     }
 
     if (activeView === 'containers') {
       if (selectedContainerId && selectedContainer) {
         return <ContainerDetailView container={selectedContainer} onBack={() => setSelectedContainerId(null)} />;
       }
-      return <ContainerView containers={containers} onSelectContainer={(id) => setSelectedContainerId(id as unknown as Id<"containers">)} />;
+      return <ContainerView containers={containers} onSelectContainer={(id) => setSelectedContainerId(id as Id<"containers">)} />;
     }
 
     if (activeView === 'tasks') {
@@ -287,8 +286,8 @@ function App() {
         <AllTasksView
           projects={projects}
           onTaskClick={(task, projectId) => {
-            setSelectedProjectId(projectId as unknown as Id<"projects">);
-            setSelectedTaskId(task.id as unknown as Id<"tasks">);
+            setSelectedProjectId(projectId as Id<"projects">);
+            setSelectedTaskId(task.id as Id<"tasks">);
           }}
         />
       );
@@ -309,7 +308,7 @@ function App() {
         return (
           <ProjectDetailView
             project={selectedProject!}
-            onTaskClick={(task) => setSelectedTaskId(task.id as unknown as Id<"tasks">)}
+            onTaskClick={(task) => setSelectedTaskId(task.id as Id<"tasks">)}
             onBack={() => setSelectedProjectId(null)}
             onUpdateProject={handleProjectUpdate}
             onAddTask={handleAddTask}
@@ -319,7 +318,7 @@ function App() {
       return (
         <ProjectListView
           projects={projects}
-          onSelectProject={(p) => setSelectedProjectId(p.id as unknown as Id<"projects">)}
+          onSelectProject={(p) => setSelectedProjectId(p.id as Id<"projects">)}
           onNewProject={() => setIsNewProjectModalOpen(true)}
         />
       );

@@ -119,14 +119,14 @@ export function TaskDetailView({
   const [showDependencyPicker, setShowDependencyPicker] = useState(false);
 
   // Get the Convex task ID
-  const taskId = task.id as unknown as Id<"tasks">;
+  const taskId = task.id as Id<"tasks">;
 
   // Fetch chat messages from Convex
   const chatMessagesData = useQuery(api.chat.listByTask, { taskId }) ?? [];
 
   // Convert Convex chat messages to legacy format
   const chatHistory: ChatMessage[] = chatMessagesData.map(msg => ({
-    id: msg._id as unknown as number,
+    id: msg._id,
     sender: msg.sender,
     text: msg.text,
     time: formatTime(msg.createdAt),
@@ -139,13 +139,13 @@ export function TaskDetailView({
   const addDependency = useMutation(api.tasks.addDependency);
   const removeDependency = useMutation(api.tasks.removeDependency);
 
-  const handleAddDependency = async (depId: number) => {
-    const dependsOnTaskId = depId as unknown as Id<"tasks">;
+  const handleAddDependency = async (depId: string) => {
+    const dependsOnTaskId = depId as Id<"tasks">;
     await addDependency({ taskId, dependsOnTaskId });
   };
 
-  const handleRemoveDependency = async (depId: number) => {
-    const dependsOnTaskId = depId as unknown as Id<"tasks">;
+  const handleRemoveDependency = async (depId: string) => {
+    const dependsOnTaskId = depId as Id<"tasks">;
     await removeDependency({ taskId, dependsOnTaskId });
   };
 

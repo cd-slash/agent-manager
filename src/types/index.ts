@@ -168,33 +168,33 @@ export type AgentJobDoc = Doc<"agentJobs"> & {
 // These can be removed once all components are updated to use Convex types
 
 export interface ChatMessage {
-  id: number;
+  id: string;
   sender: 'ai' | 'user';
   text: string;
   time: string;
 }
 
 export interface HistoryEvent {
-  id: number;
+  id: string;
   action: string;
   user: string;
   time: string;
 }
 
 export interface AcceptanceCriteria {
-  id: number;
+  id: string;
   text: string;
   done: boolean;
 }
 
 export interface Test {
-  id: number;
+  id: string;
   name: string;
   status: 'passed' | 'pending' | 'failed';
 }
 
 export interface Task {
-  id: number;
+  id: string;
   title: string;
   category: 'backlog' | 'todo' | 'in-progress' | 'done';
   tag: string;
@@ -208,11 +208,11 @@ export interface Task {
   prCreated: boolean;
   prNumber?: number;
   prStatus?: string;
-  dependencies: number[];
+  dependencies: string[];
 }
 
 export interface Project {
-  id: number;
+  id: string;
   name: string;
   description: string;
   tasks: Task[];
@@ -221,7 +221,7 @@ export interface Project {
 }
 
 export interface Server {
-  id: number;
+  id: string;
   name: string;
   ip: string;
   region: string;

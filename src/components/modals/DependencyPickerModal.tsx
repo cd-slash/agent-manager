@@ -24,9 +24,9 @@ interface DependencyPickerModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   tasks: Task[];
-  currentTaskId: number;
-  existingDependencies: number[];
-  onSelect: (taskId: number) => void;
+  currentTaskId: string;
+  existingDependencies: string[];
+  onSelect: (taskId: string) => void;
 }
 
 const categories = [
@@ -89,7 +89,7 @@ export function DependencyPickerModal({
     return filtered;
   }, [availableTasks, selectedCategory, searchQuery]);
 
-  const handleSelect = (taskId: number) => {
+  const handleSelect = (taskId: string) => {
     onSelect(taskId);
     onOpenChange(false);
     setSearchQuery('');

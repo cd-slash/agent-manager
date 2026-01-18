@@ -25,11 +25,11 @@ import type { Project, Task } from '@/types';
 
 interface AllTasksViewProps {
   projects: Project[];
-  onTaskClick: (task: Task, projectId: number) => void;
+  onTaskClick: (task: Task, projectId: string) => void;
 }
 
 type TaskWithProject = Task & {
-  projectId: number;
+  projectId: string;
   projectName: string;
 };
 
