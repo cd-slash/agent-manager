@@ -1,5 +1,6 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
+import { deleteProjectCascade } from "./internal/cascadeDelete";
 
 // List all non-archived projects
 export const list = query({
@@ -155,80 +156,6 @@ export const deleteProject = mutation({
     const existing = await ctx.db.get(args.id);
     if (!existing) throw new Error("Project not found");
 
-    // Delete all related tasks first
-    const tasks = await ctx.db
-      .query("tasks")
-      .withIndex("by_project", (q) => q.eq("projectId", args.id))
-      .collect();
-
-    for (const task of tasks) {
-      // Delete task dependencies
-      const deps = await ctx.db
-        .query("taskDependencies")
-        .withIndex("by_task", (q) => q.eq("taskId", task._id))
-        .collect();
-      for (const dep of deps) {
-        await ctx.db.delete(dep._id);
-      }
-
-      // Delete acceptance criteria
-      const criteria = await ctx.db
-        .query("acceptanceCriteria")
-        .withIndex("by_task", (q) => q.eq("taskId", task._id))
-        .collect();
-      for (const c of criteria) {
-        await ctx.db.delete(c._id);
-      }
-
-      // Delete tests
-      const tests = await ctx.db
-        .query("tests")
-        .withIndex("by_task", (q) => q.eq("taskId", task._id))
-        .collect();
-      for (const t of tests) {
-        await ctx.db.delete(t._id);
-      }
-
-      // Delete chat messages for task
-      const taskChats = await ctx.db
-        .query("chatMessages")
-        .withIndex("by_task", (q) => q.eq("taskId", task._id))
-        .collect();
-      for (const chat of taskChats) {
-        await ctx.db.delete(chat._id);
-      }
-
-      // Delete history events for task
-      const taskHistory = await ctx.db
-        .query("historyEvents")
-        .withIndex("by_task", (q) => q.eq("taskId", task._id))
-        .collect();
-      for (const event of taskHistory) {
-        await ctx.db.delete(event._id);
-      }
-
-      await ctx.db.delete(task._id);
-    }
-
-    // Delete project-level chat messages
-    const projectChats = await ctx.db
-      .query("chatMessages")
-      .withIndex("by_project", (q) => q.eq("projectId", args.id))
-      .collect();
-    for (const chat of projectChats) {
-      await ctx.db.delete(chat._id);
-    }
-
-    // Delete project-level history events
-    const projectHistory = await ctx.db
-      .query("historyEvents")
-      .withIndex("by_project", (q) => q.eq("projectId", args.id))
-      .collect();
-    for (const event of projectHistory) {
-      await ctx.db.delete(event._id);
-    }
-
-    // Finally delete the project
-    await ctx.db.delete(args.id);
+    await deleteProjectCascade(ctx.db, args.id);
   },
 });

@@ -2,6 +2,7 @@ import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { serverStatusValidator } from "./validators";
 import { patchWithTimestamp } from "./internal/updateUtils";
+import { deleteServerCascade } from "./internal/cascadeDelete";
 
 // List all servers
 export const list = query({
@@ -215,24 +216,6 @@ export const deleteServer = mutation({
     const server = await ctx.db.get(args.id);
     if (!server) throw new Error("Server not found");
 
-    // Delete containers
-    const containers = await ctx.db
-      .query("containers")
-      .withIndex("by_server", (q) => q.eq("serverId", args.id))
-      .collect();
-    for (const container of containers) {
-      await ctx.db.delete(container._id);
-    }
-
-    // Delete metrics history
-    const metrics = await ctx.db
-      .query("serverMetrics")
-      .withIndex("by_server_and_timestamp", (q) => q.eq("serverId", args.id))
-      .collect();
-    for (const metric of metrics) {
-      await ctx.db.delete(metric._id);
-    }
-
-    await ctx.db.delete(args.id);
+    await deleteServerCascade(ctx.db, args.id);
   },
 });

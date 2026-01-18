@@ -2,6 +2,7 @@ import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { categoryValidator } from "./validators";
 import { patchWithTimestamp } from "./internal/updateUtils";
+import { deleteTaskCascade } from "./internal/cascadeDelete";
 
 // List all tasks for a project
 export const listByProject = query({
@@ -309,97 +310,6 @@ export const deleteTask = mutation({
     const task = await ctx.db.get(args.id);
     if (!task) throw new Error("Task not found");
 
-    // Delete dependencies where this task is the dependent
-    const deps = await ctx.db
-      .query("taskDependencies")
-      .withIndex("by_task", (q) => q.eq("taskId", args.id))
-      .collect();
-    for (const dep of deps) {
-      await ctx.db.delete(dep._id);
-    }
-
-    // Delete dependencies where this task is depended upon
-    const blockedBy = await ctx.db
-      .query("taskDependencies")
-      .withIndex("by_depends_on", (q) => q.eq("dependsOnTaskId", args.id))
-      .collect();
-    for (const dep of blockedBy) {
-      await ctx.db.delete(dep._id);
-    }
-
-    // Delete acceptance criteria
-    const criteria = await ctx.db
-      .query("acceptanceCriteria")
-      .withIndex("by_task", (q) => q.eq("taskId", args.id))
-      .collect();
-    for (const c of criteria) {
-      await ctx.db.delete(c._id);
-    }
-
-    // Delete tests
-    const tests = await ctx.db
-      .query("tests")
-      .withIndex("by_task", (q) => q.eq("taskId", args.id))
-      .collect();
-    for (const t of tests) {
-      await ctx.db.delete(t._id);
-    }
-
-    // Delete chat messages
-    const chats = await ctx.db
-      .query("chatMessages")
-      .withIndex("by_task", (q) => q.eq("taskId", args.id))
-      .collect();
-    for (const chat of chats) {
-      await ctx.db.delete(chat._id);
-    }
-
-    // Delete history events
-    const history = await ctx.db
-      .query("historyEvents")
-      .withIndex("by_task", (q) => q.eq("taskId", args.id))
-      .collect();
-    for (const event of history) {
-      await ctx.db.delete(event._id);
-    }
-
-    // Delete pull requests and related data
-    const pullRequests = await ctx.db
-      .query("pullRequests")
-      .withIndex("by_task", (q) => q.eq("taskId", args.id))
-      .collect();
-    for (const pr of pullRequests) {
-      // Delete PR comments
-      const comments = await ctx.db
-        .query("prComments")
-        .withIndex("by_pull_request", (q) => q.eq("pullRequestId", pr._id))
-        .collect();
-      for (const comment of comments) {
-        await ctx.db.delete(comment._id);
-      }
-
-      // Delete PR issues
-      const issues = await ctx.db
-        .query("prIssues")
-        .withIndex("by_pull_request", (q) => q.eq("pullRequestId", pr._id))
-        .collect();
-      for (const issue of issues) {
-        await ctx.db.delete(issue._id);
-      }
-
-      // Delete PR checks
-      const checks = await ctx.db
-        .query("prChecks")
-        .withIndex("by_pull_request", (q) => q.eq("pullRequestId", pr._id))
-        .collect();
-      for (const check of checks) {
-        await ctx.db.delete(check._id);
-      }
-
-      await ctx.db.delete(pr._id);
-    }
-
-    // Finally delete the task
-    await ctx.db.delete(args.id);
+    await deleteTaskCascade(ctx.db, args.id);
   },
 });
