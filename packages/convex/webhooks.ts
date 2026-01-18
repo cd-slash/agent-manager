@@ -1,18 +1,6 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
-
-const webhookSourceValidator = v.union(
-  v.literal("github"),
-  v.literal("cicd"),
-  v.literal("agent")
-);
-
-const webhookStatusValidator = v.union(
-  v.literal("pending"),
-  v.literal("processing"),
-  v.literal("processed"),
-  v.literal("failed")
-);
+import { webhookSourceValidator, webhookStatusValidator } from "./validators";
 
 // List webhook events by source
 export const listBySource = query({

@@ -1,29 +1,10 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
-
-const prStatusValidator = v.union(
-  v.literal("draft"),
-  v.literal("open"),
-  v.literal("review_requested"),
-  v.literal("changes_requested"),
-  v.literal("approved"),
-  v.literal("merged"),
-  v.literal("closed")
-);
-
-const checkStatusValidator = v.union(
-  v.literal("pending"),
-  v.literal("running"),
-  v.literal("passed"),
-  v.literal("failed"),
-  v.literal("skipped")
-);
-
-const issueSeverityValidator = v.union(
-  v.literal("error"),
-  v.literal("warning"),
-  v.literal("info")
-);
+import {
+  prStatusValidator,
+  checkStatusValidator,
+  issueSeverityValidator,
+} from "./validators";
 
 // Get pull request by task
 export const getByTask = query({

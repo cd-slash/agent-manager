@@ -1,7 +1,6 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
-
-const senderValidator = v.union(v.literal("ai"), v.literal("user"));
+import { senderValidator } from "./validators";
 
 // List chat messages for a project
 export const listByProject = query({

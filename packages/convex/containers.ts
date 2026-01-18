@@ -1,13 +1,6 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
-
-const containerStatusValidator = v.union(
-  v.literal("running"),
-  v.literal("stopped"),
-  v.literal("restarting"),
-  v.literal("paused"),
-  v.literal("exited")
-);
+import { containerStatusValidator } from "./validators";
 
 // List all containers
 export const list = query({

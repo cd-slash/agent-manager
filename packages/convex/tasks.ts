@@ -1,12 +1,6 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
-
-const categoryValidator = v.union(
-  v.literal("backlog"),
-  v.literal("todo"),
-  v.literal("in-progress"),
-  v.literal("done")
-);
+import { categoryValidator } from "./validators";
 
 // List all tasks for a project
 export const listByProject = query({

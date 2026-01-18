@@ -1,11 +1,6 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
-
-const testStatusValidator = v.union(
-  v.literal("passed"),
-  v.literal("pending"),
-  v.literal("failed")
-);
+import { testStatusValidator } from "./validators";
 
 // List tests for a task
 export const listByTask = query({

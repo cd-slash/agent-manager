@@ -1,11 +1,6 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
-
-const serverStatusValidator = v.union(
-  v.literal("online"),
-  v.literal("maintenance"),
-  v.literal("offline")
-);
+import { serverStatusValidator } from "./validators";
 
 // List all servers
 export const list = query({
