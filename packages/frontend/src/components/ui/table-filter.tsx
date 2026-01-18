@@ -59,7 +59,7 @@ export function TableFilter({
           <DropdownMenuTrigger asChild>
             <Button variant="outline" className="gap-2">
               <Filter size={16} />
-              Filters
+              Filter
               {activeFilterCount > 0 && (
                 <Badge variant="secondary" className="ml-1 px-1.5 py-0 text-xs h-5">
                   {activeFilterCount}

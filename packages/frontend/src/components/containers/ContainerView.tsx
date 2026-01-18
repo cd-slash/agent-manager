@@ -158,6 +158,7 @@ export function ContainerView({
       selectionActions={selectionActions}
       emptyMessage="No containers found matching your filters."
       getRowId={(row) => row.id}
+      className="p-page"
     />
   );
 }

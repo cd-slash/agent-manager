@@ -153,6 +153,7 @@ export function ServerView({ servers, onSelectServer }: ServerViewProps) {
       headerActions={headerActions}
       selectionActions={selectionActions}
       getRowId={(row) => row.id.toString()}
+      className="p-page"
     />
   );
 }

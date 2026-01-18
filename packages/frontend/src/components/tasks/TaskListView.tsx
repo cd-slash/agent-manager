@@ -157,7 +157,6 @@ export function TaskListView({ tasks, onTaskClick }: TaskListViewProps) {
       selectionActions={selectionActions}
       emptyMessage="No tasks found. Add one to get started!"
       getRowId={(row) => row.id.toString()}
-      className="p-0"
     />
   );
 }

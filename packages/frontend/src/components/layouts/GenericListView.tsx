@@ -146,7 +146,7 @@ export function GenericListView<TData extends Record<string, unknown>>({
   const hasSelectionActions = selectionActions && selectedRows.length > 0;
 
   return (
-    <div className={cn('p-page h-full flex flex-col bg-background', className)}>
+    <div className={cn('h-full flex flex-col', className)}>
       {hasHeader && (
         <div className="flex flex-col sm:flex-row gap-card mb-section">
           {/* Search and filters on the left */}

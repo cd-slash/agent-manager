@@ -311,7 +311,6 @@ function App() {
             onTaskClick={(task) => setSelectedTaskId(task.id as Id<"tasks">)}
             onBack={() => setSelectedProjectId(null)}
             onUpdateProject={handleProjectUpdate}
-            onAddTask={handleAddTask}
           />
         );
       }

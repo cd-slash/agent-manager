@@ -212,6 +212,7 @@ export function AllTasksView({ projects, onTaskClick }: AllTasksViewProps) {
           : 'No tasks match your filters.'
       }
       getRowId={(row) => `${row.projectId}-${row.id}`}
+      className="p-page"
     />
   );
 }

@@ -134,6 +134,7 @@ export function ProjectListView({
       headerActions={headerActions}
       selectionActions={selectionActions}
       getRowId={(row) => row.id.toString()}
+      className="p-page"
     />
   );
 }

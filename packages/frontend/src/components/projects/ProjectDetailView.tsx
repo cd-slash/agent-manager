@@ -6,8 +6,6 @@ import {
   List,
   FileText,
   Info,
-  Plus,
-  Grid,
   Trash2,
 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -23,7 +21,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { TaskListView } from '@/components/tasks/TaskListView';
-import { KanbanColumn } from '@/components/tasks/KanbanColumn';
 import { AgentChatPanel } from '@/components/chat/AgentChatPanel';
 import { SpecificationView } from './SpecificationView';
 import type { Project, Task, ChatMessage } from '@/types';
@@ -47,7 +44,6 @@ interface ProjectDetailViewProps {
   onTaskClick: (task: Task) => void;
   onBack: () => void;
   onUpdateProject: (project: Project) => void;
-  onAddTask: (projectId: string, title: string) => void;
 }
 
 export function ProjectDetailView({
@@ -55,11 +51,8 @@ export function ProjectDetailView({
   onTaskClick,
   onBack,
   onUpdateProject,
-  onAddTask,
 }: ProjectDetailViewProps) {
   const [activeTab, setActiveTab] = useState('tasks');
-  const [taskViewMode, setTaskViewMode] = useState<'list' | 'board'>('list');
-  const [quickTaskTitle, setQuickTaskTitle] = useState('');
   const [planText, setPlanText] = useState(
     project.plan ||
       `## Project Requirements\n\n${project.description}\n\n## Acceptance Criteria\n\n- [ ] System must be scalable\n- [ ] UI must be responsive`
@@ -86,13 +79,6 @@ export function ProjectDetailView({
   useEffect(() => {
     setPlanText(project.plan || `## Project Requirements\n\n${project.description}\n\n## Acceptance Criteria\n\n- [ ] System must be scalable\n- [ ] UI must be responsive`);
   }, [project.plan, project.description]);
-
-  const handleQuickAdd = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!quickTaskTitle.trim()) return;
-    onAddTask(project.id, quickTaskTitle);
-    setQuickTaskTitle('');
-  };
 
   const handleChatSend = async (text: string) => {
     // Send user message to Convex
@@ -138,83 +124,11 @@ export function ProjectDetailView({
 
               <div className="flex gap-page items-stretch flex-1 min-h-0">
                 <div className="flex-1 min-w-0 flex flex-col">
-                  <TabsContent value="tasks" className="!mt-0 flex-1 min-h-0 flex flex-col">
-                      <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center">
-                        <List size={16} className="mr-2" />
-                        Tasks
-                      </h3>
-                      <div className="flex justify-between items-center mb-section">
-                        <form
-                          onSubmit={handleQuickAdd}
-                          className="flex-1 max-w-lg relative mr-4"
-                        >
-                          <Plus
-                            size={16}
-                            className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-                          />
-                          <Input
-                            value={quickTaskTitle}
-                            onChange={(e) => setQuickTaskTitle(e.target.value)}
-                            placeholder="Add a new task..."
-                            className="pl-10"
-                          />
-                        </form>
-                        <div className="flex items-center space-x-2 bg-surface border border-border rounded-lg p-compact">
-                          <Button
-                            variant={taskViewMode === 'list' ? 'secondary' : 'ghost'}
-                            size="icon-sm"
-                            onClick={() => setTaskViewMode('list')}
-                          >
-                            <List size={18} />
-                          </Button>
-                          <Button
-                            variant={taskViewMode === 'board' ? 'secondary' : 'ghost'}
-                            size="icon-sm"
-                            onClick={() => setTaskViewMode('board')}
-                          >
-                            <Grid size={18} />
-                          </Button>
-                        </div>
-                      </div>
-                      <div className="flex-1 min-h-0">
-                        {taskViewMode === 'list' ? (
-                          <TaskListView
-                            tasks={project.tasks}
-                            onTaskClick={onTaskClick}
-                          />
-                        ) : (
-                          <div className="flex h-full space-x-section min-w-max overflow-x-auto pb-item">
-                            <KanbanColumn
-                              title="Backlog"
-                              tasks={project.tasks.filter(
-                                (t) => t.category === 'backlog'
-                              )}
-                              onTaskClick={onTaskClick}
-                            />
-                            <KanbanColumn
-                              title="To Do"
-                              tasks={project.tasks.filter(
-                                (t) => t.category === 'todo'
-                              )}
-                              onTaskClick={onTaskClick}
-                            />
-                            <KanbanColumn
-                              title="In Progress"
-                              tasks={project.tasks.filter(
-                                (t) => t.category === 'in-progress'
-                              )}
-                              onTaskClick={onTaskClick}
-                            />
-                            <KanbanColumn
-                              title="Done"
-                              tasks={project.tasks.filter(
-                                (t) => t.category === 'done'
-                              )}
-                              onTaskClick={onTaskClick}
-                            />
-                          </div>
-                        )}
-                      </div>
+                  <TabsContent value="tasks" className="!mt-0 flex-1 min-h-0">
+                    <TaskListView
+                      tasks={project.tasks}
+                      onTaskClick={onTaskClick}
+                    />
                   </TabsContent>
 
                   <TabsContent value="plan" className="!mt-0">
