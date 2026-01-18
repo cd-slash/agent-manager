@@ -1,6 +1,7 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { serverStatusValidator } from "./validators";
+import { patchWithTimestamp } from "./internal/updateUtils";
 
 // List all servers
 export const list = query({
@@ -159,17 +160,7 @@ export const update = mutation({
     const existing = await ctx.db.get(id);
     if (!existing) throw new Error("Server not found");
 
-    const filteredUpdates: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(updates)) {
-      if (value !== undefined) {
-        filteredUpdates[key] = value;
-      }
-    }
-
-    await ctx.db.patch(id, {
-      ...filteredUpdates,
-      updatedAt: Date.now(),
-    });
+    await patchWithTimestamp(ctx.db, id, updates);
   },
 });
 
