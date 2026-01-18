@@ -151,26 +151,7 @@ function App() {
     const projectId = await createProject({
       name: projectData.name,
       description: projectData.description,
-      plan: `## Project Requirements\n\n${projectData.description}\n\n## Acceptance Criteria\n\n- [ ] Initial scaffold created`,
-    });
-
-    // Create some initial tasks
-    await createTask({
-      projectId,
-      title: `Initialize repository for ${projectData.name}`,
-      description: 'Set up the initial project repository and structure.',
-      category: 'backlog',
-      tag: 'devops',
-      complexity: 'Low',
-    });
-
-    await createTask({
-      projectId,
-      title: 'Setup development environment',
-      description: 'Configure development tools and dependencies.',
-      category: 'todo',
-      tag: 'devops',
-      complexity: 'Medium',
+      plan: '',
     });
 
     setIsNewProjectModalOpen(false);

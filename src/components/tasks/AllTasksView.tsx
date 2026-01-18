@@ -1,9 +1,13 @@
 import { useState, useMemo } from 'react';
+import { useMutation } from 'convex/react';
+import { api } from '../../../convex/_generated/api';
+import type { Id } from '../../../convex/_generated/dataModel';
 import {
   Edit2,
   GitPullRequest,
   Link as LinkIcon,
   Search,
+  Trash2,
 } from 'lucide-react';
 import type { ColumnDef } from '@tanstack/react-table';
 import { DataTable, createSelectionColumn } from '@/components/ui/data-table';
@@ -47,6 +51,20 @@ export function AllTasksView({ projects, onTaskClick }: AllTasksViewProps) {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [tagFilter, setTagFilter] = useState<string>('all');
   const [projectFilter, setProjectFilter] = useState<string>('all');
+
+  const deleteTask = useMutation(api.tasks.deleteTask);
+
+  const handleDeleteSelected = async (
+    selectedTasks: TaskWithProject[],
+    clearSelection: () => void
+  ) => {
+    await Promise.all(
+      selectedTasks.map((task) =>
+        deleteTask({ id: task.id as unknown as Id<'tasks'> })
+      )
+    );
+    clearSelection();
+  };
 
   const allTasks = useMemo(
     () =>
@@ -241,6 +259,17 @@ export function AllTasksView({ projects, onTaskClick }: AllTasksViewProps) {
             : 'No tasks match your filters.'
         }
         getRowId={(row) => `${row.projectId}-${row.id}`}
+        selectionActions={(selectedRows, clearSelection) => (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-destructive hover:text-destructive hover:bg-destructive/10"
+            onClick={() => handleDeleteSelected(selectedRows, clearSelection)}
+          >
+            <Trash2 size={16} className="mr-2" />
+            Delete
+          </Button>
+        )}
       />
     </div>
   );

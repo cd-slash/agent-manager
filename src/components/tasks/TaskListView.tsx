@@ -1,7 +1,10 @@
 import { useMemo } from 'react';
-import { Edit2, GitPullRequest, Link as LinkIcon } from 'lucide-react';
+import { useMutation } from 'convex/react';
+import { api } from '../../../convex/_generated/api';
+import type { Id } from '../../../convex/_generated/dataModel';
+import { Edit2, GitPullRequest, Link as LinkIcon, Trash2 } from 'lucide-react';
 import type { ColumnDef } from '@tanstack/react-table';
-import { DataTable } from '@/components/ui/data-table';
+import { DataTable, createSelectionColumn } from '@/components/ui/data-table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import type { Task } from '@/types';
@@ -25,8 +28,23 @@ const getStatusVariant = (status: string) => {
 };
 
 export function TaskListView({ tasks, onTaskClick }: TaskListViewProps) {
+  const deleteTask = useMutation(api.tasks.deleteTask);
+
+  const handleDeleteSelected = async (
+    selectedTasks: Task[],
+    clearSelection: () => void
+  ) => {
+    await Promise.all(
+      selectedTasks.map((task) =>
+        deleteTask({ id: task.id as unknown as Id<'tasks'> })
+      )
+    );
+    clearSelection();
+  };
+
   const columns: ColumnDef<Task>[] = useMemo(
     () => [
+      createSelectionColumn<Task>(),
       {
         accessorKey: 'title',
         header: 'Task',
@@ -104,11 +122,23 @@ export function TaskListView({ tasks, onTaskClick }: TaskListViewProps) {
       columns={columns}
       data={tasks}
       onRowClick={onTaskClick}
+      enableRowSelection
       enablePagination
       fillHeight
       pageSize={10}
       emptyMessage="No tasks found. Add one to get started!"
       getRowId={(row) => row.id.toString()}
+      selectionActions={(selectedRows, clearSelection) => (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="text-destructive hover:text-destructive hover:bg-destructive/10"
+          onClick={() => handleDeleteSelected(selectedRows, clearSelection)}
+        >
+          <Trash2 size={16} className="mr-2" />
+          Delete
+        </Button>
+      )}
     />
   );
 }
