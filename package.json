@@ -9,12 +9,11 @@
     "dev:frontend": "bun run --filter @agent-manager/frontend dev",
     "dev:convex": "bunx convex dev",
     "dev:gateway": "bun run --filter @agent-manager/agent-gateway dev",
-    "dev:runner": "bun run --filter @agent-manager/agent-runner dev",
     "build": "turbo build",
     "start": "bun run --filter @agent-manager/backend start",
     "start:gateway": "bun run --filter @agent-manager/agent-gateway start",
-    "start:runner": "bun run --filter @agent-manager/agent-runner start",
-    "convex:deploy": "bun run --filter @agent-manager/convex deploy"
+    "convex:deploy": "bun run --filter @agent-manager/convex deploy",
+    "create-agent": "packages/agent-gateway/bin/create-agent"
   },
   "devDependencies": {
     "@types/bun": "latest",

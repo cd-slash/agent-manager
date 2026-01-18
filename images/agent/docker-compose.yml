@@ -1,10 +1,10 @@
-# Uses variables from .env (will be created) for easy customization
-# Single container with Tailscale running directly (no sidecar)
+# Agent container with Tailscale running directly (no sidecar)
+# Build context is monorepo root to access packages/container-api
 services:
   server:
     build:
-      context: .
-      dockerfile: server/Dockerfile
+      context: ../..
+      dockerfile: images/agent/Dockerfile
       args:
         TZ: ${TZ:-UTC}
         GH_USERNAME: ${GH_USERNAME}
@@ -17,8 +17,6 @@ services:
       # MagicDNS (100.100.100.100) as fallback for Tailscale hostname resolution
       - 1.1.1.1
       - 100.100.100.100
-    env_file:
-      - .env
     environment:
       - TS_AUTHKEY=${TS_AUTHKEY}
       - TS_HOSTNAME=${DEV_HOSTNAME:-dev-bun}
@@ -34,6 +32,8 @@ services:
       - DOTFILES_REPO=${DOTFILES_REPO:-cd-slash/dotfiles}
       - GH_USERNAME=${GH_USERNAME}
       - GH_TOKEN=${GH_TOKEN}
+      # Manager WebSocket URL for container API to connect to
+      - MANAGER_WS_URL=${MANAGER_WS_URL:-}
     volumes:
       - tailscale-data:/var/lib/tailscale
       - dotfiles:/root/.config/dotfiles
@@ -48,9 +48,8 @@ services:
     stdin_open: true
     tty: true
     # Hard memory limit to prevent container from consuming excessive host memory
-    # OOM killer will terminate the container if it exceeds this limit
     mem_limit: 4096m
-    # Memory reservation (soft limit) - container will try to stay under this
+    # Memory reservation (soft limit)
     mem_reservation: 3072m
 
 volumes:

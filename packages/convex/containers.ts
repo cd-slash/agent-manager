@@ -289,3 +289,54 @@ export const getByContainerId = query({
       .first();
   },
 });
+
+// Create container from agent-gateway (called when a new container is created via create-agent)
+export const createFromAgent = mutation({
+  args: {
+    containerId: v.string(),
+    name: v.string(),
+    hostname: v.string(),
+    repo: v.string(),
+    branch: v.string(),
+    server: v.string(),
+    network: v.union(v.literal("macvlan"), v.literal("bridge")),
+    lanIp: v.optional(v.string()),
+    wgPort: v.optional(v.number()),
+    taskId: v.optional(v.id("tasks")),
+    projectId: v.optional(v.id("projects")),
+  },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+
+    // Check if container already exists
+    const existing = await ctx.db
+      .query("containers")
+      .filter((q) => q.eq(q.field("containerId"), args.containerId))
+      .first();
+
+    if (existing) {
+      // Update existing container
+      await ctx.db.patch(existing._id, {
+        name: args.name,
+        tailscaleHostname: args.hostname,
+        status: "running",
+        updatedAt: now,
+      });
+      return existing._id;
+    }
+
+    // Create new container
+    const id = await ctx.db.insert("containers", {
+      containerId: args.containerId,
+      name: args.name,
+      image: `agent:${args.repo}@${args.branch}`,
+      status: "running",
+      port: args.network === "macvlan" ? "80" : String(args.wgPort || 4096),
+      tailscaleHostname: args.hostname,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    return id;
+  },
+});

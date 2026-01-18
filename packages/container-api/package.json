@@ -1,5 +1,5 @@
 {
-  "name": "@agent-manager/agent-runner",
+  "name": "@agent-manager/container-api",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -8,6 +8,8 @@
     "start": "NODE_ENV=production bun src/index.ts"
   },
   "dependencies": {
-    "@agent-manager/agent-shared": "workspace:*"
+    "@agent-manager/agent-shared": "workspace:*",
+    "chokidar": "^4.0.3",
+    "elysia": "^1.2.25"
   }
 }

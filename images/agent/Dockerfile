@@ -202,12 +202,16 @@ RUN npm install -g @anthropic-ai/claude-code && \
     claude --version || echo "Claude CLI installed"
 
 # ======================
-# Install container-api (local)
+# Install container-api from packages/
 # ======================
-# Copy the local container API that wraps the Claude CLI
-COPY api/ /opt/container-api/
+# Copy the container API package that wraps the Claude CLI
+# Build context is monorepo root, so we can access packages/
+COPY packages/container-api/ /opt/container-api/
+COPY packages/agent-shared/ /opt/agent-shared/
 RUN cd /opt/container-api && \
-    bun install --frozen-lockfile 2>/dev/null || bun install
+    # Link the shared package locally
+    sed -i 's|"@agent-manager/agent-shared": "workspace:\*"|"@agent-manager/agent-shared": "file:/opt/agent-shared"|' package.json && \
+    bun install
 
 # ======================
 # Create workspace directory
@@ -218,8 +222,9 @@ WORKDIR /workspace
 # ======================
 # Setup entrypoint with tini
 # ======================
-# Path is relative to build context (. directory containing server/ and api/)
-COPY server/entrypoint.sh /usr/local/bin/entrypoint.sh
+# Build context is monorepo root
+COPY images/agent/entrypoint.sh /usr/local/bin/entrypoint.sh
+COPY images/agent/claude-settings.json /root/.claude/settings.json
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
 ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/entrypoint.sh"]

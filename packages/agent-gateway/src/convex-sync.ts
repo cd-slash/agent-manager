@@ -1,133 +1,158 @@
-import { ConvexHttpClient } from "convex/browser";
-import type { api } from "@agent-manager/convex/api";
-import type {
-  SessionInfo,
-  CliOutputMessage,
-  ResultMessage,
-  ContainerInfo,
-} from "@agent-manager/agent-shared";
+/**
+ * Convex Sync
+ *
+ * Syncs gateway events to Convex for persistence and frontend real-time updates.
+ */
 
-// Type for Convex API - will be properly typed when schema is added
-type ConvexApi = typeof api;
+import { ConvexHttpClient } from "convex/browser";
+import type {
+  ExecStartPayload,
+  ExecStreamPayload,
+  ExecCompletePayload,
+  CreateContainerResult,
+} from "@agent-manager/agent-shared";
 
 export class ConvexSync {
   private client: ConvexHttpClient;
-  private connected = false;
 
   constructor(convexUrl: string) {
     this.client = new ConvexHttpClient(convexUrl);
-    this.connected = true;
-    console.log(`[ConvexSync] Initialized with URL: ${convexUrl}`);
+    console.log(`[convex] Initialized with URL: ${convexUrl}`);
   }
 
-  async createSession(params: {
-    sessionId: string;
-    containerId: string;
-    prompt: string;
-    taskId?: string;
-    projectId?: string;
-  }): Promise<void> {
-    if (!this.connected) return;
-
+  /**
+   * Update container connection status
+   */
+  async updateContainerConnection(
+    containerId: string,
+    hostname: string,
+    connected: boolean
+  ): Promise<void> {
     try {
-      // @ts-expect-error - API will be typed when Convex schema is generated
-      await this.client.mutation(api.agentSessions.create, {
-        sessionId: params.sessionId,
-        containerId: params.containerId,
-        prompt: params.prompt,
-        taskId: params.taskId,
-        projectId: params.projectId,
+      // @ts-expect-error - API types will be generated
+      await this.client.mutation("containers:updateAgentStatus", {
+        containerId,
+        hostname,
+        agentStatus: connected ? "online" : "offline",
+        lastSeenAt: Date.now(),
+      });
+    } catch (error) {
+      console.error("[convex] Failed to update container connection:", error);
+    }
+  }
+
+  /**
+   * Record execution start
+   */
+  async recordExecStart(
+    correlationId: string,
+    containerId: string,
+    options: ExecStartPayload,
+    taskId?: string,
+    projectId?: string
+  ): Promise<void> {
+    try {
+      // @ts-expect-error - API types will be generated
+      await this.client.mutation("agentSessions:create", {
+        sessionId: correlationId,
+        containerId,
+        prompt: options.message,
+        taskId,
+        projectId,
         status: "starting",
         startedAt: Date.now(),
       });
     } catch (error) {
-      console.error("[ConvexSync] Failed to create session:", error);
+      console.error("[convex] Failed to record exec start:", error);
     }
   }
 
-  async updateSessionStatus(
-    sessionId: string,
-    status: SessionInfo["status"],
-    additionalData?: Partial<{
-      completedAt: number;
-      result: string;
-      error: string;
-      totalCostUsd: number;
-      numTurns: number;
-    }>
+  /**
+   * Record streaming event
+   */
+  async recordStreamEvent(
+    correlationId: string,
+    containerId: string,
+    payload: ExecStreamPayload,
+    taskId?: string,
+    projectId?: string
   ): Promise<void> {
-    if (!this.connected) return;
-
     try {
-      // @ts-expect-error - API will be typed when Convex schema is generated
-      await this.client.mutation(api.agentSessions.updateStatus, {
-        sessionId,
-        status,
-        ...additionalData,
+      // Update session status to running on first stream event
+      // @ts-expect-error - API types will be generated
+      await this.client.mutation("agentSessions:updateStatus", {
+        sessionId: correlationId,
+        status: "running",
       });
-    } catch (error) {
-      console.error("[ConvexSync] Failed to update session status:", error);
-    }
-  }
 
-  async recordSessionOutput(
-    sessionId: string,
-    output: CliOutputMessage
-  ): Promise<void> {
-    if (!this.connected) return;
-
-    try {
-      // @ts-expect-error - API will be typed when Convex schema is generated
-      await this.client.mutation(api.agentMessages.create, {
-        sessionId,
-        messageType: output.type,
-        content: JSON.stringify(output),
+      // Record the message
+      // @ts-expect-error - API types will be generated
+      await this.client.mutation("agentMessages:create", {
+        sessionId: correlationId,
+        messageType: payload.streamType === "assistant" ? "assistant" :
+                     payload.streamType === "result" ? "result" : "system",
+        content: JSON.stringify(payload.data),
         timestamp: Date.now(),
       });
     } catch (error) {
-      console.error("[ConvexSync] Failed to record output:", error);
+      console.error("[convex] Failed to record stream event:", error);
     }
   }
 
-  async recordSessionResult(
-    sessionId: string,
-    result: ResultMessage
-  ): Promise<void> {
-    if (!this.connected) return;
-
-    const status = result.subtype === "success" ? "completed" : "failed";
-
-    await this.updateSessionStatus(sessionId, status, {
-      completedAt: Date.now(),
-      result: result.result,
-      totalCostUsd: result.total_cost_usd,
-      numTurns: result.num_turns,
-      error: result.subtype !== "success" ? result.subtype : undefined,
-    });
-  }
-
-  async updateContainerStatus(
+  /**
+   * Record execution completion
+   */
+  async recordExecComplete(
+    correlationId: string,
     containerId: string,
-    info: ContainerInfo,
-    status: "online" | "offline"
+    payload: ExecCompletePayload,
+    taskId?: string,
+    projectId?: string
   ): Promise<void> {
-    if (!this.connected) return;
-
     try {
-      // Update the containers table with connection status
-      // @ts-expect-error - API will be typed when Convex schema is generated
-      await this.client.mutation(api.containers.updateAgentStatus, {
-        containerId,
-        hostname: info.hostname,
-        agentStatus: status,
-        lastSeenAt: Date.now(),
+      const status = payload.result === "success" ? "completed" :
+                     payload.result === "aborted" ? "cancelled" : "failed";
+
+      // @ts-expect-error - API types will be generated
+      await this.client.mutation("agentSessions:updateStatus", {
+        sessionId: correlationId,
+        status,
+        completedAt: Date.now(),
+        totalCostUsd: payload.totalCostUsd,
+        numTurns: payload.numTurns,
+        error: payload.error,
       });
     } catch (error) {
-      console.error("[ConvexSync] Failed to update container status:", error);
+      console.error("[convex] Failed to record exec complete:", error);
     }
   }
 
-  isConnected(): boolean {
-    return this.connected;
+  /**
+   * Record new container created
+   */
+  async recordContainerCreated(
+    result: CreateContainerResult,
+    taskId?: string,
+    projectId?: string
+  ): Promise<void> {
+    try {
+      // Create container record
+      // @ts-expect-error - API types will be generated
+      await this.client.mutation("containers:createFromAgent", {
+        containerId: result.containerId,
+        name: result.name,
+        hostname: result.hostname,
+        repo: result.repo,
+        branch: result.branch,
+        server: result.server,
+        network: result.network,
+        lanIp: result.lanIp,
+        wgPort: result.wgPort,
+        taskId,
+        projectId,
+      });
+    } catch (error) {
+      console.error("[convex] Failed to record container created:", error);
+    }
   }
 }

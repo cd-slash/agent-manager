@@ -8,7 +8,12 @@
 
 set -euo pipefail
 
-ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+# Get the monorepo root (3 levels up from packages/agent-gateway/bin/)
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+MONOREPO_ROOT=$(cd "$SCRIPT_DIR/../../.." && pwd)
+
+# Image directory contains Dockerfile, docker-compose.yml, etc.
+IMAGE_DIR="$MONOREPO_ROOT/images/agent"
 
 # 3-letter words for random name generation
 WORDS=(
@@ -186,7 +191,7 @@ fi
 log "  Server     : $SERVER"
 
 # Load base env
-BASE_ENV="$ROOT_DIR/.env"
+BASE_ENV="$IMAGE_DIR/.env"
 if [[ ! -f "$BASE_ENV" ]]; then
     echo "Error: .env file not found at $BASE_ENV" >&2
     exit 1
@@ -252,7 +257,7 @@ else
 fi
 
 # Build and start container
-cd "$ROOT_DIR"
+cd "$IMAGE_DIR"
 
 if [[ "$SERVER" == "localhost" ]]; then
     # Local execution
@@ -320,7 +325,7 @@ else
     if $QUIET; then
         scp "$TMP_ENV" "$SERVER:/tmp/agent-$HOSTNAME.env" &>/dev/null
         $USE_MACVLAN && scp "$TMP_OVERRIDE" "$SERVER:/tmp/agent-$HOSTNAME-override.yml" &>/dev/null
-        ssh "$SERVER" "cd $ROOT_DIR && \
+        ssh "$SERVER" "cd $IMAGE_DIR && \
             docker compose $REMOTE_COMPOSE_FILES \
                 --env-file /tmp/agent-$HOSTNAME.env \
                 --project-name $PROJECT_NAME \
@@ -329,7 +334,7 @@ else
     else
         scp "$TMP_ENV" "$SERVER:/tmp/agent-$HOSTNAME.env" >&2
         $USE_MACVLAN && scp "$TMP_OVERRIDE" "$SERVER:/tmp/agent-$HOSTNAME-override.yml" >&2
-        ssh "$SERVER" "cd $ROOT_DIR && \
+        ssh "$SERVER" "cd $IMAGE_DIR && \
             docker compose $REMOTE_COMPOSE_FILES \
                 --env-file /tmp/agent-$HOSTNAME.env \
                 --project-name $PROJECT_NAME \
