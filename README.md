@@ -52,9 +52,13 @@ The application will be available at:
 
 Create `.env` files as needed:
 
-**Root `.env`** (for Convex):
+**Root `.env`** (for frontend and agent-gateway):
 ```env
+# Frontend (Vite)
 VITE_CONVEX_URL=https://your-deployment.convex.cloud
+
+# Agent Gateway (required for container creation and secret fetching)
+CONVEX_URL=https://your-deployment.convex.cloud
 ```
 
 **Agent containers** (`images/agent/.env`):
