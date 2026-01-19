@@ -30,7 +30,7 @@ export function ServerDetailView({
   server,
   containers,
 }: ServerDetailViewProps) {
-  const [sshUser, setSshUser] = useState(server.sshUser || 'root');
+  const [sshUser, setSshUser] = useState(server.sshUser || 'ubuntu');
   const [isSaving, setIsSaving] = useState(false);
   const updateServer = useMutation(api.servers.update);
 
@@ -46,7 +46,7 @@ export function ServerDetailView({
     }
   };
 
-  const hasChanges = sshUser !== (server.sshUser || 'root');
+  const hasChanges = sshUser !== (server.sshUser || 'ubuntu');
 
   const infoCards = (
     <>
@@ -89,7 +89,7 @@ export function ServerDetailView({
             <Input
               value={sshUser}
               onChange={(e) => setSshUser(e.target.value)}
-              placeholder="root"
+              placeholder="ubuntu"
               className="font-mono text-sm h-8"
             />
             {server._id && (

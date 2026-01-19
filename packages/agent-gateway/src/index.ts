@@ -195,7 +195,7 @@ async function createContainerOnServer(
   secrets: Record<string, string>,
   buildTracker?: ConvexSync
 ): Promise<CreateContainerResult> {
-  const { repo, branch = "main", name, server = "localhost", sshUser = "root" } = request;
+  const { repo, branch = "main", name, server = "localhost", sshUser = "ubuntu" } = request;
   const containerName = name || generateRandomName();
   const wgPort = generateWgPort(containerName);
   // Build SSH target (user@host for remote, just localhost for local)
