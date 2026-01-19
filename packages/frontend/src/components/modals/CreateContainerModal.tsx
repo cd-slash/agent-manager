@@ -28,6 +28,7 @@ interface CreateContainerModalProps {
     branch: string;
     name?: string;
     server: string;
+    sshUser?: string;
   }) => Promise<void>;
 }
 
@@ -58,11 +59,16 @@ export function CreateContainerModal({
     setError(null);
 
     try {
+      // Find the selected server to get sshUser
+      const selectedServer = servers.find(
+        (s) => (s.tailscaleHostname || s.name) === form.server
+      );
       await onCreate({
         repo: form.repo,
         branch: form.branch || "main",
         name: form.name || undefined,
         server: form.server,
+        sshUser: selectedServer?.sshUser || undefined,
       });
       // Reset form on success
       setForm({ repo: "", branch: "main", name: "", server: "localhost" });

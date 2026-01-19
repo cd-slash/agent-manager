@@ -448,6 +448,8 @@ export interface CreateContainerRequest {
   name?: string;
   /** Target server (default: localhost) */
   server?: string;
+  /** SSH username for remote server (default: root) */
+  sshUser?: string;
   /** Task ID to associate with */
   taskId?: string;
   /** Project ID to associate with */

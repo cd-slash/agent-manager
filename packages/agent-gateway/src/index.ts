@@ -195,9 +195,11 @@ async function createContainerOnServer(
   secrets: Record<string, string>,
   buildTracker?: ConvexSync
 ): Promise<CreateContainerResult> {
-  const { repo, branch = "main", name, server = "localhost" } = request;
+  const { repo, branch = "main", name, server = "localhost", sshUser = "root" } = request;
   const containerName = name || generateRandomName();
   const wgPort = generateWgPort(containerName);
+  // Build SSH target (user@host for remote, just localhost for local)
+  const sshTarget = server === "localhost" ? "localhost" : `${sshUser}@${server}`;
 
   // Initialize build tracking
   if (buildTracker) {
@@ -354,7 +356,7 @@ rm -rf "$BUILD_DIR" /tmp/compose-${containerName}.yml`;
     // Execute build script on server
     const buildProc = server === "localhost"
       ? Bun.spawn(["bash", "-c", buildScript], { stdout: "pipe", stderr: "pipe" })
-      : Bun.spawn(["ssh", server, "bash", "-s"], {
+      : Bun.spawn(["ssh", sshTarget, "bash", "-s"], {
           stdin: new Blob([buildScript]),
           stdout: "pipe",
           stderr: "pipe",
@@ -418,7 +420,7 @@ rm -rf "$BUILD_DIR" /tmp/compose-${containerName}.yml`;
         }
       } else {
         // SCP to server, then docker cp
-        const scpProc = Bun.spawn(["scp", BINARY_PATH, `${server}:/tmp/container-api-binary`], {
+        const scpProc = Bun.spawn(["scp", BINARY_PATH, `${sshTarget}:/tmp/container-api-binary`], {
           stdout: "pipe",
           stderr: "pipe",
         });
@@ -432,7 +434,7 @@ rm -rf "$BUILD_DIR" /tmp/compose-${containerName}.yml`;
 docker exec ${containerName} chmod +x /opt/container-api/container-api && \
 rm /tmp/container-api-binary`;
 
-        const copyProc = Bun.spawn(["ssh", server, "bash", "-c", copyScript], {
+        const copyProc = Bun.spawn(["ssh", sshTarget, "bash", "-c", copyScript], {
           stdout: "pipe",
           stderr: "pipe",
         });
@@ -463,7 +465,7 @@ docker exec ${containerName} tailscale serve --bg --http 80 http://localhost:409
 
       const startProc = server === "localhost"
         ? Bun.spawn(["bash", "-c", startCommand], { stdout: "pipe", stderr: "pipe" })
-        : Bun.spawn(["ssh", server, "bash", "-c", startCommand], { stdout: "pipe", stderr: "pipe" });
+        : Bun.spawn(["ssh", sshTarget, "bash", "-c", startCommand], { stdout: "pipe", stderr: "pipe" });
 
       const startStdout = await new Response(startProc.stdout).text();
       const startStderr = await new Response(startProc.stderr).text();

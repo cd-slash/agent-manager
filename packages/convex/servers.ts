@@ -155,6 +155,7 @@ export const update = mutation({
     name: v.optional(v.string()),
     ip: v.optional(v.string()),
     region: v.optional(v.string()),
+    sshUser: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const { id, ...updates } = args;

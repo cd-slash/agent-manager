@@ -115,6 +115,8 @@ export type ServerDoc = Doc<"servers"> & {
   status: "online" | "maintenance" | "offline";
   cpu: number;
   mem: number;
+  sshUser?: string;
+  tailscaleHostname?: string;
   createdAt: number;
   updatedAt: number;
 };
@@ -228,6 +230,8 @@ export interface Server {
   status: 'online' | 'maintenance' | 'offline';
   cpu: number;
   mem: number;
+  sshUser?: string;
+  tailscaleHostname?: string;
 }
 
 export interface Container {

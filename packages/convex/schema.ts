@@ -180,6 +180,8 @@ export default defineSchema({
     ),
     cpu: v.number(), // percentage 0-100
     mem: v.number(), // percentage 0-100
+    // SSH connection settings
+    sshUser: v.optional(v.string()), // SSH username (default: root)
     // Tailscale integration fields
     tailscaleNodeId: v.optional(v.string()),
     tailscaleHostname: v.optional(v.string()),
