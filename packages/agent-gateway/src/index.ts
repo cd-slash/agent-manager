@@ -91,6 +91,102 @@ async function fetchSecrets(
   return result.value || {};
 }
 
+// Paths for binary building
+const BINARY_PATH = new URL("../container-api-binary", import.meta.url).pathname;
+const CONTAINER_API_SRC = new URL("../../container-api/src", import.meta.url).pathname;
+const CONTAINER_API_PKG = new URL("../../container-api", import.meta.url).pathname;
+
+/**
+ * Get the latest modification time of all source files in a directory
+ */
+async function getLatestSourceMtime(dir: string): Promise<number> {
+  const glob = new Bun.Glob("**/*.ts");
+  let latestMtime = 0;
+
+  for await (const file of glob.scan({ cwd: dir, absolute: true })) {
+    try {
+      const stat = await Bun.file(file).stat();
+      if (stat && stat.mtime.getTime() > latestMtime) {
+        latestMtime = stat.mtime.getTime();
+      }
+    } catch {
+      // Skip files we can't stat
+    }
+  }
+
+  // Also check package.json for dependency changes
+  try {
+    const pkgStat = await Bun.file(`${CONTAINER_API_PKG}/package.json`).stat();
+    if (pkgStat && pkgStat.mtime.getTime() > latestMtime) {
+      latestMtime = pkgStat.mtime.getTime();
+    }
+  } catch {
+    // Skip if package.json doesn't exist
+  }
+
+  return latestMtime;
+}
+
+/**
+ * Check if the container-api binary needs to be rebuilt
+ */
+async function shouldRebuildBinary(): Promise<boolean> {
+  const binaryFile = Bun.file(BINARY_PATH);
+
+  // If binary doesn't exist, we need to build it
+  if (!(await binaryFile.exists())) {
+    return true;
+  }
+
+  // Get binary modification time
+  const binaryStat = await binaryFile.stat();
+  if (!binaryStat) {
+    return true;
+  }
+  const binaryMtime = binaryStat.mtime.getTime();
+
+  // Get latest source file modification time
+  const sourceMtime = await getLatestSourceMtime(CONTAINER_API_SRC);
+
+  // Rebuild if any source file is newer than the binary
+  return sourceMtime > binaryMtime;
+}
+
+/**
+ * Build the container-api binary
+ */
+async function buildContainerApiBinary(): Promise<void> {
+  console.log("[gateway] Building container-api binary...");
+
+  const entryPoint = `${CONTAINER_API_PKG}/src/index.ts`;
+  const proc = Bun.spawn(
+    ["bun", "build", "--compile", "--outfile", BINARY_PATH, entryPoint],
+    {
+      cwd: CONTAINER_API_PKG,
+      stdout: "pipe",
+      stderr: "pipe",
+    }
+  );
+
+  const stderr = await new Response(proc.stderr).text();
+  const exitCode = await proc.exited;
+
+  if (exitCode !== 0) {
+    throw new Error(`Failed to build container-api binary: ${stderr}`);
+  }
+
+  console.log("[gateway] Container-api binary built successfully");
+}
+
+/**
+ * Ensure the container-api binary is up to date
+ */
+async function ensureBinaryUpToDate(): Promise<void> {
+  if (await shouldRebuildBinary()) {
+    await buildContainerApiBinary();
+  }
+}
+
 /**
  * Create a container on a remote server using inline SSH
  */
@@ -98,6 +194,9 @@ async function createContainerOnServer(
   request: CreateContainerRequest,
   secrets: Record<string, string>
 ): Promise<CreateContainerResult> {
+  // Ensure the container-api binary is up to date before creating container
+  await ensureBinaryUpToDate();
+
   const { repo, branch = "main", name, server = "localhost" } = request;
   const containerName = name || generateRandomName();
   const wgPort = generateWgPort(containerName);
@@ -193,8 +292,6 @@ exec "\$@"`;
     restart: unless-stopped
     mem_limit: 4096m`;
 
-  const binaryPath = new URL("../container-api-binary", import.meta.url).pathname;
-
   // Step 1: Build and start container (without binary)
   const buildScript = `set -e
 BUILD_DIR="/tmp/agent-build"
@@ -247,21 +344,21 @@ rm -rf "$BUILD_DIR" /tmp/compose-${containerName}.yml`;
   console.log(`[gateway] Copying container-api binary...`);
 
   // Check if binary exists
-  const binaryFile = Bun.file(binaryPath);
+  const binaryFile = Bun.file(BINARY_PATH);
   if (!(await binaryFile.exists())) {
-    console.warn(`[gateway] Binary not found at ${binaryPath}, skipping SCP`);
+    console.warn(`[gateway] Binary not found at ${BINARY_PATH}, skipping SCP`);
   } else {
     if (server === "localhost") {
       // Direct docker cp for localhost
       const copyProc = Bun.spawn([
         "bash", "-c",
-        `docker cp "${binaryPath}" ${containerName}:/opt/container-api/container-api && \
+        `docker cp "${BINARY_PATH}" ${containerName}:/opt/container-api/container-api && \
          docker exec ${containerName} chmod +x /opt/container-api/container-api`
       ], { stdout: "pipe", stderr: "pipe" });
       await copyProc.exited;
     } else {
       // SCP to server, then docker cp
-      const scpProc = Bun.spawn(["scp", binaryPath, `${server}:/tmp/container-api-binary`], {
+      const scpProc = Bun.spawn(["scp", BINARY_PATH, `${server}:/tmp/container-api-binary`], {
         stdout: "pipe",
         stderr: "pipe",
       });
