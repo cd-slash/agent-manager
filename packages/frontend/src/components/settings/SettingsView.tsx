@@ -59,6 +59,7 @@ export function SettingsView() {
   // Convex hooks for secrets
   const secretsList = useQuery(api.secrets.list);
   const setSecret = useMutation(api.secrets.set);
+  const storedGhUsername = useQuery(api.secrets.get, { key: 'GH_USERNAME' });
 
   // Check which secrets are configured
   const hasSecret = (key: string) => secretsList?.some((s) => s.key === key && s.hasValue);
@@ -192,14 +193,12 @@ export function SettingsView() {
                   <Label>GitHub Username</Label>
                   <Input
                     type="text"
-                    placeholder={hasSecret('GH_USERNAME') ? '(configured)' : 'your-username'}
-                    value={ghUsername}
+                    placeholder="your-username"
+                    value={ghUsername || storedGhUsername?.value || ''}
                     onChange={(e) => setGhUsername(e.target.value)}
                   />
                   <p className="text-xs text-muted-foreground">
-                    {hasSecret('GH_USERNAME')
-                      ? 'Username is configured. Enter a new value to update it.'
-                      : 'Your GitHub username for repository access'}
+                    Your GitHub username for repository access
                   </p>
                 </div>
                 <div className="space-y-2">
