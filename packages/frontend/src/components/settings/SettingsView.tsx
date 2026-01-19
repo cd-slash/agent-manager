@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Key, Cpu, Network, Sliders, Lock, Bell, RefreshCw, Check, Copy } from 'lucide-react';
+import { Key, Cpu, Network, Sliders, Lock, Bell, RefreshCw, Check, Copy, Container } from 'lucide-react';
 import { useToast } from '@/components/ToastProvider';
 import { useQuery, useMutation, useAction } from 'convex/react';
 import { api } from '@agent-manager/convex/api';
@@ -19,6 +19,12 @@ import { Switch } from '@/components/ui/switch';
 export function SettingsView() {
   const [activeTab, setActiveTab] = useState('credentials');
   const toast = useToast();
+
+  // Container secrets state
+  const [tsAuthKey, setTsAuthKey] = useState('');
+  const [ghUsername, setGhUsername] = useState('');
+  const [ghToken, setGhToken] = useState('');
+  const [isSavingContainerSecrets, setIsSavingContainerSecrets] = useState(false);
 
   // Tailscale state
   const [tailnetId, setTailnetId] = useState('');
@@ -43,6 +49,46 @@ export function SettingsView() {
   const tailscaleConfig = useQuery(api.settings.getTailscaleConfig);
   const upsertSetting = useMutation(api.settings.upsert);
   const syncDevices = useAction(api.tailscale.syncDevices);
+
+  // Convex hooks for secrets
+  const secretsList = useQuery(api.secrets.list);
+  const setSecret = useMutation(api.secrets.set);
+
+  // Check which secrets are configured
+  const hasSecret = (key: string) => secretsList?.some((s) => s.key === key && s.hasValue);
+
+  const handleSaveContainerSecrets = async () => {
+    setIsSavingContainerSecrets(true);
+    try {
+      const promises = [];
+      if (tsAuthKey) {
+        promises.push(setSecret({ key: 'TS_AUTHKEY', value: tsAuthKey, description: 'Tailscale auth key for container networking' }));
+      }
+      if (ghUsername) {
+        promises.push(setSecret({ key: 'GH_USERNAME', value: ghUsername, description: 'GitHub username for repository cloning' }));
+      }
+      if (ghToken) {
+        promises.push(setSecret({ key: 'GH_TOKEN', value: ghToken, description: 'GitHub personal access token' }));
+      }
+
+      if (promises.length === 0) {
+        toast.error('No changes', 'Enter at least one secret to save');
+        return;
+      }
+
+      await Promise.all(promises);
+      toast.success('Secrets saved', 'Container secrets have been stored securely');
+
+      // Clear input fields
+      setTsAuthKey('');
+      setGhUsername('');
+      setGhToken('');
+    } catch (error) {
+      toast.error('Failed to save', error instanceof Error ? error.message : 'Failed to save secrets');
+    } finally {
+      setIsSavingContainerSecrets(false);
+    }
+  };
 
   const handleSaveTailscale = async () => {
     setIsSavingTailscale(true);
@@ -97,9 +143,94 @@ export function SettingsView() {
       <div className="flex-1 overflow-y-auto px-page py-section animate-in fade-in duration-300">
         <TabsContent value="credentials" className="mt-0">
           <div className="w-full space-y-6">
+            {/* Container Creation Secrets */}
+            <div className="bg-surface border border-border rounded-xl p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <Container size={20} className="text-muted-foreground" />
+                <h3 className="text-lg font-semibold text-foreground">
+                  Container Creation Secrets
+                </h3>
+              </div>
+              <p className="text-sm text-muted-foreground mb-4">
+                These credentials are required for creating new agent containers. They are stored securely in Convex.
+              </p>
+              <div className="space-y-4 max-w-3xl">
+                <div className="space-y-2">
+                  <Label>Tailscale Auth Key</Label>
+                  <div className="relative">
+                    <Input
+                      type="password"
+                      placeholder={hasSecret('TS_AUTHKEY') ? '••••••••••••••••' : 'tskey-auth-...'}
+                      value={tsAuthKey}
+                      onChange={(e) => setTsAuthKey(e.target.value)}
+                    />
+                    <Lock
+                      size={14}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {hasSecret('TS_AUTHKEY')
+                      ? 'Auth key is configured. Enter a new key to update it.'
+                      : 'Create a reusable auth key in the Tailscale admin console'}
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label>GitHub Username</Label>
+                  <Input
+                    type="text"
+                    placeholder={hasSecret('GH_USERNAME') ? '(configured)' : 'your-username'}
+                    value={ghUsername}
+                    onChange={(e) => setGhUsername(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    {hasSecret('GH_USERNAME')
+                      ? 'Username is configured. Enter a new value to update it.'
+                      : 'Your GitHub username for repository access'}
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label>GitHub Personal Access Token</Label>
+                  <div className="relative">
+                    <Input
+                      type="password"
+                      placeholder={hasSecret('GH_TOKEN') ? '••••••••••••••••' : 'ghp_...'}
+                      value={ghToken}
+                      onChange={(e) => setGhToken(e.target.value)}
+                    />
+                    <Lock
+                      size={14}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {hasSecret('GH_TOKEN')
+                      ? 'Token is configured. Enter a new token to update it.'
+                      : 'Create a PAT with repo access at GitHub Settings > Developer settings'}
+                  </p>
+                </div>
+                <div className="pt-2">
+                  <Button
+                    onClick={handleSaveContainerSecrets}
+                    disabled={isSavingContainerSecrets || (!tsAuthKey && !ghUsername && !ghToken)}
+                  >
+                    {isSavingContainerSecrets ? (
+                      <>
+                        <RefreshCw size={14} className="mr-2 animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      'Save Container Secrets'
+                    )}
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            {/* AI API Keys */}
             <div className="bg-surface border border-border rounded-xl p-6">
               <h3 className="text-lg font-semibold text-foreground mb-4">
-                API Keys
+                AI API Keys
               </h3>
               <div className="space-y-4 max-w-3xl">
                 <div className="space-y-2">
