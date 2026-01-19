@@ -263,6 +263,15 @@ if [ -n "\${WORKSPACE_REPO:-}" ] && [ ! -d "/workspace/.git" ]; then
   cd /workspace && [ -f package.json ] && bun install
 fi
 
+# Start container-api if binary exists (survives container restarts)
+if [ -x /opt/container-api/container-api ]; then
+  echo "Starting container-api..."
+  PORT=4096 /opt/container-api/container-api &
+  sleep 2
+  # Expose via Tailscale serve (ignore errors if already configured)
+  tailscale serve --bg --http 80 http://localhost:4096 2>/dev/null || true
+fi
+
 exec "\$@"`;
 
   const composeYml = `services:
