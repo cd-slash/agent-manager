@@ -336,4 +336,11 @@ export default defineSchema({
     .index("by_created", ["createdAt"])
     .index("by_read", ["read"])
     .index("by_read_and_created", ["read", "createdAt"]),
+
+  // Secrets - encrypted secrets for container creation and deployment
+  secrets: defineTable({
+    key: v.string(),
+    value: v.string(),
+    description: v.optional(v.string()),
+  }).index("by_key", ["key"]),
 });

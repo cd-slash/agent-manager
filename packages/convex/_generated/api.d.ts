@@ -25,6 +25,7 @@ import type * as internal_webhookProcessing from "../internal/webhookProcessing.
 import type * as notifications from "../notifications.js";
 import type * as projects from "../projects.js";
 import type * as pullRequests from "../pullRequests.js";
+import type * as secrets from "../secrets.js";
 import type * as servers from "../servers.js";
 import type * as settings from "../settings.js";
 import type * as tailscale from "../tailscale.js";
@@ -57,6 +58,7 @@ declare const fullApi: ApiFromModules<{
   notifications: typeof notifications;
   projects: typeof projects;
   pullRequests: typeof pullRequests;
+  secrets: typeof secrets;
   servers: typeof servers;
   settings: typeof settings;
   tailscale: typeof tailscale;

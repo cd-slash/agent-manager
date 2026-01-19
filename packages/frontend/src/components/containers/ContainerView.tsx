@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Box, FileText, Terminal, StopCircle, Play, RefreshCw } from 'lucide-react';
+import { Box, FileText, Terminal, StopCircle, Play, RefreshCw, Plus } from 'lucide-react';
 import { useAction } from 'convex/react';
 import { api } from '@agent-manager/convex/api';
 import { useToast } from '@/components/ToastProvider';
@@ -13,6 +13,8 @@ import {
   TableSelectionActions,
   SelectionActionButton,
 } from '@/components/ui/table-actions';
+import { CreateContainerModal } from '@/components/modals/CreateContainerModal';
+import { agentGateway } from '@/lib/agent-gateway';
 import type { Container } from '@/types';
 
 interface ContainerViewProps {
@@ -36,6 +38,7 @@ export function ContainerView({
   onSelectContainer,
 }: ContainerViewProps) {
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const syncDevices = useAction(api.tailscale.syncDevices);
   const toast = useToast();
 
@@ -51,15 +54,43 @@ export function ContainerView({
     }
   };
 
+  const handleCreateContainer = async (data: {
+    repo: string;
+    branch: string;
+    name?: string;
+    server: string;
+  }) => {
+    const result = await agentGateway.createContainer({
+      repo: data.repo,
+      branch: data.branch,
+      name: data.name,
+      server: data.server,
+    });
+
+    toast.success(
+      'Container created',
+      `Container "${result.name}" created on ${result.server}`
+    );
+
+    // Sync to get the new container in the list
+    await syncDevices();
+  };
+
   const headerActions = (
-    <Button
-      variant="outline"
-      onClick={handleRefreshFromTailscale}
-      disabled={isRefreshing}
-    >
-      <RefreshCw size={16} className={`mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
-      {isRefreshing ? 'Syncing...' : 'Refresh from Tailscale'}
-    </Button>
+    <div className="flex items-center gap-2">
+      <Button
+        variant="outline"
+        onClick={handleRefreshFromTailscale}
+        disabled={isRefreshing}
+      >
+        <RefreshCw size={16} className={`mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+        {isRefreshing ? 'Syncing...' : 'Refresh from Tailscale'}
+      </Button>
+      <Button onClick={() => setIsCreateModalOpen(true)}>
+        <Plus size={16} className="mr-2" />
+        Create Container
+      </Button>
+    </div>
   );
 
   const columns: ColumnDef<Container>[] = useMemo(
@@ -176,21 +207,28 @@ export function ContainerView({
   };
 
   return (
-    <GenericListView
-      columns={columns}
-      data={containers}
-      onRowClick={(container) => onSelectContainer(container.id)}
-      enableRowSelection
-      includeSelectionColumn
-      enableSearch
-      searchPlaceholder="Search containers..."
-      searchFields={['name', 'image', 'server']}
-      filters={statusFilters}
-      headerActions={headerActions}
-      selectionActions={selectionActions}
-      emptyMessage="No containers found matching your filters."
-      getRowId={(row) => row.id}
-      className="p-page"
-    />
+    <>
+      <GenericListView
+        columns={columns}
+        data={containers}
+        onRowClick={(container) => onSelectContainer(container.id)}
+        enableRowSelection
+        includeSelectionColumn
+        enableSearch
+        searchPlaceholder="Search containers..."
+        searchFields={['name', 'image', 'server']}
+        filters={statusFilters}
+        headerActions={headerActions}
+        selectionActions={selectionActions}
+        emptyMessage="No containers found matching your filters."
+        getRowId={(row) => row.id}
+        className="p-page"
+      />
+      <CreateContainerModal
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        onCreate={handleCreateContainer}
+      />
+    </>
   );
 }
