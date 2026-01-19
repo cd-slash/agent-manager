@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Plus, Server, Terminal, FileText, RefreshCw } from 'lucide-react';
 import { useAction } from 'convex/react';
 import { api } from '@agent-manager/convex/api';
+import { useToast } from '@/components/ToastProvider';
 import type { ColumnDef } from '@tanstack/react-table';
 import {
   GenericListView,
@@ -35,13 +36,15 @@ const statusFilters: FilterConfig[] = [
 export function ServerView({ servers, onSelectServer }: ServerViewProps) {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const syncDevices = useAction(api.tailscale.syncDevices);
+  const toast = useToast();
 
   const handleRefreshFromTailscale = async () => {
     setIsRefreshing(true);
     try {
       await syncDevices();
+      toast.success('Sync complete', 'Servers refreshed from Tailscale');
     } catch (error) {
-      console.error('Failed to sync from Tailscale:', error);
+      toast.error('Sync failed', error instanceof Error ? error.message : 'Failed to sync from Tailscale');
     } finally {
       setIsRefreshing(false);
     }

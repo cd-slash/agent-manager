@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '@agent-manager/convex/api';
 import type { Id } from '@agent-manager/convex/dataModel';
+import { useToast } from '@/components/ToastProvider';
 import {
   Layout,
   Link as LinkIcon,
@@ -117,6 +118,7 @@ export function TaskDetailView({
     'src/utils/cart.js': true,
   });
   const [showDependencyPicker, setShowDependencyPicker] = useState(false);
+  const toast = useToast();
 
   // Get the Convex task ID
   const taskId = task.id as Id<"tasks">;
@@ -140,13 +142,23 @@ export function TaskDetailView({
   const removeDependency = useMutation(api.tasks.removeDependency);
 
   const handleAddDependency = async (depId: string) => {
-    const dependsOnTaskId = depId as Id<"tasks">;
-    await addDependency({ taskId, dependsOnTaskId });
+    try {
+      const dependsOnTaskId = depId as Id<"tasks">;
+      await addDependency({ taskId, dependsOnTaskId });
+      toast.success('Dependency added', 'Task dependency has been added');
+    } catch (error) {
+      toast.error('Failed to add dependency', error instanceof Error ? error.message : 'Could not add dependency');
+    }
   };
 
   const handleRemoveDependency = async (depId: string) => {
-    const dependsOnTaskId = depId as Id<"tasks">;
-    await removeDependency({ taskId, dependsOnTaskId });
+    try {
+      const dependsOnTaskId = depId as Id<"tasks">;
+      await removeDependency({ taskId, dependsOnTaskId });
+      toast.success('Dependency removed', 'Task dependency has been removed');
+    } catch (error) {
+      toast.error('Failed to remove dependency', error instanceof Error ? error.message : 'Could not remove dependency');
+    }
   };
 
   const toggleFile = (filename: string) =>

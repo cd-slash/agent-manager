@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Key, Cpu, Network, Sliders, Lock, Bell, RefreshCw, Check, AlertCircle, Copy } from 'lucide-react';
+import { Key, Cpu, Network, Sliders, Lock, Bell, RefreshCw, Check, Copy } from 'lucide-react';
+import { useToast } from '@/components/ToastProvider';
 import { useQuery, useMutation, useAction } from 'convex/react';
 import { api } from '@agent-manager/convex/api';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -17,14 +18,13 @@ import { Switch } from '@/components/ui/switch';
 
 export function SettingsView() {
   const [activeTab, setActiveTab] = useState('credentials');
+  const toast = useToast();
 
   // Tailscale state
   const [tailnetId, setTailnetId] = useState('');
   const [tailscaleApiKey, setTailscaleApiKey] = useState('');
   const [tailscaleWebhookSecret, setTailscaleWebhookSecret] = useState('');
   const [isSavingTailscale, setIsSavingTailscale] = useState(false);
-  const [tailscaleSaveStatus, setTailscaleSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
-  const [tailscaleError, setTailscaleError] = useState('');
   const [webhookUrlCopied, setWebhookUrlCopied] = useState(false);
 
   // Derive webhook URL from Convex URL
@@ -35,6 +35,7 @@ export function SettingsView() {
   const handleCopyWebhookUrl = async () => {
     await navigator.clipboard.writeText(webhookUrl);
     setWebhookUrlCopied(true);
+    toast.success('Copied', 'Webhook URL copied to clipboard');
     setTimeout(() => setWebhookUrlCopied(false), 2000);
   };
 
@@ -45,8 +46,6 @@ export function SettingsView() {
 
   const handleSaveTailscale = async () => {
     setIsSavingTailscale(true);
-    setTailscaleSaveStatus('idle');
-    setTailscaleError('');
 
     try {
       // Save credentials
@@ -62,12 +61,11 @@ export function SettingsView() {
       // Trigger initial sync
       await syncDevices();
 
-      setTailscaleSaveStatus('success');
+      toast.success('Tailscale configured', 'Configuration saved and devices synced successfully');
       setTailscaleApiKey(''); // Clear the API key field for security
       setTailscaleWebhookSecret(''); // Clear the webhook secret field for security
     } catch (error) {
-      setTailscaleSaveStatus('error');
-      setTailscaleError(error instanceof Error ? error.message : 'Failed to save Tailscale configuration');
+      toast.error('Configuration failed', error instanceof Error ? error.message : 'Failed to save Tailscale configuration');
     } finally {
       setIsSavingTailscale(false);
     }
@@ -300,18 +298,6 @@ export function SettingsView() {
                 {tailscaleConfig?.lastValidated && (
                   <div className="text-xs text-muted-foreground">
                     Last synced: {new Date(tailscaleConfig.lastValidated).toLocaleString()}
-                  </div>
-                )}
-                {tailscaleSaveStatus === 'error' && (
-                  <div className="flex items-center text-sm text-destructive">
-                    <AlertCircle size={14} className="mr-2" />
-                    {tailscaleError}
-                  </div>
-                )}
-                {tailscaleSaveStatus === 'success' && (
-                  <div className="flex items-center text-sm text-success">
-                    <Check size={14} className="mr-2" />
-                    Tailscale configuration saved and devices synced successfully
                   </div>
                 )}
                 <div className="pt-2">

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '@agent-manager/convex/api';
 import type { Id } from '@agent-manager/convex/dataModel';
+import { useToast } from '@/components/ToastProvider';
 import {
   List,
   FileText,
@@ -57,6 +58,7 @@ export function ProjectDetailView({
     project.plan ||
       `## Project Requirements\n\n${project.description}\n\n## Acceptance Criteria\n\n- [ ] System must be scalable\n- [ ] UI must be responsive`
   );
+  const toast = useToast();
 
   // Get the Convex project ID
   const projectId = project.id as Id<"projects">;
@@ -81,21 +83,29 @@ export function ProjectDetailView({
   }, [project.plan, project.description]);
 
   const handleChatSend = async (text: string) => {
-    // Send user message to Convex
-    await sendMessage({
-      projectId,
-      text,
-      sender: 'user',
-    });
-
-    // Simulate AI response (in production this would be handled by a Convex action)
-    setTimeout(async () => {
+    try {
+      // Send user message to Convex
       await sendMessage({
         projectId,
-        text: "I've updated the plan based on your request. I also suggest breaking this down into 3 new tasks.",
-        sender: 'ai',
+        text,
+        sender: 'user',
       });
-    }, 1000);
+
+      // Simulate AI response (in production this would be handled by a Convex action)
+      setTimeout(async () => {
+        try {
+          await sendMessage({
+            projectId,
+            text: "I've updated the plan based on your request. I also suggest breaking this down into 3 new tasks.",
+            sender: 'ai',
+          });
+        } catch (error) {
+          toast.error('AI response failed', 'Could not process your message');
+        }
+      }, 1000);
+    } catch (error) {
+      toast.error('Message failed', error instanceof Error ? error.message : 'Could not send message');
+    }
   };
 
   return (

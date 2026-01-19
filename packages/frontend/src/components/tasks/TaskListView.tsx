@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useMutation } from 'convex/react';
 import { api } from '@agent-manager/convex/api';
 import type { Id } from '@agent-manager/convex/dataModel';
+import { useToast } from '@/components/ToastProvider';
 import { Edit2, GitPullRequest, Link as LinkIcon, Trash2 } from 'lucide-react';
 import type { ColumnDef } from '@tanstack/react-table';
 import {
@@ -23,6 +24,7 @@ interface TaskListViewProps {
 
 export function TaskListView({ tasks, onTaskClick }: TaskListViewProps) {
   const deleteTask = useMutation(api.tasks.deleteTask);
+  const toast = useToast();
 
   const uniqueTags = useMemo(
     () => [...new Set(tasks.map((t) => t.tag))],
@@ -114,12 +116,17 @@ export function TaskListView({ tasks, onTaskClick }: TaskListViewProps) {
     selectedTasks: Task[],
     clearSelection: () => void
   ) => {
-    await Promise.all(
-      selectedTasks.map((task) =>
-        deleteTask({ id: task.id as unknown as Id<'tasks'> })
-      )
-    );
-    clearSelection();
+    try {
+      await Promise.all(
+        selectedTasks.map((task) =>
+          deleteTask({ id: task.id as unknown as Id<'tasks'> })
+        )
+      );
+      toast.success('Tasks deleted', `${selectedTasks.length} task${selectedTasks.length > 1 ? 's' : ''} deleted`);
+      clearSelection();
+    } catch (error) {
+      toast.error('Delete failed', error instanceof Error ? error.message : 'Failed to delete tasks');
+    }
   };
 
   const selectionActions = (

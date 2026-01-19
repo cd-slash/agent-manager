@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Box, FileText, Terminal, StopCircle, Play, RefreshCw } from 'lucide-react';
 import { useAction } from 'convex/react';
 import { api } from '@agent-manager/convex/api';
+import { useToast } from '@/components/ToastProvider';
 import { Button } from '@/components/ui/button';
 import type { ColumnDef } from '@tanstack/react-table';
 import {
@@ -36,13 +37,15 @@ export function ContainerView({
 }: ContainerViewProps) {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const syncDevices = useAction(api.tailscale.syncDevices);
+  const toast = useToast();
 
   const handleRefreshFromTailscale = async () => {
     setIsRefreshing(true);
     try {
       await syncDevices();
+      toast.success('Sync complete', 'Containers refreshed from Tailscale');
     } catch (error) {
-      console.error('Failed to sync from Tailscale:', error);
+      toast.error('Sync failed', error instanceof Error ? error.message : 'Failed to sync from Tailscale');
     } finally {
       setIsRefreshing(false);
     }

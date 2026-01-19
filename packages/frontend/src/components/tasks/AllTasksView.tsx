@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useMutation } from 'convex/react';
 import { api } from '@agent-manager/convex/api';
 import type { Id } from '@agent-manager/convex/dataModel';
+import { useToast } from '@/components/ToastProvider';
 import {
   Edit2,
   GitPullRequest,
@@ -45,6 +46,7 @@ const getStatusVariant = (status: string) => {
 
 export function AllTasksView({ projects, onTaskClick }: AllTasksViewProps) {
   const deleteTask = useMutation(api.tasks.deleteTask);
+  const toast = useToast();
 
   const allTasks = useMemo(
     () =>
@@ -165,12 +167,17 @@ export function AllTasksView({ projects, onTaskClick }: AllTasksViewProps) {
     selectedTasks: TaskWithProject[],
     clearSelection: () => void
   ) => {
-    await Promise.all(
-      selectedTasks.map((task) =>
-        deleteTask({ id: task.id as unknown as Id<'tasks'> })
-      )
-    );
-    clearSelection();
+    try {
+      await Promise.all(
+        selectedTasks.map((task) =>
+          deleteTask({ id: task.id as unknown as Id<'tasks'> })
+        )
+      );
+      toast.success('Tasks deleted', `${selectedTasks.length} task${selectedTasks.length > 1 ? 's' : ''} deleted`);
+      clearSelection();
+    } catch (error) {
+      toast.error('Delete failed', error instanceof Error ? error.message : 'Failed to delete tasks');
+    }
   };
 
   const selectionActions = (
