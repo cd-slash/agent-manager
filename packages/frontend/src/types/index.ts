@@ -232,6 +232,7 @@ export interface Server {
 
 export interface Container {
   id: string;
+  containerId: string;  // Docker container ID
   name: string;
   image: string;
   status: 'running' | 'stopped';

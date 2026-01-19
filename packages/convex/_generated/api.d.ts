@@ -12,6 +12,7 @@ import type * as acceptanceCriteria from "../acceptanceCriteria.js";
 import type * as agentMessages from "../agentMessages.js";
 import type * as agentSessions from "../agentSessions.js";
 import type * as chat from "../chat.js";
+import type * as containerBuilds from "../containerBuilds.js";
 import type * as containers from "../containers.js";
 import type * as crons from "../crons.js";
 import type * as http from "../http.js";
@@ -45,6 +46,7 @@ declare const fullApi: ApiFromModules<{
   agentMessages: typeof agentMessages;
   agentSessions: typeof agentSessions;
   chat: typeof chat;
+  containerBuilds: typeof containerBuilds;
   containers: typeof containers;
   crons: typeof crons;
   http: typeof http;

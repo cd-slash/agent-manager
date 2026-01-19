@@ -1,4 +1,7 @@
-import { Box, Server, Terminal } from 'lucide-react';
+import { useState } from 'react';
+import { useQuery } from 'convex/react';
+import { api } from '@agent-manager/convex/api';
+import { Box, Server, Terminal, Hammer } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -6,6 +9,8 @@ import {
   DetailViewLayout,
   InfoCard,
 } from '@/components/layouts/DetailViewLayout';
+import { BuildTimeline, type BuildPhase } from './BuildTimeline';
+import { BuildLogViewer } from './BuildLogViewer';
 import type { Container } from '@/types';
 
 interface ContainerDetailViewProps {
@@ -17,6 +22,37 @@ export function ContainerDetailView({
   container,
   onBack,
 }: ContainerDetailViewProps) {
+  const [selectedPhase, setSelectedPhase] = useState<string | undefined>();
+
+  // Fetch build status from Convex
+  const build = useQuery(api.containerBuilds.getByContainer, {
+    containerId: container.containerId,
+  });
+  const phasesData = useQuery(api.containerBuilds.getPhases, {
+    containerId: container.containerId,
+  });
+
+  // Convert phases to the expected format
+  const phases: BuildPhase[] = (phasesData ?? []).map((p) => ({
+    phase: p.phase,
+    status: p.status as BuildPhase['status'],
+    startedAt: p.startedAt,
+    completedAt: p.completedAt,
+    error: p.error,
+    logs: p.logs,
+    order: p.order,
+  }));
+
+  // Get selected phase data
+  const selectedPhaseData = phases.find((p) => p.phase === selectedPhase);
+
+  // Auto-select first phase with logs or the current phase
+  const effectiveSelectedPhase =
+    selectedPhase ||
+    build?.currentPhase ||
+    phases.find((p) => p.logs || p.error)?.phase ||
+    phases[0]?.phase;
+
   const subtitle = (
     <>
       <span className="flex items-center font-mono">
@@ -91,6 +127,67 @@ export function ContainerDetailView({
           <div className="text-foreground">14 days, 3 hours</div>
         </div>
       </InfoCard>
+
+      {/* Build Status Card */}
+      {build && phases.length > 0 && (
+        <InfoCard title="Build Status" wide className="space-y-4">
+          <div className="border-b border-border pb-2 -mt-2" />
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <Hammer size={18} className="text-muted-foreground" />
+              <div>
+                <span className="text-sm font-medium text-foreground">
+                  Current Phase: {build.currentPhase}
+                </span>
+                <div className="text-xs text-muted-foreground mt-0.5">
+                  {build.repo} @ {build.branch}
+                </div>
+              </div>
+            </div>
+            <StatusBadge
+              type="build"
+              status={build.status as 'pending' | 'in_progress' | 'completed' | 'failed'}
+              uppercase
+              className="px-3 py-1"
+            />
+          </div>
+
+          {build.error && (
+            <div className="bg-red-950/30 border border-red-900/50 rounded-lg p-3 mb-4">
+              <p className="text-sm text-red-300 font-medium">Build Failed</p>
+              <p className="text-xs text-red-200/70 mt-1">{build.error}</p>
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-6">
+            {/* Timeline */}
+            <div className="bg-surface/50 rounded-lg p-4 border border-border">
+              <h4 className="text-xs text-muted-foreground uppercase font-semibold mb-3">
+                Build Timeline
+              </h4>
+              <BuildTimeline
+                phases={phases}
+                currentPhase={build.currentPhase}
+                selectedPhase={effectiveSelectedPhase}
+                onSelectPhase={setSelectedPhase}
+              />
+            </div>
+
+            {/* Log Viewer */}
+            <div className="h-80">
+              <BuildLogViewer
+                logs={
+                  phases.find((p) => p.phase === effectiveSelectedPhase)?.logs
+                }
+                error={
+                  phases.find((p) => p.phase === effectiveSelectedPhase)?.error
+                }
+                phase={effectiveSelectedPhase || 'pending'}
+              />
+            </div>
+          </div>
+        </InfoCard>
+      )}
     </>
   );
 

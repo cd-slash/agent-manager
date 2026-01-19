@@ -10,6 +10,7 @@ import type {
   ExecStreamPayload,
   ExecCompletePayload,
   CreateContainerResult,
+  CreateContainerRequest,
 } from "@agent-manager/agent-shared";
 
 export class ConvexSync {
@@ -153,6 +154,120 @@ export class ConvexSync {
       });
     } catch (error) {
       console.error("[convex] Failed to record container created:", error);
+    }
+  }
+
+  /**
+   * Create a new build record with all phases initialized
+   */
+  async createBuild(
+    containerId: string,
+    request: CreateContainerRequest
+  ): Promise<void> {
+    try {
+      // @ts-expect-error - API types will be generated
+      await this.client.mutation("containerBuilds:create", {
+        containerId,
+        repo: request.repo,
+        branch: request.branch || "main",
+        server: request.server || "localhost",
+        taskId: request.taskId,
+        projectId: request.projectId,
+      });
+    } catch (error) {
+      console.error("[convex] Failed to create build:", error);
+    }
+  }
+
+  /**
+   * Start a build phase
+   */
+  async startPhase(containerId: string, phase: string): Promise<void> {
+    try {
+      // @ts-expect-error - API types will be generated
+      await this.client.mutation("containerBuilds:startPhase", {
+        containerId,
+        phase,
+      });
+    } catch (error) {
+      console.error(`[convex] Failed to start phase ${phase}:`, error);
+    }
+  }
+
+  /**
+   * Complete a build phase
+   */
+  async completePhase(
+    containerId: string,
+    phase: string,
+    logs?: string
+  ): Promise<void> {
+    try {
+      // @ts-expect-error - API types will be generated
+      await this.client.mutation("containerBuilds:completePhase", {
+        containerId,
+        phase,
+        logs,
+      });
+    } catch (error) {
+      console.error(`[convex] Failed to complete phase ${phase}:`, error);
+    }
+  }
+
+  /**
+   * Fail a build at the specified phase
+   */
+  async failBuild(
+    containerId: string,
+    phase: string,
+    error: string,
+    logs?: string
+  ): Promise<void> {
+    try {
+      // @ts-expect-error - API types will be generated
+      await this.client.mutation("containerBuilds:failBuild", {
+        containerId,
+        phase,
+        error,
+        logs,
+      });
+    } catch (error) {
+      console.error(`[convex] Failed to record build failure:`, error);
+    }
+  }
+
+  /**
+   * Append logs to the current phase
+   */
+  async appendLogs(
+    containerId: string,
+    phase: string,
+    logs: string
+  ): Promise<void> {
+    try {
+      // @ts-expect-error - API types will be generated
+      await this.client.mutation("containerBuilds:appendLogs", {
+        containerId,
+        phase,
+        logs,
+      });
+    } catch (error) {
+      console.error(`[convex] Failed to append logs:`, error);
+    }
+  }
+
+  /**
+   * Skip a build phase
+   */
+  async skipPhase(containerId: string, phase: string): Promise<void> {
+    try {
+      // @ts-expect-error - API types will be generated
+      await this.client.mutation("containerBuilds:skipPhase", {
+        containerId,
+        phase,
+      });
+    } catch (error) {
+      console.error(`[convex] Failed to skip phase ${phase}:`, error);
     }
   }
 }

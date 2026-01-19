@@ -320,6 +320,78 @@ convexSync.recordStreamEvent(correlationId, containerId, payload, taskId, projec
 convexSync.recordExecComplete(correlationId, containerId, payload, taskId, projectId);
 ```
 
+#### containerBuilds
+
+Tracks container build sessions with phase-by-phase progress:
+
+```typescript
+containerBuilds: defineTable({
+  containerId: v.string(),
+  repo: v.string(),
+  branch: v.string(),
+  server: v.string(),
+  currentPhase: v.string(),       // Current phase name
+  status: v.union(
+    v.literal("pending"),
+    v.literal("in_progress"),
+    v.literal("completed"),
+    v.literal("failed")
+  ),
+  error: v.optional(v.string()),
+  taskId: v.optional(v.id("tasks")),
+  projectId: v.optional(v.id("projects")),
+  startedAt: v.number(),
+  completedAt: v.optional(v.number()),
+})
+```
+
+#### containerBuildPhases
+
+Individual phase tracking with logs for debugging:
+
+```typescript
+containerBuildPhases: defineTable({
+  containerId: v.string(),
+  phase: v.string(),              // Phase name
+  status: v.union(
+    v.literal("pending"),
+    v.literal("in_progress"),
+    v.literal("completed"),
+    v.literal("failed"),
+    v.literal("skipped")
+  ),
+  logs: v.optional(v.string()),   // Build output logs
+  error: v.optional(v.string()),
+  startedAt: v.optional(v.number()),
+  completedAt: v.optional(v.number()),
+  order: v.number(),              // Phase order (0-6)
+})
+```
+
+### Build Phases
+
+Container creation progresses through these phases:
+
+| Order | Phase | Description |
+|-------|-------|-------------|
+| 0 | `pending` | Request received, waiting to start |
+| 1 | `building_binary` | Compiling container-api binary (if needed) |
+| 2 | `building_image` | Docker build in progress |
+| 3 | `starting_container` | Container starting, Tailscale connecting |
+| 4 | `deploying_binary` | SCP'ing binary to container |
+| 5 | `starting_api` | Starting container-api service |
+| 6 | `ready` | Fully operational |
+
+The frontend subscribes to build progress in real-time:
+
+```typescript
+// Subscribe to build status
+const build = useQuery(api.containerBuilds.getByContainer, { containerId });
+
+// Subscribe to all phases
+const phases = useQuery(api.containerBuilds.getPhases, { containerId });
+```
+
 ## Claude Code CLI Integration
 
 ### Print Mode

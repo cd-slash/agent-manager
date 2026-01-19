@@ -63,6 +63,21 @@ const statusMappings = {
     warning: "warning",
     info: "info",
   },
+  // Build phase statuses
+  buildPhase: {
+    pending: "secondary",
+    in_progress: "info",
+    completed: "success",
+    failed: "destructive",
+    skipped: "secondary",
+  },
+  // Build overall status
+  build: {
+    pending: "secondary",
+    in_progress: "info",
+    completed: "success",
+    failed: "destructive",
+  },
 } as const;
 
 type StatusType = keyof typeof statusMappings;

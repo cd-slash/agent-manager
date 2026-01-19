@@ -192,14 +192,33 @@ async function ensureBinaryUpToDate(): Promise<void> {
  */
 async function createContainerOnServer(
   request: CreateContainerRequest,
-  secrets: Record<string, string>
+  secrets: Record<string, string>,
+  buildTracker?: ConvexSync
 ): Promise<CreateContainerResult> {
-  // Ensure the container-api binary is up to date before creating container
-  await ensureBinaryUpToDate();
-
   const { repo, branch = "main", name, server = "localhost" } = request;
   const containerName = name || generateRandomName();
   const wgPort = generateWgPort(containerName);
+
+  // Initialize build tracking
+  if (buildTracker) {
+    await buildTracker.createBuild(containerName, request);
+  }
+
+  // Phase 1: Building binary (if needed)
+  if (buildTracker) await buildTracker.startPhase(containerName, "building_binary");
+  try {
+    const needsRebuild = await shouldRebuildBinary();
+    if (needsRebuild) {
+      await buildContainerApiBinary();
+      if (buildTracker) await buildTracker.completePhase(containerName, "building_binary", "Binary rebuilt successfully");
+    } else {
+      if (buildTracker) await buildTracker.completePhase(containerName, "building_binary", "Binary already up to date");
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (buildTracker) await buildTracker.failBuild(containerName, "building_binary", message);
+    throw error;
+  }
 
   // Inline Dockerfile (self-contained, no monorepo needed)
   const dockerfile = `FROM debian:bookworm-slim
@@ -328,76 +347,140 @@ rm -rf "$BUILD_DIR" /tmp/compose-${containerName}.yml`;
 
   console.log(`[gateway] Creating container ${containerName} on ${server}...`);
 
-  // Execute build script on server
-  const buildProc = server === "localhost"
-    ? Bun.spawn(["bash", "-c", buildScript], { stdout: "pipe", stderr: "pipe" })
-    : Bun.spawn(["ssh", server, "bash", "-s"], {
-        stdin: new Blob([buildScript]),
-        stdout: "pipe",
-        stderr: "pipe",
-      });
+  // Phase 2: Building image
+  if (buildTracker) await buildTracker.startPhase(containerName, "building_image");
+  let buildLogs = "";
+  try {
+    // Execute build script on server
+    const buildProc = server === "localhost"
+      ? Bun.spawn(["bash", "-c", buildScript], { stdout: "pipe", stderr: "pipe" })
+      : Bun.spawn(["ssh", server, "bash", "-s"], {
+          stdin: new Blob([buildScript]),
+          stdout: "pipe",
+          stderr: "pipe",
+        });
 
-  const buildStderr = await new Response(buildProc.stderr).text();
-  const buildExit = await buildProc.exited;
+    const buildStdout = await new Response(buildProc.stdout).text();
+    const buildStderr = await new Response(buildProc.stderr).text();
+    buildLogs = buildStdout + buildStderr;
+    const buildExit = await buildProc.exited;
 
-  if (buildExit !== 0) {
-    throw new Error(`Container build failed: ${buildStderr}`);
+    if (buildExit !== 0) {
+      throw new Error(`Container build failed: ${buildStderr}`);
+    }
+    if (buildTracker) await buildTracker.completePhase(containerName, "building_image", buildLogs);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (buildTracker) await buildTracker.failBuild(containerName, "building_image", message, buildLogs);
+    throw error;
   }
 
   console.log(`[gateway] Container ${containerName} started, waiting for Tailscale...`);
 
-  // Step 2: Wait for container to be running
-  await new Promise((resolve) => setTimeout(resolve, 5000));
+  // Phase 3: Starting container (waiting for Tailscale)
+  if (buildTracker) await buildTracker.startPhase(containerName, "starting_container");
+  try {
+    // Wait for container to be running
+    await new Promise((resolve) => setTimeout(resolve, 5000));
+    if (buildTracker) await buildTracker.completePhase(containerName, "starting_container", "Container started, Tailscale connecting...");
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (buildTracker) await buildTracker.failBuild(containerName, "starting_container", message);
+    throw error;
+  }
 
-  // Step 3: SCP binary to the server, then docker cp into container
+  // Phase 4: Deploying binary
+  if (buildTracker) await buildTracker.startPhase(containerName, "deploying_binary");
   console.log(`[gateway] Copying container-api binary...`);
 
   // Check if binary exists
+  let deployLogs = "";
   const binaryFile = Bun.file(BINARY_PATH);
   if (!(await binaryFile.exists())) {
     console.warn(`[gateway] Binary not found at ${BINARY_PATH}, skipping SCP`);
+    if (buildTracker) await buildTracker.skipPhase(containerName, "deploying_binary");
+    if (buildTracker) await buildTracker.skipPhase(containerName, "starting_api");
   } else {
-    if (server === "localhost") {
-      // Direct docker cp for localhost
-      const copyProc = Bun.spawn([
-        "bash", "-c",
-        `docker cp "${BINARY_PATH}" ${containerName}:/opt/container-api/container-api && \
-         docker exec ${containerName} chmod +x /opt/container-api/container-api`
-      ], { stdout: "pipe", stderr: "pipe" });
-      await copyProc.exited;
-    } else {
-      // SCP to server, then docker cp
-      const scpProc = Bun.spawn(["scp", BINARY_PATH, `${server}:/tmp/container-api-binary`], {
-        stdout: "pipe",
-        stderr: "pipe",
-      });
-      await scpProc.exited;
+    try {
+      if (server === "localhost") {
+        // Direct docker cp for localhost
+        const copyProc = Bun.spawn([
+          "bash", "-c",
+          `docker cp "${BINARY_PATH}" ${containerName}:/opt/container-api/container-api && \
+           docker exec ${containerName} chmod +x /opt/container-api/container-api`
+        ], { stdout: "pipe", stderr: "pipe" });
+        const copyStdout = await new Response(copyProc.stdout).text();
+        const copyStderr = await new Response(copyProc.stderr).text();
+        deployLogs = copyStdout + copyStderr;
+        const copyExit = await copyProc.exited;
+        if (copyExit !== 0) {
+          throw new Error(`Failed to copy binary: ${copyStderr}`);
+        }
+      } else {
+        // SCP to server, then docker cp
+        const scpProc = Bun.spawn(["scp", BINARY_PATH, `${server}:/tmp/container-api-binary`], {
+          stdout: "pipe",
+          stderr: "pipe",
+        });
+        const scpStderr = await new Response(scpProc.stderr).text();
+        const scpExit = await scpProc.exited;
+        if (scpExit !== 0) {
+          throw new Error(`SCP failed: ${scpStderr}`);
+        }
 
-      const copyScript = `docker cp /tmp/container-api-binary ${containerName}:/opt/container-api/container-api && \
+        const copyScript = `docker cp /tmp/container-api-binary ${containerName}:/opt/container-api/container-api && \
 docker exec ${containerName} chmod +x /opt/container-api/container-api && \
 rm /tmp/container-api-binary`;
 
-      const copyProc = Bun.spawn(["ssh", server, "bash", "-c", copyScript], {
-        stdout: "pipe",
-        stderr: "pipe",
-      });
-      await copyProc.exited;
+        const copyProc = Bun.spawn(["ssh", server, "bash", "-c", copyScript], {
+          stdout: "pipe",
+          stderr: "pipe",
+        });
+        const copyStdout = await new Response(copyProc.stdout).text();
+        const copyStderr = await new Response(copyProc.stderr).text();
+        deployLogs = copyStdout + copyStderr;
+        const copyExit = await copyProc.exited;
+        if (copyExit !== 0) {
+          throw new Error(`Failed to copy binary: ${copyStderr}`);
+        }
+      }
+      if (buildTracker) await buildTracker.completePhase(containerName, "deploying_binary", deployLogs || "Binary deployed successfully");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (buildTracker) await buildTracker.failBuild(containerName, "deploying_binary", message, deployLogs);
+      throw error;
     }
 
-    // Step 4: Start container-api inside the container
+    // Phase 5: Starting API
+    if (buildTracker) await buildTracker.startPhase(containerName, "starting_api");
     console.log(`[gateway] Starting container-api...`);
 
-    const startCommand = `docker exec -d ${containerName} bash -c 'PORT=4096 /opt/container-api/container-api &' && \
+    let startLogs = "";
+    try {
+      const startCommand = `docker exec -d ${containerName} bash -c 'PORT=4096 /opt/container-api/container-api &' && \
 sleep 2 && \
 docker exec ${containerName} tailscale serve --bg --http 80 http://localhost:4096 2>/dev/null || true`;
 
-    const startProc = server === "localhost"
-      ? Bun.spawn(["bash", "-c", startCommand], { stdout: "pipe", stderr: "pipe" })
-      : Bun.spawn(["ssh", server, "bash", "-c", startCommand], { stdout: "pipe", stderr: "pipe" });
+      const startProc = server === "localhost"
+        ? Bun.spawn(["bash", "-c", startCommand], { stdout: "pipe", stderr: "pipe" })
+        : Bun.spawn(["ssh", server, "bash", "-c", startCommand], { stdout: "pipe", stderr: "pipe" });
 
-    await startProc.exited;
+      const startStdout = await new Response(startProc.stdout).text();
+      const startStderr = await new Response(startProc.stderr).text();
+      startLogs = startStdout + startStderr;
+      await startProc.exited;
+
+      if (buildTracker) await buildTracker.completePhase(containerName, "starting_api", startLogs || "API started successfully");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (buildTracker) await buildTracker.failBuild(containerName, "starting_api", message, startLogs);
+      throw error;
+    }
   }
 
+  // Phase 6: Ready
+  if (buildTracker) await buildTracker.startPhase(containerName, "ready");
+  if (buildTracker) await buildTracker.completePhase(containerName, "ready", "Container is fully operational");
   console.log(`[gateway] Container ${containerName} ready!`);
 
   return {
@@ -800,7 +883,7 @@ async function handleHttpRequest(req: Request): Promise<Response> {
         secrets.MANAGER_WS_URL = `ws://localhost:${PORT}`;
       }
 
-      const result = await createContainerOnServer(body, secrets);
+      const result = await createContainerOnServer(body, secrets, convexSync ?? undefined);
 
       // Record in Convex
       if (convexSync) {

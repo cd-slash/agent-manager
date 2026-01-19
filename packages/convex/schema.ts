@@ -343,4 +343,46 @@ export default defineSchema({
     value: v.string(),
     description: v.optional(v.string()),
   }).index("by_key", ["key"]),
+
+  // Container builds - top-level build session tracking
+  containerBuilds: defineTable({
+    containerId: v.string(),
+    repo: v.string(),
+    branch: v.string(),
+    server: v.string(),
+    currentPhase: v.string(), // Current phase name
+    status: v.union(
+      v.literal("pending"),
+      v.literal("in_progress"),
+      v.literal("completed"),
+      v.literal("failed")
+    ),
+    error: v.optional(v.string()),
+    taskId: v.optional(v.id("tasks")),
+    projectId: v.optional(v.id("projects")),
+    startedAt: v.number(),
+    completedAt: v.optional(v.number()),
+  })
+    .index("by_container", ["containerId"])
+    .index("by_status", ["status"]),
+
+  // Container build phases - individual phase tracking with logs
+  containerBuildPhases: defineTable({
+    containerId: v.string(),
+    phase: v.string(),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("in_progress"),
+      v.literal("completed"),
+      v.literal("failed"),
+      v.literal("skipped")
+    ),
+    logs: v.optional(v.string()),
+    error: v.optional(v.string()),
+    startedAt: v.optional(v.number()),
+    completedAt: v.optional(v.number()),
+    order: v.number(),
+  })
+    .index("by_container", ["containerId"])
+    .index("by_container_and_order", ["containerId", "order"]),
 });

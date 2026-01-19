@@ -105,6 +105,11 @@ The schema normalizes the frontend's nested data structures into separate tables
        │
        ├──────────────────▶ projects (optional)
        └──────────────────▶ tasks (optional)
+
+┌─────────────────┐       ┌─────────────────────┐
+│containerBuilds  │──────▶│containerBuildPhases │
+│ (build sessions)│       │  (phase tracking)   │
+└─────────────────┘       └─────────────────────┘
 ```
 
 ### Table Purposes
@@ -129,6 +134,8 @@ The schema normalizes the frontend's nested data structures into separate tables
 | `agentJobs` | AI agent job tracking | Belongs to task |
 | `agentSessions` | Claude Code CLI sessions via gateway | Belongs to container, optionally task/project |
 | `agentMessages` | Streaming output from CLI sessions | Belongs to agentSession |
+| `containerBuilds` | Container build session tracking | Links to container by containerId |
+| `containerBuildPhases` | Individual build phase logs | Belongs to containerBuild |
 
 ### Index Strategy
 
@@ -334,6 +341,14 @@ class ConvexSync {
 
   // Update container connection status
   updateContainerConnection(containerId, hostname, connected)
+
+  // Build tracking methods
+  createBuild(containerId, request)        // Initialize build with all phases
+  startPhase(containerId, phase)           // Mark phase as in_progress
+  completePhase(containerId, phase, logs?) // Mark phase completed with logs
+  failBuild(containerId, phase, error, logs?) // Mark build as failed
+  appendLogs(containerId, phase, logs)     // Append logs to current phase
+  skipPhase(containerId, phase)            // Skip a phase
 }
 ```
 
