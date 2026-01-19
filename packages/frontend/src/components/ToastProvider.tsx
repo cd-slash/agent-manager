@@ -1,119 +1,105 @@
 import * as React from "react";
-import { createContext, useContext, useCallback, useState, useEffect, useRef } from "react";
+import { createContext, useContext, useCallback } from "react";
+import { toast as sonnerToast } from "sonner";
 import { useMutation } from "convex/react";
 import { api } from "@agent-manager/convex/api";
-import { Toast, ToastContainer } from "./ui/toast";
+import { Toaster } from "./ui/sonner";
 
 type ToastType = "success" | "error" | "warning" | "info";
 
-interface ToastItem {
-  id: string;
-  type: ToastType;
+interface ToastOptions {
+  type?: ToastType;
   title: string;
   message?: string;
   duration?: number;
-  persist?: boolean; // If true, also save to Convex
+  persist?: boolean;
 }
 
 interface ToastContextValue {
-  toast: (options: Omit<ToastItem, "id">) => string;
-  success: (title: string, message?: string, options?: Partial<ToastItem>) => string;
-  error: (title: string, message?: string, options?: Partial<ToastItem>) => string;
-  warning: (title: string, message?: string, options?: Partial<ToastItem>) => string;
-  info: (title: string, message?: string, options?: Partial<ToastItem>) => string;
-  dismiss: (id: string) => void;
+  toast: (options: ToastOptions) => string | number;
+  success: (title: string, message?: string, options?: Partial<ToastOptions>) => string | number;
+  error: (title: string, message?: string, options?: Partial<ToastOptions>) => string | number;
+  warning: (title: string, message?: string, options?: Partial<ToastOptions>) => string | number;
+  info: (title: string, message?: string, options?: Partial<ToastOptions>) => string | number;
+  dismiss: (id: string | number) => void;
   dismissAll: () => void;
 }
 
 const ToastContext = createContext<ToastContextValue | null>(null);
 
-const DEFAULT_DURATION = 5000;
-
 export function ToastProvider({ children }: { children: React.ReactNode }) {
-  const [toasts, setToasts] = useState<ToastItem[]>([]);
-  const timersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const createNotification = useMutation(api.notifications.create);
 
-  const generateId = () => `toast-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-
-  const dismiss = useCallback((id: string) => {
-    const timer = timersRef.current.get(id);
-    if (timer) {
-      clearTimeout(timer);
-      timersRef.current.delete(id);
-    }
-    setToasts((prev) => prev.filter((t) => t.id !== id));
-  }, []);
-
-  const dismissAll = useCallback(() => {
-    timersRef.current.forEach((timer) => clearTimeout(timer));
-    timersRef.current.clear();
-    setToasts([]);
-  }, []);
-
   const toast = useCallback(
-    (options: Omit<ToastItem, "id">) => {
-      const id = generateId();
-      const duration = options.duration ?? DEFAULT_DURATION;
+    (options: ToastOptions) => {
+      const { type = "info", title, message, duration, persist } = options;
 
-      const newToast: ToastItem = {
-        ...options,
-        id,
+      let id: string | number;
+      const toastOptions = {
+        description: message,
+        duration: duration,
       };
 
-      setToasts((prev) => [...prev, newToast]);
-
-      // Auto-dismiss after duration
-      if (duration > 0) {
-        const timer = setTimeout(() => {
-          dismiss(id);
-        }, duration);
-        timersRef.current.set(id, timer);
+      switch (type) {
+        case "success":
+          id = sonnerToast.success(title, toastOptions);
+          break;
+        case "error":
+          id = sonnerToast.error(title, toastOptions);
+          break;
+        case "warning":
+          id = sonnerToast.warning(title, toastOptions);
+          break;
+        case "info":
+        default:
+          id = sonnerToast.info(title, toastOptions);
+          break;
       }
 
       // Persist to Convex if requested
-      if (options.persist) {
+      if (persist) {
         createNotification({
-          type: options.type,
-          title: options.title,
-          message: options.message,
+          type,
+          title,
+          message,
         }).catch(console.error);
       }
 
       return id;
     },
-    [dismiss, createNotification]
+    [createNotification]
   );
 
   const success = useCallback(
-    (title: string, message?: string, options?: Partial<ToastItem>) =>
+    (title: string, message?: string, options?: Partial<ToastOptions>) =>
       toast({ type: "success", title, message, ...options }),
     [toast]
   );
 
   const error = useCallback(
-    (title: string, message?: string, options?: Partial<ToastItem>) =>
+    (title: string, message?: string, options?: Partial<ToastOptions>) =>
       toast({ type: "error", title, message, ...options }),
     [toast]
   );
 
   const warning = useCallback(
-    (title: string, message?: string, options?: Partial<ToastItem>) =>
+    (title: string, message?: string, options?: Partial<ToastOptions>) =>
       toast({ type: "warning", title, message, ...options }),
     [toast]
   );
 
   const info = useCallback(
-    (title: string, message?: string, options?: Partial<ToastItem>) =>
+    (title: string, message?: string, options?: Partial<ToastOptions>) =>
       toast({ type: "info", title, message, ...options }),
     [toast]
   );
 
-  // Cleanup timers on unmount
-  useEffect(() => {
-    return () => {
-      timersRef.current.forEach((timer) => clearTimeout(timer));
-    };
+  const dismiss = useCallback((id: string | number) => {
+    sonnerToast.dismiss(id);
+  }, []);
+
+  const dismissAll = useCallback(() => {
+    sonnerToast.dismiss();
   }, []);
 
   return (
@@ -121,21 +107,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       value={{ toast, success, error, warning, info, dismiss, dismissAll }}
     >
       {children}
-      <ToastContainer>
-        {toasts.map((t) => (
-          <div
-            key={t.id}
-            className="animate-in slide-in-from-right-full fade-in duration-300"
-          >
-            <Toast
-              variant={t.type}
-              title={t.title}
-              message={t.message}
-              onDismiss={() => dismiss(t.id)}
-            />
-          </div>
-        ))}
-      </ToastContainer>
+      <Toaster />
     </ToastContext.Provider>
   );
 }
