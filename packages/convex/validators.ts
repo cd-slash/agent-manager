@@ -76,3 +76,11 @@ export const webhookStatusValidator = v.union(
   v.literal("processed"),
   v.literal("failed")
 );
+
+// Notification type
+export const notificationTypeValidator = v.union(
+  v.literal("success"),
+  v.literal("error"),
+  v.literal("warning"),
+  v.literal("info")
+);

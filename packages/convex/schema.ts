@@ -315,4 +315,25 @@ export default defineSchema({
   })
     .index("by_session", ["sessionId"])
     .index("by_session_and_timestamp", ["sessionId", "timestamp"]),
+
+  // Notifications - notification queue for toast messages
+  notifications: defineTable({
+    type: v.union(
+      v.literal("success"),
+      v.literal("error"),
+      v.literal("warning"),
+      v.literal("info")
+    ),
+    title: v.string(),
+    message: v.optional(v.string()),
+    sourceTable: v.optional(v.string()), // e.g., "projects", "tasks", "servers"
+    sourceId: v.optional(v.string()), // ID reference to source entity
+    read: v.boolean(),
+    dismissedAt: v.optional(v.number()),
+    createdAt: v.number(),
+    expiresAt: v.optional(v.number()), // Auto-cleanup TTL
+  })
+    .index("by_created", ["createdAt"])
+    .index("by_read", ["read"])
+    .index("by_read_and_created", ["read", "createdAt"]),
 });

@@ -22,6 +22,7 @@ import type * as internal_metrics from "../internal/metrics.js";
 import type * as internal_tailscale from "../internal/tailscale.js";
 import type * as internal_updateUtils from "../internal/updateUtils.js";
 import type * as internal_webhookProcessing from "../internal/webhookProcessing.js";
+import type * as notifications from "../notifications.js";
 import type * as projects from "../projects.js";
 import type * as pullRequests from "../pullRequests.js";
 import type * as servers from "../servers.js";
@@ -53,6 +54,7 @@ declare const fullApi: ApiFromModules<{
   "internal/tailscale": typeof internal_tailscale;
   "internal/updateUtils": typeof internal_updateUtils;
   "internal/webhookProcessing": typeof internal_webhookProcessing;
+  notifications: typeof notifications;
   projects: typeof projects;
   pullRequests: typeof pullRequests;
   servers: typeof servers;

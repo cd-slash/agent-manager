@@ -9,6 +9,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { ConvexProvider, ConvexReactClient } from "convex/react";
 import App from "./App";
+import { ToastProvider } from "./components/ToastProvider";
 import "./index.css";
 
 // Initialize Convex client
@@ -22,7 +23,9 @@ const elem = document.getElementById("root")!;
 const app = (
   <StrictMode>
     <ConvexProvider client={convex}>
-      <App />
+      <ToastProvider>
+        <App />
+      </ToastProvider>
     </ConvexProvider>
   </StrictMode>
 );
