@@ -233,7 +233,7 @@ ENV PATH="/root/.bun/bin:/root/.local/bin:$PATH"
 
 # Base packages
 RUN apt-get update && apt-get install -y --no-install-recommends \\
-    ca-certificates curl git gnupg iptables openssh-server procps tini tmux \\
+    ca-certificates curl git gnupg iptables openssh-server procps tini tmux unzip \\
     && rm -rf /var/lib/apt/lists/*
 
 # Tailscale
@@ -430,11 +430,13 @@ rm -rf "$BUILD_DIR" /tmp/compose-${containerName}.yml`;
           throw new Error(`SCP failed: ${scpStderr}`);
         }
 
-        const copyScript = `docker cp /tmp/container-api-binary ${containerName}:/opt/container-api/container-api && \
-docker exec ${containerName} chmod +x /opt/container-api/container-api && \
+        const copyScript = `set -e
+docker cp /tmp/container-api-binary ${containerName}:/opt/container-api/container-api
+docker exec ${containerName} chmod +x /opt/container-api/container-api
 rm /tmp/container-api-binary`;
 
-        const copyProc = Bun.spawn(["ssh", sshTarget, "bash", "-c", copyScript], {
+        const copyProc = Bun.spawn(["ssh", sshTarget, "bash", "-s"], {
+          stdin: new Blob([copyScript]),
           stdout: "pipe",
           stderr: "pipe",
         });
@@ -459,13 +461,17 @@ rm /tmp/container-api-binary`;
 
     let startLogs = "";
     try {
-      const startCommand = `docker exec -d ${containerName} bash -c 'PORT=4096 /opt/container-api/container-api &' && \
-sleep 2 && \
+      const startCommand = `docker exec -d ${containerName} bash -c 'PORT=4096 /opt/container-api/container-api &'
+sleep 2
 docker exec ${containerName} tailscale serve --bg --http 80 http://localhost:4096 2>/dev/null || true`;
 
       const startProc = server === "localhost"
         ? Bun.spawn(["bash", "-c", startCommand], { stdout: "pipe", stderr: "pipe" })
-        : Bun.spawn(["ssh", sshTarget, "bash", "-c", startCommand], { stdout: "pipe", stderr: "pipe" });
+        : Bun.spawn(["ssh", sshTarget, "bash", "-s"], {
+            stdin: new Blob([startCommand]),
+            stdout: "pipe",
+            stderr: "pipe",
+          });
 
       const startStdout = await new Response(startProc.stdout).text();
       const startStderr = await new Response(startProc.stderr).text();

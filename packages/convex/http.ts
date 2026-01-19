@@ -81,7 +81,10 @@ http.route({
   handler: httpAction(async (ctx, request) => {
     try {
       const payload = await request.json();
-      const eventType = (payload as { type?: string }).type ?? "unknown";
+      // Tailscale uses "event" field for event type (e.g., "nodeCreated", "nodeApproved")
+      const eventType = (payload as { event?: string; type?: string }).event
+        ?? (payload as { type?: string }).type
+        ?? "unknown";
 
       // Store the webhook event
       const eventId = await ctx.runMutation(api.webhooks.store, {
