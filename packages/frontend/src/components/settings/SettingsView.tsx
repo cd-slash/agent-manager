@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Key, Cpu, Network, Sliders, Lock, Bell, RefreshCw, Check, Copy, Container } from 'lucide-react';
+import { Key, Cpu, Network, Sliders, Lock, Bell, RefreshCw, Check, Copy, Container, Eye, EyeOff } from 'lucide-react';
 import { useToast } from '@/components/ToastProvider';
 import { useQuery, useMutation, useAction } from 'convex/react';
 import { api } from '@agent-manager/convex/api';
@@ -25,6 +25,12 @@ export function SettingsView() {
   const [ghUsername, setGhUsername] = useState('');
   const [ghToken, setGhToken] = useState('');
   const [isSavingContainerSecrets, setIsSavingContainerSecrets] = useState(false);
+
+  // Visibility toggles for password fields
+  const [showTsAuthKey, setShowTsAuthKey] = useState(false);
+  const [showGhToken, setShowGhToken] = useState(false);
+  const [showTailscaleApiKey, setShowTailscaleApiKey] = useState(false);
+  const [showTailscaleWebhookSecret, setShowTailscaleWebhookSecret] = useState(false);
 
   // Tailscale state
   const [tailnetId, setTailnetId] = useState('');
@@ -159,15 +165,22 @@ export function SettingsView() {
                   <Label>Tailscale Auth Key</Label>
                   <div className="relative">
                     <Input
-                      type="password"
+                      type={showTsAuthKey ? 'text' : 'password'}
                       placeholder={hasSecret('TS_AUTHKEY') ? '••••••••••••••••' : 'tskey-auth-...'}
                       value={tsAuthKey}
                       onChange={(e) => setTsAuthKey(e.target.value)}
+                      className="pr-16"
                     />
-                    <Lock
-                      size={14}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-                    />
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setShowTsAuthKey(!showTsAuthKey)}
+                        className="text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        {showTsAuthKey ? <EyeOff size={14} /> : <Eye size={14} />}
+                      </button>
+                      <Lock size={14} className="text-muted-foreground" />
+                    </div>
                   </div>
                   <p className="text-xs text-muted-foreground">
                     {hasSecret('TS_AUTHKEY')
@@ -193,15 +206,22 @@ export function SettingsView() {
                   <Label>GitHub Personal Access Token</Label>
                   <div className="relative">
                     <Input
-                      type="password"
+                      type={showGhToken ? 'text' : 'password'}
                       placeholder={hasSecret('GH_TOKEN') ? '••••••••••••••••' : 'ghp_...'}
                       value={ghToken}
                       onChange={(e) => setGhToken(e.target.value)}
+                      className="pr-16"
                     />
-                    <Lock
-                      size={14}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-                    />
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setShowGhToken(!showGhToken)}
+                        className="text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        {showGhToken ? <EyeOff size={14} /> : <Eye size={14} />}
+                      </button>
+                      <Lock size={14} className="text-muted-foreground" />
+                    </div>
                   </div>
                   <p className="text-xs text-muted-foreground">
                     {hasSecret('GH_TOKEN')
@@ -364,15 +384,22 @@ export function SettingsView() {
                   <Label>API Key</Label>
                   <div className="relative">
                     <Input
-                      type="password"
+                      type={showTailscaleApiKey ? 'text' : 'password'}
                       placeholder={tailscaleConfig?.hasApiKey ? '••••••••••••••••' : 'tskey-api-...'}
                       value={tailscaleApiKey}
                       onChange={(e) => setTailscaleApiKey(e.target.value)}
+                      className="pr-16"
                     />
-                    <Lock
-                      size={14}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-                    />
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setShowTailscaleApiKey(!showTailscaleApiKey)}
+                        className="text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        {showTailscaleApiKey ? <EyeOff size={14} /> : <Eye size={14} />}
+                      </button>
+                      <Lock size={14} className="text-muted-foreground" />
+                    </div>
                   </div>
                   <p className="text-xs text-muted-foreground">
                     {tailscaleConfig?.hasApiKey
@@ -384,15 +411,22 @@ export function SettingsView() {
                   <Label>Webhook Secret</Label>
                   <div className="relative">
                     <Input
-                      type="password"
+                      type={showTailscaleWebhookSecret ? 'text' : 'password'}
                       placeholder={tailscaleConfig?.hasWebhookSecret ? '••••••••••••••••' : 'tskey-webhook-...'}
                       value={tailscaleWebhookSecret}
                       onChange={(e) => setTailscaleWebhookSecret(e.target.value)}
+                      className="pr-16"
                     />
-                    <Lock
-                      size={14}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-                    />
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setShowTailscaleWebhookSecret(!showTailscaleWebhookSecret)}
+                        className="text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        {showTailscaleWebhookSecret ? <EyeOff size={14} /> : <Eye size={14} />}
+                      </button>
+                      <Lock size={14} className="text-muted-foreground" />
+                    </div>
                   </div>
                   <p className="text-xs text-muted-foreground">
                     {tailscaleConfig?.hasWebhookSecret
