@@ -5,6 +5,7 @@ import type { Id } from '@agent-manager/convex/dataModel';
 import { ChevronLeft, GitPullRequest } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { TooltipProvider } from '@/components/ui/tooltip';
 
 import { Sidebar } from '@/components/Sidebar';
 import { QuickTaskModal } from '@/components/modals/QuickTaskModal';
@@ -330,6 +331,7 @@ function App() {
   };
 
   return (
+    <TooltipProvider>
     <div className="flex h-screen bg-background text-foreground overflow-hidden font-sans">
       <Sidebar
         activeView={activeView}
@@ -476,6 +478,7 @@ function App() {
         onCreate={handleCreateProject}
       />
     </div>
+    </TooltipProvider>
   );
 }
 

@@ -15,7 +15,6 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-  TooltipProvider,
 } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
@@ -43,7 +42,6 @@ export function Sidebar({
   onQuickTask,
 }: SidebarProps) {
   return (
-    <TooltipProvider delayDuration={0}>
       <div
         className={cn(
           'h-screen bg-sidebar border-r border-sidebar-border flex flex-col transition-all duration-300 shrink-0 z-30',
@@ -198,6 +196,5 @@ export function Sidebar({
           </div>
         </div>
       </div>
-    </TooltipProvider>
   );
 }
