@@ -264,7 +264,7 @@ function App() {
 
     if (activeView === 'containers') {
       if (selectedContainerId && selectedContainer) {
-        return <ContainerDetailView container={selectedContainer} onBack={() => setSelectedContainerId(null)} />;
+        return <ContainerDetailView container={selectedContainer} />;
       }
       return <ContainerView containers={containers} onSelectContainer={(id) => setSelectedContainerId(id as Id<"containers">)} />;
     }
@@ -275,10 +275,6 @@ function App() {
           <TaskDetailView
             task={selectedTask}
             project={selectedProject}
-            onBack={() => {
-              setSelectedTaskId(null);
-              setSelectedProjectId(null);
-            }}
             onUpdate={handleTaskUpdate}
           />
         );
@@ -301,7 +297,6 @@ function App() {
             <TaskDetailView
               task={selectedTask}
               project={selectedProject}
-              onBack={() => setSelectedTaskId(null)}
               onUpdate={handleTaskUpdate}
             />
           );
@@ -310,7 +305,6 @@ function App() {
           <ProjectDetailView
             project={selectedProject!}
             onTaskClick={(task) => setSelectedTaskId(task.id as Id<"tasks">)}
-            onBack={() => setSelectedProjectId(null)}
             onUpdateProject={handleProjectUpdate}
           />
         );
@@ -423,6 +417,31 @@ function App() {
                   </h2>
                   <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">
                     Servers
+                  </div>
+                </div>
+              </>
+            ) : selectedContainerId && selectedContainer ? (
+              <>
+                <Button
+                  variant="outline"
+                  size="icon-sm"
+                  onClick={() => setSelectedContainerId(null)}
+                  className="mr-component"
+                >
+                  <ChevronLeft size={20} />
+                </Button>
+                <div className="min-w-0 flex-1">
+                  <h2 className="text-sm font-bold text-foreground flex items-center">
+                    <span className="truncate">{selectedContainer.name}</span>
+                    <Badge
+                      variant={selectedContainer.status === 'running' ? 'success' : 'warning'}
+                      className="ml-item uppercase text-[10px]"
+                    >
+                      {selectedContainer.status}
+                    </Badge>
+                  </h2>
+                  <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">
+                    Containers
                   </div>
                 </div>
               </>

@@ -43,14 +43,12 @@ const formatTime = (timestamp: number): string => {
 interface ProjectDetailViewProps {
   project: Project;
   onTaskClick: (task: Task) => void;
-  onBack: () => void;
   onUpdateProject: (project: Project) => void;
 }
 
 export function ProjectDetailView({
   project,
   onTaskClick,
-  onBack,
   onUpdateProject,
 }: ProjectDetailViewProps) {
   const [activeTab, setActiveTab] = useState('tasks');

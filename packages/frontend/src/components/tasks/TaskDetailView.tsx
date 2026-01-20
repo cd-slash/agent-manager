@@ -55,7 +55,6 @@ const formatTime = (timestamp: number): string => {
 interface TaskDetailViewProps {
   task: Task;
   project?: Project;
-  onBack: () => void;
   onUpdate: (task: Task) => void;
 }
 
@@ -110,7 +109,6 @@ const aiIssues = [
 export function TaskDetailView({
   task,
   project,
-  onBack,
   onUpdate,
 }: TaskDetailViewProps) {
   const [activeTab, setActiveTab] = useState('requirements');
