@@ -1,7 +1,18 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Box, ArrowRight, Loader2 } from "lucide-react";
 import { useQuery } from "convex/react";
 import { api } from "@agent-manager/convex/api";
+
+// Human-readable phase labels
+const PHASE_LABELS: Record<string, string> = {
+  pending: "Preparing...",
+  building_binary: "Building binary...",
+  building_image: "Building Docker image...",
+  starting_container: "Starting container...",
+  deploying_binary: "Deploying binary...",
+  starting_api: "Starting API service...",
+  ready: "Finishing up...",
+};
 import {
   Dialog,
   DialogContent,
@@ -48,6 +59,26 @@ export function CreateContainerModal({
 
   // Fetch servers from Convex for the dropdown
   const servers = useQuery(api.servers.list) ?? [];
+
+  // Watch active builds to show progress during creation
+  const activeBuilds = useQuery(api.containerBuilds.listActive) ?? [];
+
+  // Find the build that matches our form values (when creating)
+  const currentBuild = useMemo(() => {
+    if (!isCreating) return null;
+    // Find a build that matches our repo, branch, and server
+    return activeBuilds.find(
+      (build) =>
+        build.repo === form.repo &&
+        build.branch === (form.branch || "main") &&
+        build.server === form.server
+    );
+  }, [isCreating, activeBuilds, form.repo, form.branch, form.server]);
+
+  // Get the display text for the current phase
+  const progressText = currentBuild?.currentPhase
+    ? PHASE_LABELS[currentBuild.currentPhase] || "Creating Container..."
+    : "Creating Container...";
 
   const handleSubmit = async () => {
     if (!form.repo) {
@@ -194,7 +225,7 @@ export function CreateContainerModal({
               {isCreating ? (
                 <>
                   <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                  <span>Creating Container...</span>
+                  <span>{progressText}</span>
                 </>
               ) : (
                 <>
