@@ -207,6 +207,8 @@ export default defineSchema({
       v.literal("exited")
     ),
     port: v.string(),
+    // Server hostname for containers without serverId (e.g., agent-gateway created)
+    serverHostname: v.optional(v.string()),
     // Tailscale integration fields
     tailscaleNodeId: v.optional(v.string()),
     tailscaleHostname: v.optional(v.string()),

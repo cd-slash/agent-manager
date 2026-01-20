@@ -128,6 +128,8 @@ export type ContainerDoc = Doc<"containers"> & {
   image: string;
   status: "running" | "stopped" | "restarting" | "paused" | "exited";
   port: string;
+  serverHostname?: string;
+  tailscaleHostname?: string;
   createdAt: number;
   updatedAt: number;
 };
@@ -239,9 +241,10 @@ export interface Container {
   containerId: string;  // Docker container ID
   name: string;
   image: string;
-  status: 'running' | 'stopped';
+  status: 'running' | 'stopped' | 'restarting' | 'paused' | 'exited';
   port: string;
   server: string;
+  serverHostname?: string;
 }
 
 // Extended types that include related data (from Convex queries)

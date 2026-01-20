@@ -318,6 +318,7 @@ export const createFromAgent = mutation({
       // Update existing container
       await ctx.db.patch(existing._id, {
         name: args.name,
+        serverHostname: args.server,
         tailscaleHostname: args.hostname,
         status: "running",
         updatedAt: now,
@@ -332,6 +333,7 @@ export const createFromAgent = mutation({
       image: `agent:${args.repo}@${args.branch}`,
       status: "running",
       port: args.network === "macvlan" ? "80" : String(args.wgPort || 4096),
+      serverHostname: args.server,
       tailscaleHostname: args.hostname,
       createdAt: now,
       updatedAt: now,

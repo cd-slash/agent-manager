@@ -157,6 +157,34 @@ class AgentGatewayClient {
       method: "POST",
     });
   }
+
+  /**
+   * Stop a container via SSH
+   */
+  async stopContainer(
+    containerName: string,
+    server: string,
+    sshUser?: string
+  ): Promise<{ status: string; containerName: string; output: string }> {
+    return this.request(`/containers/${containerName}/stop`, {
+      method: "POST",
+      body: JSON.stringify({ server, sshUser }),
+    });
+  }
+
+  /**
+   * Delete a container via SSH (must be stopped first)
+   */
+  async deleteContainer(
+    containerName: string,
+    server: string,
+    sshUser?: string
+  ): Promise<{ status: string; containerName: string; output: string }> {
+    return this.request(`/containers/${containerName}`, {
+      method: "DELETE",
+      body: JSON.stringify({ server, sshUser }),
+    });
+  }
 }
 
 // Export singleton instance

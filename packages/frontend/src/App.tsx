@@ -264,7 +264,7 @@ function App() {
 
     if (activeView === 'containers') {
       if (selectedContainerId && selectedContainer) {
-        return <ContainerDetailView container={selectedContainer} />;
+        return <ContainerDetailView container={selectedContainer} onDeleted={() => setSelectedContainerId(null)} />;
       }
       return <ContainerView containers={containers} onSelectContainer={(id) => setSelectedContainerId(id as Id<"containers">)} />;
     }

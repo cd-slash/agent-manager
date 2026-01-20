@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react';
 import { Box, Terminal, StopCircle, Play, RefreshCw, Plus, MoreHorizontal, Trash2 } from 'lucide-react';
-import { useAction } from 'convex/react';
+import { useAction, useMutation } from 'convex/react';
 import { api } from '@agent-manager/convex/api';
 import { useToast } from '@/components/ToastProvider';
 import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { ColumnDef } from '@tanstack/react-table';
 import {
   GenericListView,
@@ -44,8 +45,60 @@ export function ContainerView({
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [selectedContainers, setSelectedContainers] = useState<Container[]>([]);
   const [clearSelectionFn, setClearSelectionFn] = useState<(() => void) | null>(null);
+  const [stoppingContainers, setStoppingContainers] = useState<Set<string>>(new Set());
+  const [deletingContainers, setDeletingContainers] = useState<Set<string>>(new Set());
   const syncDevices = useAction(api.tailscale.syncDevices);
+  const updateContainerStatus = useMutation(api.containers.updateStatus);
+  const deleteContainerFromDb = useMutation(api.containers.deleteContainer);
   const toast = useToast();
+
+  const handleStopContainer = async (container: Container) => {
+    const serverHostname = container.serverHostname || container.server || 'localhost';
+    setStoppingContainers((prev) => new Set(prev).add(container.id));
+    try {
+      await agentGateway.stopContainer(container.name, serverHostname);
+      await updateContainerStatus({ id: container.id as Parameters<typeof updateContainerStatus>[0]['id'], status: 'stopped' });
+      toast.success('Container stopped', `Container "${container.name}" has been stopped`);
+    } catch (error) {
+      toast.error('Failed to stop container', error instanceof Error ? error.message : 'Unknown error');
+    } finally {
+      setStoppingContainers((prev) => {
+        const next = new Set(prev);
+        next.delete(container.id);
+        return next;
+      });
+    }
+  };
+
+  const handleDeleteContainer = async (container: Container) => {
+    if (container.status === 'running') {
+      toast.error('Cannot delete running container', 'Stop the container first before deleting');
+      return;
+    }
+    const serverHostname = container.serverHostname || container.server || 'localhost';
+    setDeletingContainers((prev) => new Set(prev).add(container.id));
+    try {
+      await agentGateway.deleteContainer(container.name, serverHostname);
+      await deleteContainerFromDb({ id: container.id as Parameters<typeof deleteContainerFromDb>[0]['id'] });
+      toast.success('Container deleted', `Container "${container.name}" has been deleted`);
+    } catch (error) {
+      toast.error('Failed to delete container', error instanceof Error ? error.message : 'Unknown error');
+    } finally {
+      setDeletingContainers((prev) => {
+        const next = new Set(prev);
+        next.delete(container.id);
+        return next;
+      });
+    }
+  };
+
+  const handleBulkStop = async () => {
+    const toStop = selectedContainers.filter((c) => c.status === 'running');
+    for (const container of toStop) {
+      await handleStopContainer(container);
+    }
+    clearSelectionFn?.();
+  };
 
   const handleRefreshFromTailscale = async () => {
     setIsRefreshing(true);
@@ -89,10 +142,7 @@ export function ContainerView({
       {stoppableCount > 0 && (
         <Button
           variant="outline"
-          onClick={() => {
-            // TODO: Implement stop containers
-            clearSelectionFn?.();
-          }}
+          onClick={handleBulkStop}
           className="h-9 text-destructive hover:text-destructive relative"
         >
           <StopCircle size={16} className="mr-2" />
@@ -103,20 +153,26 @@ export function ContainerView({
         </Button>
       )}
       {startableCount > 0 && (
-        <Button
-          variant="outline"
-          onClick={() => {
-            // TODO: Implement start containers
-            clearSelectionFn?.();
-          }}
-          className="h-9 relative"
-        >
-          <Play size={16} className="mr-2" />
-          Start
-          <span className="ml-1.5 inline-flex items-center justify-center rounded bg-foreground/10 text-muted-foreground text-[11px] font-medium min-w-[1.125rem] h-[1.125rem] px-1 tabular-nums">
-            {startableCount}
-          </span>
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span>
+              <Button
+                variant="outline"
+                disabled
+                className="h-9 relative cursor-not-allowed"
+              >
+                <Play size={16} className="mr-2" />
+                Start
+                <span className="ml-1.5 inline-flex items-center justify-center rounded bg-foreground/10 text-muted-foreground text-[11px] font-medium min-w-[1.125rem] h-[1.125rem] px-1 tabular-nums">
+                  {startableCount}
+                </span>
+              </Button>
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Starting containers is not yet implemented</p>
+          </TooltipContent>
+        </Tooltip>
       )}
       {(stoppableCount > 0 || startableCount > 0) && (
         <div className="h-6 w-px bg-border mx-1" />
@@ -227,32 +283,28 @@ export function ContainerView({
                     <Terminal size={16} />
                     Terminal
                   </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => {
-                      // TODO: Implement stop/start container
-                    }}
-                  >
-                    {isRunning ? (
-                      <>
-                        <StopCircle size={16} />
-                        Stop
-                      </>
-                    ) : (
-                      <>
-                        <Play size={16} />
-                        Start
-                      </>
-                    )}
-                  </DropdownMenuItem>
+                  {isRunning ? (
+                    <DropdownMenuItem
+                      onClick={() => handleStopContainer(container)}
+                      disabled={stoppingContainers.has(container.id)}
+                    >
+                      <StopCircle size={16} />
+                      {stoppingContainers.has(container.id) ? 'Stopping...' : 'Stop'}
+                    </DropdownMenuItem>
+                  ) : (
+                    <DropdownMenuItem disabled>
+                      <Play size={16} />
+                      Start (not available)
+                    </DropdownMenuItem>
+                  )}
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
-                    className="text-destructive focus:text-destructive"
-                    onClick={() => {
-                      // TODO: Implement delete container
-                    }}
+                    className={isRunning ? 'text-muted-foreground' : 'text-destructive focus:text-destructive'}
+                    onClick={() => !isRunning && handleDeleteContainer(container)}
+                    disabled={isRunning || deletingContainers.has(container.id)}
                   >
                     <Trash2 size={16} />
-                    Delete
+                    {deletingContainers.has(container.id) ? 'Deleting...' : isRunning ? 'Delete (stop first)' : 'Delete'}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>

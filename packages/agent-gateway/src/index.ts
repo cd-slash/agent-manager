@@ -264,9 +264,9 @@ WORKDIR /workspace`;
   const entrypoint = `#!/bin/bash
 set -euo pipefail
 
-# Start Tailscale
+# Start Tailscale (using --state=mem: for ephemeral nodes that auto-remove when offline)
 if [ -n "\${TS_AUTHKEY:-}" ]; then
-  TAILSCALED_ARGS="--state=/var/lib/tailscale/tailscaled.state"
+  TAILSCALED_ARGS="--state=mem:"
   [ -n "\${TS_WG_PORT:-}" ] && TAILSCALED_ARGS="$TAILSCALED_ARGS --port=\${TS_WG_PORT}"
   tailscaled $TAILSCALED_ARGS &
   sleep 2
@@ -904,6 +904,130 @@ async function handleHttpRequest(req: Request): Promise<Response> {
       const message = error instanceof Error ? error.message : "Unknown error";
       return Response.json(
         { error: "Failed to create container", details: message },
+        { status: 500, headers: corsHeaders }
+      );
+    }
+  }
+
+  // Stop container (SSH docker stop)
+  if (url.pathname.match(/^\/containers\/[^/]+\/stop$/) && req.method === "POST") {
+    const containerName = url.pathname.split("/")[2];
+    try {
+      const body = (await req.json()) as { server: string; sshUser?: string };
+
+      if (!body.server) {
+        return Response.json(
+          { error: "server is required" },
+          { status: 400, headers: corsHeaders }
+        );
+      }
+
+      console.log(`[gateway] Stopping container ${containerName} on ${body.server}...`);
+
+      const sshTarget = body.server === "localhost" ? "localhost" : `${body.sshUser || "ubuntu"}@${body.server}`;
+      const stopScript = `docker stop ${containerName}`;
+
+      const stopProc = body.server === "localhost"
+        ? Bun.spawn(["bash", "-c", stopScript], { stdout: "pipe", stderr: "pipe" })
+        : Bun.spawn(["ssh", sshTarget, "bash", "-c", stopScript], {
+            stdout: "pipe",
+            stderr: "pipe",
+          });
+
+      const stdout = await new Response(stopProc.stdout).text();
+      const stderr = await new Response(stopProc.stderr).text();
+      const exitCode = await stopProc.exited;
+
+      if (exitCode !== 0) {
+        console.error(`[gateway] Failed to stop container: ${stderr}`);
+        return Response.json(
+          { error: "Failed to stop container", details: stderr },
+          { status: 500, headers: corsHeaders }
+        );
+      }
+
+      console.log(`[gateway] Container ${containerName} stopped successfully`);
+      return Response.json(
+        { status: "stopped", containerName, output: stdout.trim() },
+        { headers: corsHeaders }
+      );
+    } catch (error) {
+      console.error("[gateway] Failed to stop container:", error);
+      const message = error instanceof Error ? error.message : "Unknown error";
+      return Response.json(
+        { error: "Failed to stop container", details: message },
+        { status: 500, headers: corsHeaders }
+      );
+    }
+  }
+
+  // Delete container (SSH docker rm - only works on stopped containers)
+  if (url.pathname.match(/^\/containers\/[^/]+$/) && req.method === "DELETE") {
+    const containerName = url.pathname.split("/")[2];
+    try {
+      const body = (await req.json()) as { server: string; sshUser?: string };
+
+      if (!body.server) {
+        return Response.json(
+          { error: "server is required" },
+          { status: 400, headers: corsHeaders }
+        );
+      }
+
+      console.log(`[gateway] Deleting container ${containerName} on ${body.server}...`);
+
+      const sshTarget = body.server === "localhost" ? "localhost" : `${body.sshUser || "ubuntu"}@${body.server}`;
+
+      // First check if container is running
+      const inspectScript = `docker inspect --format='{{.State.Running}}' ${containerName} 2>/dev/null || echo "not_found"`;
+      const inspectProc = body.server === "localhost"
+        ? Bun.spawn(["bash", "-c", inspectScript], { stdout: "pipe", stderr: "pipe" })
+        : Bun.spawn(["ssh", sshTarget, "bash", "-c", `"${inspectScript}"`], {
+            stdout: "pipe",
+            stderr: "pipe",
+          });
+
+      const inspectOutput = (await new Response(inspectProc.stdout).text()).trim();
+      await inspectProc.exited;
+
+      if (inspectOutput === "true") {
+        return Response.json(
+          { error: "Container is running. Stop it first before deleting." },
+          { status: 400, headers: corsHeaders }
+        );
+      }
+
+      // Delete the container
+      const deleteScript = `docker rm ${containerName}`;
+      const deleteProc = body.server === "localhost"
+        ? Bun.spawn(["bash", "-c", deleteScript], { stdout: "pipe", stderr: "pipe" })
+        : Bun.spawn(["ssh", sshTarget, "bash", "-c", deleteScript], {
+            stdout: "pipe",
+            stderr: "pipe",
+          });
+
+      const stdout = await new Response(deleteProc.stdout).text();
+      const stderr = await new Response(deleteProc.stderr).text();
+      const exitCode = await deleteProc.exited;
+
+      if (exitCode !== 0) {
+        console.error(`[gateway] Failed to delete container: ${stderr}`);
+        return Response.json(
+          { error: "Failed to delete container", details: stderr },
+          { status: 500, headers: corsHeaders }
+        );
+      }
+
+      console.log(`[gateway] Container ${containerName} deleted successfully`);
+      return Response.json(
+        { status: "deleted", containerName, output: stdout.trim() },
+        { headers: corsHeaders }
+      );
+    } catch (error) {
+      console.error("[gateway] Failed to delete container:", error);
+      const message = error instanceof Error ? error.message : "Unknown error";
+      return Response.json(
+        { error: "Failed to delete container", details: message },
         { status: 500, headers: corsHeaders }
       );
     }

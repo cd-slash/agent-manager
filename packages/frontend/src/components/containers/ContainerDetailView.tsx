@@ -1,24 +1,69 @@
 import { useState } from 'react';
-import { useQuery } from 'convex/react';
+import { useQuery, useMutation } from 'convex/react';
 import { api } from '@agent-manager/convex/api';
-import { Box, Server, Terminal, Hammer, Network, Clock, Info } from 'lucide-react';
+import { Box, Server, Terminal, Hammer, Network, Clock, Info, StopCircle, Trash2, Play, AlertTriangle } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { StatusBadge } from '@/components/ui/status-badge';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { BuildTimeline, type BuildPhase } from './BuildTimeline';
 import { BuildLogViewer } from './BuildLogViewer';
+import { agentGateway } from '@/lib/agent-gateway';
+import { useToast } from '@/components/ToastProvider';
 import type { Container } from '@/types';
 
 interface ContainerDetailViewProps {
   container: Container;
+  onDeleted?: () => void;
 }
 
 export function ContainerDetailView({
   container,
+  onDeleted,
 }: ContainerDetailViewProps) {
   const [activeTab, setActiveTab] = useState('overview');
   const [selectedPhase, setSelectedPhase] = useState<string | undefined>();
+  const [isStoppingContainer, setIsStoppingContainer] = useState(false);
+  const [isDeletingContainer, setIsDeletingContainer] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const toast = useToast();
+  const updateContainerStatus = useMutation(api.containers.updateStatus);
+  const deleteContainerFromDb = useMutation(api.containers.deleteContainer);
+
+  const isRunning = container.status === 'running';
+  const canDelete = !isRunning;
+  const serverHostname = container.serverHostname || container.server || 'localhost';
+
+  const handleStopContainer = async () => {
+    setIsStoppingContainer(true);
+    try {
+      await agentGateway.stopContainer(container.name, serverHostname);
+      await updateContainerStatus({ id: container.id as Parameters<typeof updateContainerStatus>[0]['id'], status: 'stopped' });
+      toast.success('Container stopped', `Container "${container.name}" has been stopped`);
+    } catch (error) {
+      toast.error('Failed to stop container', error instanceof Error ? error.message : 'Unknown error');
+    } finally {
+      setIsStoppingContainer(false);
+    }
+  };
+
+  const handleDeleteContainer = async () => {
+    setIsDeletingContainer(true);
+    try {
+      // First delete from Docker
+      await agentGateway.deleteContainer(container.name, serverHostname);
+      // Then delete from database
+      await deleteContainerFromDb({ id: container.id as Parameters<typeof deleteContainerFromDb>[0]['id'] });
+      toast.success('Container deleted', `Container "${container.name}" has been deleted`);
+      onDeleted?.();
+    } catch (error) {
+      toast.error('Failed to delete container', error instanceof Error ? error.message : 'Unknown error');
+    } finally {
+      setIsDeletingContainer(false);
+      setShowDeleteConfirm(false);
+    }
+  };
 
   // Fetch build status from Convex
   const build = useQuery(api.containerBuilds.getByContainer, {
@@ -150,6 +195,114 @@ export function ContainerDetailView({
                               Uptime
                             </label>
                             <div className="text-foreground mt-1">14 days, 3 hours</div>
+                          </div>
+                        </div>
+                      </div>
+                    </section>
+
+                    <section>
+                      <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center">
+                        <AlertTriangle size={16} className="mr-2" /> Actions
+                      </h3>
+                      <div className="bg-surface border border-border rounded-lg p-4">
+                        <div className="space-y-4">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <div className="text-sm font-medium text-foreground">Stop Container</div>
+                              <div className="text-xs text-muted-foreground mt-0.5">
+                                Stop the running container. It can be started again later.
+                              </div>
+                            </div>
+                            <Button
+                              variant="outline"
+                              onClick={handleStopContainer}
+                              disabled={!isRunning || isStoppingContainer}
+                              className="min-w-[100px]"
+                            >
+                              {isStoppingContainer ? (
+                                <>
+                                  <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2" />
+                                  Stopping...
+                                </>
+                              ) : isRunning ? (
+                                <>
+                                  <StopCircle size={16} className="mr-2" />
+                                  Stop
+                                </>
+                              ) : (
+                                <>
+                                  <Play size={16} className="mr-2" />
+                                  Stopped
+                                </>
+                              )}
+                            </Button>
+                          </div>
+
+                          <div className="border-t border-border pt-4">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <div className="text-sm font-medium text-destructive">Delete Container</div>
+                                <div className="text-xs text-muted-foreground mt-0.5">
+                                  Permanently remove this container. This action cannot be undone.
+                                </div>
+                              </div>
+                              {canDelete ? (
+                                showDeleteConfirm ? (
+                                  <div className="flex items-center gap-2">
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => setShowDeleteConfirm(false)}
+                                      disabled={isDeletingContainer}
+                                    >
+                                      Cancel
+                                    </Button>
+                                    <Button
+                                      variant="destructive"
+                                      size="sm"
+                                      onClick={handleDeleteContainer}
+                                      disabled={isDeletingContainer}
+                                    >
+                                      {isDeletingContainer ? (
+                                        <>
+                                          <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2" />
+                                          Deleting...
+                                        </>
+                                      ) : (
+                                        'Confirm Delete'
+                                      )}
+                                    </Button>
+                                  </div>
+                                ) : (
+                                  <Button
+                                    variant="outline"
+                                    onClick={() => setShowDeleteConfirm(true)}
+                                    className="text-destructive hover:text-destructive min-w-[100px]"
+                                  >
+                                    <Trash2 size={16} className="mr-2" />
+                                    Delete
+                                  </Button>
+                                )
+                              ) : (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <span>
+                                      <Button
+                                        variant="outline"
+                                        disabled
+                                        className="min-w-[100px] cursor-not-allowed"
+                                      >
+                                        <Trash2 size={16} className="mr-2" />
+                                        Delete
+                                      </Button>
+                                    </span>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>Container must be stopped before it can be deleted</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </div>
