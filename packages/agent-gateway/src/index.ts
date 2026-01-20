@@ -320,7 +320,9 @@ exec "\$@"`;
     ports:
       - "${wgPort}:${wgPort}/udp"
     restart: unless-stopped
-    mem_limit: 4096m`;
+    mem_limit: 4096m
+    labels:
+      - "agent-manager.tailscale-hostname=${containerName}"`;
 
   // Step 1: Build and start container (without binary)
   const buildScript = `set -e
@@ -925,11 +927,20 @@ async function handleHttpRequest(req: Request): Promise<Response> {
       console.log(`[gateway] Stopping container ${containerName} on ${body.server}...`);
 
       const sshTarget = body.server === "localhost" ? "localhost" : `${body.sshUser || "ubuntu"}@${body.server}`;
-      const stopScript = `docker stop ${containerName}`;
+
+      // Find container by label first, fallback to direct name
+      const stopScript = `
+CONTAINER_ID=$(docker ps -aq --filter "label=agent-manager.tailscale-hostname=${containerName}" | head -1)
+if [ -z "$CONTAINER_ID" ]; then
+  CONTAINER_ID="${containerName}"
+fi
+docker stop "$CONTAINER_ID"
+`;
 
       const stopProc = body.server === "localhost"
         ? Bun.spawn(["bash", "-c", stopScript], { stdout: "pipe", stderr: "pipe" })
-        : Bun.spawn(["ssh", sshTarget, "bash", "-c", stopScript], {
+        : Bun.spawn(["ssh", sshTarget, "bash", "-s"], {
+            stdin: new Blob([stopScript]),
             stdout: "pipe",
             stderr: "pipe",
           });
@@ -946,7 +957,7 @@ async function handleHttpRequest(req: Request): Promise<Response> {
         );
       }
 
-      console.log(`[gateway] Container ${containerName} stopped successfully`);
+      console.log(`[gateway] Container ${containerName} stopped successfully (ID: ${stdout.trim()})`);
       return Response.json(
         { status: "stopped", containerName, output: stdout.trim() },
         { headers: corsHeaders }
@@ -978,39 +989,56 @@ async function handleHttpRequest(req: Request): Promise<Response> {
 
       const sshTarget = body.server === "localhost" ? "localhost" : `${body.sshUser || "ubuntu"}@${body.server}`;
 
-      // First check if container is running
-      const inspectScript = `docker inspect --format='{{.State.Running}}' ${containerName} 2>/dev/null || echo "not_found"`;
-      const inspectProc = body.server === "localhost"
-        ? Bun.spawn(["bash", "-c", inspectScript], { stdout: "pipe", stderr: "pipe" })
-        : Bun.spawn(["ssh", sshTarget, "bash", "-c", `"${inspectScript}"`], {
-            stdout: "pipe",
-            stderr: "pipe",
-          });
+      // Find container by label first, check if running, then delete
+      const deleteScript = `
+CONTAINER_ID=$(docker ps -aq --filter "label=agent-manager.tailscale-hostname=${containerName}" | head -1)
+if [ -z "$CONTAINER_ID" ]; then
+  CONTAINER_ID="${containerName}"
+fi
 
-      const inspectOutput = (await new Response(inspectProc.stdout).text()).trim();
-      await inspectProc.exited;
+# Check if container exists
+if ! docker inspect "$CONTAINER_ID" >/dev/null 2>&1; then
+  echo "NOT_FOUND"
+  exit 0
+fi
 
-      if (inspectOutput === "true") {
-        return Response.json(
-          { error: "Container is running. Stop it first before deleting." },
-          { status: 400, headers: corsHeaders }
-        );
-      }
+# Check if container is running
+RUNNING=$(docker inspect --format='{{.State.Running}}' "$CONTAINER_ID" 2>/dev/null || echo "false")
+if [ "$RUNNING" = "true" ]; then
+  echo "STILL_RUNNING"
+  exit 1
+fi
 
-      // Delete the container
-      const deleteScript = `docker rm ${containerName}`;
+# Delete the container
+docker rm "$CONTAINER_ID"
+`;
+
       const deleteProc = body.server === "localhost"
         ? Bun.spawn(["bash", "-c", deleteScript], { stdout: "pipe", stderr: "pipe" })
-        : Bun.spawn(["ssh", sshTarget, "bash", "-c", deleteScript], {
+        : Bun.spawn(["ssh", sshTarget, "bash", "-s"], {
+            stdin: new Blob([deleteScript]),
             stdout: "pipe",
             stderr: "pipe",
           });
 
-      const stdout = await new Response(deleteProc.stdout).text();
+      const stdout = (await new Response(deleteProc.stdout).text()).trim();
       const stderr = await new Response(deleteProc.stderr).text();
       const exitCode = await deleteProc.exited;
 
-      if (exitCode !== 0) {
+      if (stdout === "NOT_FOUND") {
+        return Response.json(
+          { error: "Container not found" },
+          { status: 404, headers: corsHeaders }
+        );
+      }
+
+      if (stdout === "STILL_RUNNING" || exitCode !== 0) {
+        if (stdout === "STILL_RUNNING") {
+          return Response.json(
+            { error: "Container is running. Stop it first before deleting." },
+            { status: 400, headers: corsHeaders }
+          );
+        }
         console.error(`[gateway] Failed to delete container: ${stderr}`);
         return Response.json(
           { error: "Failed to delete container", details: stderr },
@@ -1018,7 +1046,7 @@ async function handleHttpRequest(req: Request): Promise<Response> {
         );
       }
 
-      console.log(`[gateway] Container ${containerName} deleted successfully`);
+      console.log(`[gateway] Container ${containerName} deleted successfully (ID: ${stdout})`);
       return Response.json(
         { status: "deleted", containerName, output: stdout.trim() },
         { headers: corsHeaders }
