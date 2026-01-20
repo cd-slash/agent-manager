@@ -19,7 +19,6 @@ import {
   ChevronDown,
   ChevronRight,
   ArrowRight,
-  Play,
   AlertTriangle,
   ThumbsUp,
   MessageSquare,
@@ -313,18 +312,9 @@ export function TaskDetailView({
                         <Terminal size={16} className="mr-2" /> AI Prompt
                       </h3>
                       <div className="bg-surface border border-border rounded-lg p-4">
-                        <code className="text-sm font-mono text-feature-blue block mb-2">
+                        <code className="text-sm font-mono text-feature-blue block">
                           {task.prompt}
                         </code>
-                        <div className="flex justify-end">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-muted-foreground hover:text-foreground"
-                          >
-                            <Play size={12} className="mr-1" /> Run Agent
-                          </Button>
-                        </div>
                       </div>
                     </section>
 
@@ -333,35 +323,42 @@ export function TaskDetailView({
                         <CheckSquare size={16} className="mr-2" /> Acceptance
                         Criteria
                       </h3>
-                      <div className="bg-surface border border-border rounded-lg p-2">
+                      <div className="bg-surface border border-border rounded-lg overflow-hidden">
+                        {(!task.acceptanceCriteria ||
+                          task.acceptanceCriteria.length === 0) && (
+                          <div className="p-4 text-sm text-muted-foreground">
+                            No acceptance criteria defined.
+                          </div>
+                        )}
                         {task.acceptanceCriteria?.map((criteria) => (
                           <div
                             key={criteria.id}
-                            className="flex items-center p-3 hover:bg-surface-elevated/50 rounded-lg transition-colors group"
+                            className="flex items-center justify-between p-3 border-b border-border last:border-0 hover:bg-surface-elevated/50 group"
                           >
-                            <div
-                              className={`w-5 h-5 rounded border flex items-center justify-center mr-3 transition-colors ${
-                                criteria.done
-                                  ? 'bg-green-500/20 border-green-500 text-green-500'
-                                  : 'border-border text-transparent hover:border-muted-foreground'
-                              }`}
-                            >
-                              <CheckCircle2
-                                size={14}
-                                className={
-                                  criteria.done ? 'opacity-100' : 'opacity-0'
-                                }
-                              />
+                            <div className="flex items-center min-w-0 flex-1">
+                              <div
+                                className={`w-2 h-2 rounded-full mr-3 flex-shrink-0 ${
+                                  criteria.done
+                                    ? 'bg-green-500'
+                                    : 'bg-muted'
+                                }`}
+                              ></div>
+                              <span
+                                className={`text-sm truncate ${
+                                  criteria.done
+                                    ? 'text-muted-foreground line-through'
+                                    : 'text-foreground'
+                                }`}
+                              >
+                                {criteria.text}
+                              </span>
                             </div>
-                            <span
-                              className={`text-sm ${
-                                criteria.done
-                                  ? 'text-muted-foreground line-through'
-                                  : 'text-foreground'
-                              }`}
+                            <Badge
+                              variant={criteria.done ? 'success' : 'secondary'}
+                              className="uppercase flex-shrink-0"
                             >
-                              {criteria.text}
-                            </span>
+                              {criteria.done ? 'Done' : 'Pending'}
+                            </Badge>
                           </div>
                         ))}
                       </div>
@@ -372,47 +369,44 @@ export function TaskDetailView({
                         <Activity size={16} className="mr-2" /> Tests
                       </h3>
                       <div className="bg-surface border border-border rounded-lg overflow-hidden">
-                        <table className="w-full text-sm text-left">
-                          <thead className="bg-background text-muted-foreground font-medium">
-                            <tr>
-                              <th className="p-3">Test Name</th>
-                              <th className="p-3 text-right">Status</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-border">
-                            {task.tests?.map((test) => (
-                              <tr
-                                key={test.id}
-                                className="hover:bg-surface-elevated/50"
-                              >
-                                <td className="p-3 font-mono text-foreground">
-                                  {test.name}
-                                </td>
-                                <td className="p-3 text-right">
-                                  <Badge
-                                    variant={
-                                      test.status === 'passed'
-                                        ? 'success'
-                                        : 'warning'
-                                    }
-                                    className="uppercase"
-                                  >
-                                    {test.status}
-                                  </Badge>
-                                </td>
-                              </tr>
-                            )) || (
-                              <tr>
-                                <td
-                                  colSpan={2}
-                                  className="p-4 text-center text-muted-foreground"
-                                >
-                                  No tests defined
-                                </td>
-                              </tr>
-                            )}
-                          </tbody>
-                        </table>
+                        {(!task.tests || task.tests.length === 0) && (
+                          <div className="p-4 text-sm text-muted-foreground">
+                            No tests defined.
+                          </div>
+                        )}
+                        {task.tests?.map((test) => (
+                          <div
+                            key={test.id}
+                            className="flex items-center justify-between p-3 border-b border-border last:border-0 hover:bg-surface-elevated/50 group"
+                          >
+                            <div className="flex items-center min-w-0 flex-1">
+                              <div
+                                className={`w-2 h-2 rounded-full mr-3 flex-shrink-0 ${
+                                  test.status === 'passed'
+                                    ? 'bg-green-500'
+                                    : test.status === 'failed'
+                                      ? 'bg-red-500'
+                                      : 'bg-muted'
+                                }`}
+                              ></div>
+                              <span className="text-sm font-mono truncate text-foreground">
+                                {test.name}
+                              </span>
+                            </div>
+                            <Badge
+                              variant={
+                                test.status === 'passed'
+                                  ? 'success'
+                                  : test.status === 'failed'
+                                    ? 'destructive'
+                                    : 'warning'
+                              }
+                              className="uppercase flex-shrink-0"
+                            >
+                              {test.status}
+                            </Badge>
+                          </div>
+                        ))}
                       </div>
                     </section>
                   </div>
