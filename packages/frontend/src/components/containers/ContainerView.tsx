@@ -1,18 +1,15 @@
 import { useMemo, useState } from 'react';
-import { Box, FileText, Terminal, StopCircle, Play, RefreshCw, Plus } from 'lucide-react';
+import { Box, Terminal, StopCircle, Play, RefreshCw, Plus } from 'lucide-react';
 import { useAction } from 'convex/react';
 import { api } from '@agent-manager/convex/api';
 import { useToast } from '@/components/ToastProvider';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import type { ColumnDef } from '@tanstack/react-table';
 import {
   GenericListView,
   type FilterConfig,
 } from '@/components/layouts/GenericListView';
-import {
-  TableSelectionActions,
-  SelectionActionButton,
-} from '@/components/ui/table-actions';
 import { CreateContainerModal } from '@/components/modals/CreateContainerModal';
 import { agentGateway } from '@/lib/agent-gateway';
 import type { Container } from '@/types';
@@ -39,6 +36,8 @@ export function ContainerView({
 }: ContainerViewProps) {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [selectedContainers, setSelectedContainers] = useState<Container[]>([]);
+  const [clearSelectionFn, setClearSelectionFn] = useState<(() => void) | null>(null);
   const syncDevices = useAction(api.tailscale.syncDevices);
   const toast = useToast();
 
@@ -76,19 +75,68 @@ export function ContainerView({
     await syncDevices();
   };
 
+  const canStop = selectedContainers.some((c) => c.status === 'running');
+  const canStart = selectedContainers.some((c) => c.status === 'stopped');
+
   const headerActions = (
     <div className="flex items-center gap-2">
+      {selectedContainers.length > 0 && (
+        <>
+          <Badge variant="secondary" className="font-normal">
+            {selectedContainers.length} selected
+          </Badge>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              // TODO: Implement open terminal
+            }}
+          >
+            <Terminal size={16} className="mr-2" />
+            Terminal
+          </Button>
+          {canStop && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                // TODO: Implement stop containers
+                clearSelectionFn?.();
+              }}
+              className="text-destructive hover:text-destructive"
+            >
+              <StopCircle size={16} className="mr-2" />
+              Stop
+            </Button>
+          )}
+          {canStart && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                // TODO: Implement start containers
+                clearSelectionFn?.();
+              }}
+            >
+              <Play size={16} className="mr-2" />
+              Start
+            </Button>
+          )}
+          <div className="h-6 w-px bg-border mx-1" />
+        </>
+      )}
       <Button
         variant="outline"
+        size="icon"
         onClick={handleRefreshFromTailscale}
         disabled={isRefreshing}
+        title="Refresh from Tailscale"
       >
-        <RefreshCw size={16} className={`mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
-        {isRefreshing ? 'Syncing...' : 'Refresh from Tailscale'}
+        <RefreshCw size={16} className={isRefreshing ? 'animate-spin' : ''} />
       </Button>
       <Button onClick={() => setIsCreateModalOpen(true)}>
         <Plus size={16} className="mr-2" />
-        Create Container
+        New
       </Button>
     </div>
   );
@@ -158,52 +206,9 @@ export function ContainerView({
     []
   );
 
-  const selectionActions = (
-    selectedContainers: Container[],
-    clearSelection: () => void
-  ) => {
-    const canStop = selectedContainers.some((c) => c.status === 'running');
-    const canStart = selectedContainers.some((c) => c.status === 'stopped');
-
-    return (
-      <TableSelectionActions selectedCount={selectedContainers.length}>
-        <SelectionActionButton
-          icon={<FileText size={16} />}
-          label="Logs"
-          onClick={() => {
-            // TODO: Implement view logs
-          }}
-        />
-        <SelectionActionButton
-          icon={<Terminal size={16} />}
-          label="Terminal"
-          onClick={() => {
-            // TODO: Implement open terminal
-          }}
-        />
-        {canStop && (
-          <SelectionActionButton
-            icon={<StopCircle size={16} />}
-            label="Stop"
-            variant="destructive"
-            onClick={() => {
-              // TODO: Implement stop containers
-              clearSelection();
-            }}
-          />
-        )}
-        {canStart && (
-          <SelectionActionButton
-            icon={<Play size={16} />}
-            label="Start"
-            onClick={() => {
-              // TODO: Implement start containers
-              clearSelection();
-            }}
-          />
-        )}
-      </TableSelectionActions>
-    );
+  const handleSelectionChange = (rows: Container[], clearSelection: () => void) => {
+    setSelectedContainers(rows);
+    setClearSelectionFn(() => clearSelection);
   };
 
   return (
@@ -219,7 +224,7 @@ export function ContainerView({
         searchFields={['name', 'image', 'server']}
         filters={statusFilters}
         headerActions={headerActions}
-        selectionActions={selectionActions}
+        onSelectionChange={handleSelectionChange}
         emptyMessage="No containers found matching your filters."
         getRowId={(row) => row.id}
         className="p-page"

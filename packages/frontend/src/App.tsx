@@ -126,6 +126,7 @@ function App() {
   const containers: Container[] = useMemo(() => {
     return containersData.map(c => ({
       id: c._id,
+      containerId: c.containerId,
       name: c.name,
       image: c.image,
       status: c.status as 'running' | 'stopped',
