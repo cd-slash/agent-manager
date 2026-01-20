@@ -97,11 +97,9 @@ export function ContainerView({
         >
           <StopCircle size={16} className="mr-2" />
           Stop
-          {stoppableCount > 1 && (
-            <span className="ml-1.5 inline-flex items-center justify-center rounded-full bg-destructive text-destructive-foreground text-xs font-medium min-w-[1.25rem] h-5 px-1.5">
-              {stoppableCount}
-            </span>
-          )}
+          <span className="ml-1.5 inline-flex items-center justify-center rounded bg-destructive/15 text-destructive text-[11px] font-medium min-w-[1.125rem] h-[1.125rem] px-1 tabular-nums">
+            {stoppableCount}
+          </span>
         </Button>
       )}
       {startableCount > 0 && (
@@ -115,11 +113,9 @@ export function ContainerView({
         >
           <Play size={16} className="mr-2" />
           Start
-          {startableCount > 1 && (
-            <span className="ml-1.5 inline-flex items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-medium min-w-[1.25rem] h-5 px-1.5">
-              {startableCount}
-            </span>
-          )}
+          <span className="ml-1.5 inline-flex items-center justify-center rounded bg-foreground/10 text-muted-foreground text-[11px] font-medium min-w-[1.125rem] h-[1.125rem] px-1 tabular-nums">
+            {startableCount}
+          </span>
         </Button>
       )}
       {(stoppableCount > 0 || startableCount > 0) && (
