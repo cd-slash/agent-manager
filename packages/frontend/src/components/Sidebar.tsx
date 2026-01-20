@@ -123,7 +123,7 @@ export function Sidebar({
 
             if (isCollapsed) {
               return (
-                <Tooltip key={item.id}>
+                <Tooltip key={item.id} delayDuration={0}>
                   <TooltipTrigger asChild>{NavButton}</TooltipTrigger>
                   <TooltipContent side="right">{item.label}</TooltipContent>
                 </Tooltip>
@@ -138,7 +138,7 @@ export function Sidebar({
         <div className={cn(
           isCollapsed ? "px-2 pb-2 flex justify-center" : "px-sidebar pb-sidebar"
         )}>
-          <Tooltip>
+          <Tooltip delayDuration={0}>
             <TooltipTrigger asChild>
               <Button
                 variant="outline"
