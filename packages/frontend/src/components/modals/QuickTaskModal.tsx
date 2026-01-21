@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, ChevronDown } from 'lucide-react';
+import { Plus, ChevronDown, ChevronRight, Settings2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -10,6 +10,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Select,
   SelectContent,
@@ -17,7 +19,28 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import type { Project } from '@/types';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
+import type { Project, TaskPhase } from '@/types';
+import { AGENT_PHASES, PHASE_DISPLAY_NAMES } from '@/types';
+
+// Available models
+const MODELS = [
+  { value: 'claude-sonnet-4-20250514', label: 'Claude Sonnet 4' },
+  { value: 'claude-opus-4-20250514', label: 'Claude Opus 4' },
+  { value: 'claude-3-5-sonnet-20241022', label: 'Claude 3.5 Sonnet' },
+  { value: 'claude-3-5-haiku-20241022', label: 'Claude 3.5 Haiku' },
+];
+
+interface PhaseOverride {
+  enabled: boolean;
+  model?: string;
+}
+
+type PhaseOverrides = Partial<Record<TaskPhase, PhaseOverride>>;
 
 interface QuickTaskModalProps {
   isOpen: boolean;
@@ -33,11 +56,17 @@ export function QuickTaskModal({
   onCreate,
 }: QuickTaskModalProps) {
   const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
   const [projectId, setProjectId] = useState<string>('');
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [phaseOverrides, setPhaseOverrides] = useState<PhaseOverrides>({});
 
   useEffect(() => {
     if (isOpen) {
       setTitle('');
+      setDescription('');
+      setShowAdvanced(false);
+      setPhaseOverrides({});
       const firstProject = projects[0];
       if (firstProject) {
         setProjectId(String(firstProject.id));
@@ -45,20 +74,35 @@ export function QuickTaskModal({
     }
   }, [isOpen, projects]);
 
+  const handlePhaseToggle = (phase: TaskPhase, enabled: boolean) => {
+    setPhaseOverrides((prev) => ({
+      ...prev,
+      [phase]: { ...prev[phase], enabled },
+    }));
+  };
+
+  const handlePhaseModelChange = (phase: TaskPhase, model: string) => {
+    setPhaseOverrides((prev) => ({
+      ...prev,
+      [phase]: { ...prev[phase], model, enabled: prev[phase]?.enabled ?? true },
+    }));
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || !projectId) return;
+    // TODO: Pass phaseOverrides and description to onCreate when backend supports it
     onCreate(projectId, title);
     onClose();
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center">
             <Plus size={20} className="mr-2 text-primary" />
-            Create Quick Task
+            Create Task
           </DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -86,6 +130,73 @@ export function QuickTaskModal({
               placeholder="What needs to be done?"
             />
           </div>
+          <div className="space-y-2">
+            <Label>Description (optional)</Label>
+            <Textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Add more details about the task..."
+              rows={3}
+            />
+          </div>
+
+          <Collapsible open={showAdvanced} onOpenChange={setShowAdvanced}>
+            <CollapsibleTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                className="w-full justify-start text-muted-foreground hover:text-foreground"
+              >
+                {showAdvanced ? (
+                  <ChevronDown size={16} className="mr-2" />
+                ) : (
+                  <ChevronRight size={16} className="mr-2" />
+                )}
+                <Settings2 size={16} className="mr-2" />
+                Advanced Phase Settings
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="pt-2">
+              <div className="bg-surface border border-border rounded-lg p-4 space-y-4">
+                <p className="text-xs text-muted-foreground">
+                  Override the default model for specific phases. These settings will only apply to this task.
+                </p>
+                {AGENT_PHASES.map((phase) => (
+                  <div
+                    key={phase}
+                    className="flex items-center justify-between py-2 border-b border-border last:border-0"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        checked={phaseOverrides[phase]?.enabled ?? true}
+                        onCheckedChange={(checked) => handlePhaseToggle(phase, checked)}
+                      />
+                      <span className="text-sm font-medium">
+                        {PHASE_DISPLAY_NAMES[phase]}
+                      </span>
+                    </div>
+                    <Select
+                      value={phaseOverrides[phase]?.model || ''}
+                      onValueChange={(value) => handlePhaseModelChange(phase, value)}
+                    >
+                      <SelectTrigger className="w-40 h-8">
+                        <SelectValue placeholder="Default" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">Default</SelectItem>
+                        {MODELS.map((m) => (
+                          <SelectItem key={m.value} value={m.value}>
+                            {m.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ))}
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
+
           <DialogFooter className="pt-4">
             <Button type="button" variant="ghost" onClick={onClose}>
               Cancel

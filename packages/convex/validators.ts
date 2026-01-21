@@ -84,3 +84,44 @@ export const notificationTypeValidator = v.union(
   v.literal("warning"),
   v.literal("info")
 );
+
+// Task phase - lifecycle phases for a task
+export const taskPhaseValidator = v.union(
+  v.literal("requirements"),
+  v.literal("planning"),
+  v.literal("implementation"),
+  v.literal("ai_review"),
+  v.literal("remediation"),
+  v.literal("human_review"),
+  v.literal("merge")
+);
+
+// Remediation trigger - which review phase triggered remediation
+export const remediationTriggerValidator = v.union(
+  v.literal("ai_review"),
+  v.literal("human_review")
+);
+
+// Phase status - status of an individual phase execution
+export const phaseStatusValidator = v.union(
+  v.literal("pending"),
+  v.literal("in_progress"),
+  v.literal("completed"),
+  v.literal("failed"),
+  v.literal("skipped")
+);
+
+// Permission mode - Claude Code permission modes
+export const permissionModeValidator = v.union(
+  v.literal("default"),
+  v.literal("plan"),
+  v.literal("accept_edits"),
+  v.literal("full_auto")
+);
+
+// PR detected via - how a PR was detected
+export const prDetectedViaValidator = v.union(
+  v.literal("webhook"),
+  v.literal("agent"),
+  v.literal("manual")
+);

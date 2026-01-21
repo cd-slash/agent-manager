@@ -29,7 +29,7 @@ async function deleteByIndex<TableName extends string>(
 
 /**
  * Deletes all task-related data for a given task ID.
- * This includes: dependencies, acceptance criteria, tests, chat messages, history events.
+ * This includes: dependencies, acceptance criteria, tests, chat messages, history events, phases, phase configs.
  */
 export async function deleteTaskRelatedData(
   db: DatabaseWriter,
@@ -58,6 +58,12 @@ export async function deleteTaskRelatedData(
 
   // Delete history events
   await deleteByIndex(db, "historyEvents", "by_task", "taskId", taskId);
+
+  // Delete task phases
+  await deleteByIndex(db, "taskPhases", "by_task", "taskId", taskId);
+
+  // Delete phase configs (task-specific overrides)
+  await deleteByIndex(db, "phaseConfigs", "by_task_and_phase", "taskId", taskId);
 }
 
 /**

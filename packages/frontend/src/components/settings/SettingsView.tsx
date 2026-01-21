@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Key, Cpu, Network, Sliders, Lock, Bell, RefreshCw, Check, Copy, Container, Eye, EyeOff } from 'lucide-react';
+import { Key, Cpu, Network, Sliders, Lock, Bell, RefreshCw, Check, Copy, Container, Eye, EyeOff, Bot } from 'lucide-react';
+import { PhaseDefaultsSettings } from './PhaseDefaultsSettings';
 import { useToast } from '@/components/ToastProvider';
 import { useQuery, useMutation, useAction } from 'convex/react';
 import { api } from '@agent-manager/convex/api';
@@ -138,6 +139,10 @@ export function SettingsView() {
                 <TabsTrigger value="models" className="flex items-center">
                   <Cpu size={14} className="mr-1.5" />
                   Model Config
+                </TabsTrigger>
+                <TabsTrigger value="phases" className="flex items-center">
+                  <Bot size={14} className="mr-1.5" />
+                  Phase Defaults
                 </TabsTrigger>
                 <TabsTrigger value="network" className="flex items-center">
                   <Network size={14} className="mr-1.5" />
@@ -355,6 +360,12 @@ export function SettingsView() {
                         </div>
                       </div>
                     </section>
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="phases" className="!mt-0">
+                  <div className="space-y-8">
+                    <PhaseDefaultsSettings />
                   </div>
                 </TabsContent>
 

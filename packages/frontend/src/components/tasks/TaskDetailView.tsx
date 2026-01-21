@@ -27,6 +27,8 @@ import {
   ClipboardList,
   Plus,
   X,
+  FileText,
+  Wrench,
 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
@@ -35,7 +37,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { AgentChatPanel } from '@/components/chat/AgentChatPanel';
 import { DependencyPickerModal } from '@/components/modals/DependencyPickerModal';
-import type { Task, Project, ChatMessage } from '@/types';
+import { PhaseTimeline } from './PhaseTimeline';
+import { PlanningTab } from './PlanningTab';
+import { ImplementationTab } from './ImplementationTab';
+import { RemediationTab } from './RemediationTab';
+import type { Task, Project, ChatMessage, TaskPhase, TaskPhaseDoc } from '@/types';
 
 // Helper to format timestamps
 const formatTime = (timestamp: number): string => {
@@ -120,6 +126,14 @@ export function TaskDetailView({
   // Get the Convex task ID
   const taskId = task.id as Id<"tasks">;
 
+  // Fetch task phases from Convex
+  const phases = useQuery(api.taskPhases.listByTask, { taskId }) ?? [];
+
+  // Helper to get phase by name
+  const getPhaseByName = (phaseName: TaskPhase): TaskPhaseDoc | null => {
+    return (phases.find((p) => p.phase === phaseName) as TaskPhaseDoc | undefined) ?? null;
+  };
+
   // Fetch chat messages from Convex
   const chatMessagesData = useQuery(api.chat.listByTask, { taskId }) ?? [];
 
@@ -195,23 +209,53 @@ export function TaskDetailView({
       <div className="flex-1 flex overflow-hidden">
         <div className="flex-1 overflow-y-auto min-w-0">
           <div className="px-page pt-section shrink-0">
+            {phases.length > 0 && (
+              <div className="mb-4 p-3 bg-surface border border-border rounded-lg">
+                <PhaseTimeline
+                  phases={phases as TaskPhaseDoc[]}
+                  currentPhase={task.currentPhase as TaskPhase | undefined}
+                  onPhaseClick={(phase) => {
+                    // Map phase to tab
+                    const phaseToTab: Record<TaskPhase, string> = {
+                      requirements: 'requirements',
+                      planning: 'planning',
+                      implementation: 'implementation',
+                      ai_review: 'ai-review',
+                      remediation: 'remediation',
+                      human_review: 'human-review',
+                      merge: 'merge',
+                    };
+                    setActiveTab(phaseToTab[phase] || 'requirements');
+                  }}
+                />
+              </div>
+            )}
+
             <Tabs value={activeTab} onValueChange={setActiveTab}>
               <TabsList className="w-full justify-start">
                 <TabsTrigger value="requirements" className="flex items-center">
                   <ClipboardList size={14} className="mr-1.5" />
                   Requirements
                 </TabsTrigger>
-                <TabsTrigger value="diff" className="flex items-center">
-                  <GitPullRequest size={14} className="mr-1.5" />
-                  Diff
+                <TabsTrigger value="planning" className="flex items-center">
+                  <FileText size={14} className="mr-1.5" />
+                  Planning
+                </TabsTrigger>
+                <TabsTrigger value="implementation" className="flex items-center">
+                  <Terminal size={14} className="mr-1.5" />
+                  Implementation
                 </TabsTrigger>
                 <TabsTrigger value="pr" className="flex items-center">
-                  <GitMerge size={14} className="mr-1.5" />
+                  <GitPullRequest size={14} className="mr-1.5" />
                   Pull Request
                 </TabsTrigger>
                 <TabsTrigger value="ai-review" className="flex items-center">
                   <Bot size={14} className="mr-1.5" />
                   AI Review
+                </TabsTrigger>
+                <TabsTrigger value="remediation" className="flex items-center">
+                  <Wrench size={14} className="mr-1.5" />
+                  Remediation
                 </TabsTrigger>
                 <TabsTrigger value="human-review" className="flex items-center">
                   <UserCheck size={14} className="mr-1.5" />
@@ -220,6 +264,10 @@ export function TaskDetailView({
                 <TabsTrigger value="merge" className="flex items-center">
                   <GitMerge size={14} className="mr-1.5" />
                   Merge
+                </TabsTrigger>
+                <TabsTrigger value="diff" className="flex items-center">
+                  <GitPullRequest size={14} className="mr-1.5" />
+                  Diff
                 </TabsTrigger>
                 <TabsTrigger value="history" className="flex items-center">
                   <History size={14} className="mr-1.5" />
@@ -412,86 +460,22 @@ export function TaskDetailView({
                   </div>
                 </TabsContent>
 
-                <TabsContent value="diff" className="!mt-0">
-                  <div className="space-y-4">
-                    {mockDiffs.map((file, idx) => (
-                      <div
-                        key={idx}
-                        className="bg-background rounded-lg border border-border overflow-hidden"
-                      >
-                        <button
-                          onClick={() => toggleFile(file.filename)}
-                          className="w-full flex items-center justify-between p-3 bg-surface/50 hover:bg-surface transition-colors border-b border-border"
-                        >
-                          <div className="flex items-center space-x-2 text-sm font-mono text-foreground">
-                            {openFiles[file.filename] ? (
-                              <ChevronDown size={16} />
-                            ) : (
-                              <ChevronRight size={16} />
-                            )}
-                            <span>{file.filename}</span>
-                          </div>
-                          <span className="text-xs text-muted-foreground">
-                            4 changes
-                          </span>
-                        </button>
-                        {openFiles[file.filename] && (
-                          <div className="font-mono text-sm leading-6">
-                            {file.lines.map((line, i) => (
-                              <div
-                                key={i}
-                                className={`flex ${
-                                  line.type === 'add'
-                                    ? 'bg-green-500/10'
-                                    : line.type === 'remove'
-                                      ? 'bg-red-500/10'
-                                      : ''
-                                }`}
-                              >
-                                <div className="w-10 text-muted-foreground text-right pr-3 select-none border-r border-border/50 bg-surface/30">
-                                  {line.line}
-                                </div>
-                                <div className="w-6 text-muted-foreground text-center select-none">
-                                  {line.type === 'add'
-                                    ? '+'
-                                    : line.type === 'remove'
-                                      ? '-'
-                                      : ''}
-                                </div>
-                                <div
-                                  className={`flex-1 pr-4 whitespace-pre ${
-                                    line.type === 'add'
-                                      ? 'text-green-300'
-                                      : line.type === 'remove'
-                                        ? 'text-red-300'
-                                        : 'text-muted-foreground'
-                                  }`}
-                                >
-                                  {line.text}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                    <div className="mt-4 flex justify-end">
-                      {task.prCreated ? (
-                        <Button
-                          variant="outline"
-                          onClick={() => setActiveTab('pr')}
-                        >
-                          <GitPullRequest size={16} className="mr-2" /> View PR
-                          #{task.prNumber}
-                        </Button>
-                      ) : (
-                        <Button onClick={handleCreatePR}>
-                          <GitPullRequest size={16} className="mr-2" /> Create
-                          PR
-                        </Button>
-                      )}
-                    </div>
-                  </div>
+                <TabsContent value="planning" className="!mt-0">
+                  <PlanningTab
+                    taskId={taskId}
+                    planningPhase={getPhaseByName('planning')}
+                    acceptanceCriteria={task.acceptanceCriteria || []}
+                    tests={task.tests || []}
+                    implementationPrompt={task.implementationPrompt}
+                  />
+                </TabsContent>
+
+                <TabsContent value="implementation" className="!mt-0">
+                  <ImplementationTab
+                    taskId={taskId}
+                    implementationPhase={getPhaseByName('implementation')}
+                    activeContainerId={task.activeContainerId}
+                  />
                 </TabsContent>
 
                 <TabsContent value="pr" className="!mt-0">
@@ -719,6 +703,13 @@ export function TaskDetailView({
                       </div>
                     </div>
                   </div>
+                </TabsContent>
+
+                <TabsContent value="remediation" className="!mt-0">
+                  <RemediationTab
+                    taskId={taskId}
+                    remediationPhase={getPhaseByName('remediation')}
+                  />
                 </TabsContent>
 
                 <TabsContent value="human-review" className="!mt-0">
@@ -991,6 +982,88 @@ export function TaskDetailView({
                           </div>
                         </div>
                       </div>
+                    </div>
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="diff" className="!mt-0">
+                  <div className="space-y-4">
+                    {mockDiffs.map((file, idx) => (
+                      <div
+                        key={idx}
+                        className="bg-background rounded-lg border border-border overflow-hidden"
+                      >
+                        <button
+                          onClick={() => toggleFile(file.filename)}
+                          className="w-full flex items-center justify-between p-3 bg-surface/50 hover:bg-surface transition-colors border-b border-border"
+                        >
+                          <div className="flex items-center space-x-2 text-sm font-mono text-foreground">
+                            {openFiles[file.filename] ? (
+                              <ChevronDown size={16} />
+                            ) : (
+                              <ChevronRight size={16} />
+                            )}
+                            <span>{file.filename}</span>
+                          </div>
+                          <span className="text-xs text-muted-foreground">
+                            4 changes
+                          </span>
+                        </button>
+                        {openFiles[file.filename] && (
+                          <div className="font-mono text-sm leading-6">
+                            {file.lines.map((line, i) => (
+                              <div
+                                key={i}
+                                className={`flex ${
+                                  line.type === 'add'
+                                    ? 'bg-green-500/10'
+                                    : line.type === 'remove'
+                                      ? 'bg-red-500/10'
+                                      : ''
+                                }`}
+                              >
+                                <div className="w-10 text-muted-foreground text-right pr-3 select-none border-r border-border/50 bg-surface/30">
+                                  {line.line}
+                                </div>
+                                <div className="w-6 text-muted-foreground text-center select-none">
+                                  {line.type === 'add'
+                                    ? '+'
+                                    : line.type === 'remove'
+                                      ? '-'
+                                      : ''}
+                                </div>
+                                <div
+                                  className={`flex-1 pr-4 whitespace-pre ${
+                                    line.type === 'add'
+                                      ? 'text-green-300'
+                                      : line.type === 'remove'
+                                        ? 'text-red-300'
+                                        : 'text-muted-foreground'
+                                  }`}
+                                >
+                                  {line.text}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                    <div className="mt-4 flex justify-end">
+                      {task.prCreated ? (
+                        <Button
+                          variant="outline"
+                          onClick={() => setActiveTab('pr')}
+                        >
+                          <GitPullRequest size={16} className="mr-2" /> View PR
+                          #{task.prNumber}
+                        </Button>
+                      ) : (
+                        <Button onClick={handleCreatePR}>
+                          <GitPullRequest size={16} className="mr-2" /> Create
+                          PR
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </TabsContent>

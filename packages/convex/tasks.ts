@@ -1,4 +1,5 @@
 import { query, mutation } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { v } from "convex/values";
 import { categoryValidator } from "./validators";
 import { patchWithTimestamp } from "./internal/updateUtils";
@@ -103,6 +104,12 @@ export const get = query({
       .collect();
     const pullRequest = pullRequests[0] ?? null;
 
+    // Get phases
+    const phases = await ctx.db
+      .query("taskPhases")
+      .withIndex("by_task", (q) => q.eq("taskId", args.id))
+      .collect();
+
     return {
       ...task,
       acceptanceCriteria: acceptanceCriteria.sort((a, b) => a.order - b.order),
@@ -112,6 +119,7 @@ export const get = query({
       dependencies: dependencies.filter(Boolean),
       blockedBy: blockedBy.filter(Boolean),
       pullRequest,
+      phases: phases.sort((a, b) => a.order - b.order),
     };
   },
 });
@@ -178,8 +186,15 @@ export const create = mutation({
       tag: args.tag,
       complexity: args.complexity,
       order: maxOrder + 1,
+      currentPhase: "requirements",
+      phaseUpdatedAt: now,
       createdAt: now,
       updatedAt: now,
+    });
+
+    // Initialize all phases for this task
+    await ctx.scheduler.runAfter(0, internal.taskPhases.initializePhases, {
+      taskId,
     });
 
     return taskId;

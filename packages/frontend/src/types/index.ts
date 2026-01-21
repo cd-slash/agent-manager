@@ -7,6 +7,13 @@
 type Id<T extends string> = string & { __tableName: T };
 type Doc<T extends string> = { _id: Id<T>; _creationTime: number } & Record<string, unknown>;
 
+// Task phase types (defined early to avoid forward references)
+export type TaskPhase = "requirements" | "planning" | "implementation" | "ai_review" | "remediation" | "human_review" | "merge";
+export type PhaseStatus = "pending" | "in_progress" | "completed" | "failed" | "skipped";
+export type PermissionMode = "default" | "plan" | "accept_edits" | "full_auto";
+export type PrDetectedVia = "webhook" | "agent" | "manual";
+export type RemediationTrigger = "ai_review" | "human_review";
+
 // Re-export Convex document types for convenience
 export type ProjectDoc = Doc<"projects"> & {
   name: string;
@@ -26,6 +33,12 @@ export type TaskDoc = Doc<"tasks"> & {
   tag: string;
   complexity: string;
   order: number;
+  // Phase tracking
+  currentPhase?: TaskPhase;
+  phaseUpdatedAt?: number;
+  activeContainerId?: string;
+  // Planning outputs
+  implementationPrompt?: string;
   createdAt: number;
   updatedAt: number;
 };
@@ -168,6 +181,66 @@ export type AgentJobDoc = Doc<"agentJobs"> & {
   createdAt: number;
 };
 
+// Task phase document types
+export type TaskPhaseDoc = Doc<"taskPhases"> & {
+  taskId: Id<"tasks">;
+  phase: TaskPhase;
+  status: PhaseStatus;
+  startedAt?: number;
+  completedAt?: number;
+  provider?: string;
+  model?: string;
+  prompt?: string;
+  permissionMode?: string;
+  result?: string;
+  error?: string;
+  agentSessionId?: string;
+  containerId?: string;
+  totalCostUsd?: number;
+  numTurns?: number;
+  order: number;
+  // Remediation tracking (for remediation phase only)
+  currentRemediationCycle?: number;
+  remediationTriggeredBy?: RemediationTrigger;
+};
+
+// Remediation cycle document type
+export type RemediationCycleDoc = Doc<"remediationCycles"> & {
+  taskId: Id<"tasks">;
+  cycleNumber: number;
+  triggeredBy: RemediationTrigger;
+  feedback?: string;
+  status: PhaseStatus;
+  startedAt?: number;
+  completedAt?: number;
+  provider?: string;
+  model?: string;
+  prompt?: string;
+  permissionMode?: string;
+  result?: string;
+  error?: string;
+  agentSessionId?: string;
+  containerId?: string;
+  totalCostUsd?: number;
+  numTurns?: number;
+  createdAt: number;
+};
+
+export type PhaseConfigDoc = Doc<"phaseConfigs"> & {
+  taskId?: Id<"tasks">;
+  phase: TaskPhase;
+  provider: string;
+  model: string;
+  permissionMode: string;
+  promptTemplate: string;
+  systemPrompt?: string;
+  maxBudgetUsd?: number;
+  maxRemediationCycles?: number;
+  enabled: boolean;
+  createdAt: number;
+  updatedAt: number;
+};
+
 // Legacy interfaces for backward compatibility during migration
 // These can be removed once all components are updated to use Convex types
 
@@ -213,6 +286,11 @@ export interface Task {
   prNumber?: number;
   prStatus?: string;
   dependencies: string[];
+  // Phase tracking
+  currentPhase?: TaskPhase;
+  phaseUpdatedAt?: number;
+  activeContainerId?: string;
+  implementationPrompt?: string;
 }
 
 export interface Project {
@@ -256,6 +334,11 @@ export interface TaskWithDetails extends TaskDoc {
   dependencies: TaskDoc[];
   blockedBy: TaskDoc[];
   pullRequest: PullRequestDoc | null;
+  phases: TaskPhaseDoc[];
+}
+
+export interface TaskWithPhases extends TaskDoc {
+  phases: TaskPhaseDoc[];
 }
 
 export interface ProjectWithStats extends ProjectDoc {
@@ -302,3 +385,53 @@ export type ContainerId = Id<"containers">;
 export type ServerMetricId = Id<"serverMetrics">;
 export type WebhookEventId = Id<"webhookEvents">;
 export type AgentJobId = Id<"agentJobs">;
+export type TaskPhaseId = Id<"taskPhases">;
+export type PhaseConfigId = Id<"phaseConfigs">;
+export type RemediationCycleId = Id<"remediationCycles">;
+
+// Phase constants for UI
+export const PHASE_ORDER: TaskPhase[] = [
+  "requirements",
+  "planning",
+  "implementation",
+  "ai_review",
+  "remediation",
+  "human_review",
+  "merge",
+];
+
+export const PHASE_DISPLAY_NAMES: Record<TaskPhase, string> = {
+  requirements: "Requirements",
+  planning: "Planning",
+  implementation: "Implementation",
+  ai_review: "AI Review",
+  remediation: "Remediation",
+  human_review: "Human Review",
+  merge: "Merge",
+};
+
+export const PHASE_DESCRIPTIONS: Record<TaskPhase, string> = {
+  requirements: "Initial task definition by user",
+  planning: "Agent develops acceptance criteria, implementation prompt, tests",
+  implementation: "Agent writes code and creates PR",
+  ai_review: "Agent reviews the PR for quality",
+  remediation: "Agent fixes issues found during review",
+  human_review: "Human tests preview and reviews with agent assistance",
+  merge: "Agent attempts to merge PR into main",
+};
+
+// Phases that use agents (for configuration)
+export const AGENT_PHASES: TaskPhase[] = [
+  "planning",
+  "implementation",
+  "ai_review",
+  "remediation",
+  "human_review",
+  "merge",
+];
+
+// Remediation trigger display names
+export const REMEDIATION_TRIGGER_NAMES: Record<RemediationTrigger, string> = {
+  ai_review: "AI Review",
+  human_review: "Human Review",
+};

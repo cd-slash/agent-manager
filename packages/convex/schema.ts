@@ -1,5 +1,12 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
+import {
+  taskPhaseValidator,
+  phaseStatusValidator,
+  permissionModeValidator,
+  prDetectedViaValidator,
+  remediationTriggerValidator,
+} from "./validators";
 
 export default defineSchema({
   // Settings table - global app settings (credentials, config)
@@ -38,11 +45,18 @@ export default defineSchema({
     tag: v.string(),
     complexity: v.string(),
     order: v.number(), // For ordering within a category
+    // Phase tracking
+    currentPhase: v.optional(taskPhaseValidator),
+    phaseUpdatedAt: v.optional(v.number()),
+    activeContainerId: v.optional(v.string()),
+    // Planning outputs
+    implementationPrompt: v.optional(v.string()),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
     .index("by_project", ["projectId"])
-    .index("by_project_and_category", ["projectId", "category"]),
+    .index("by_project_and_category", ["projectId", "category"])
+    .index("by_current_phase", ["currentPhase"]),
 
   // Task dependencies - many-to-many relationship
   taskDependencies: defineTable({
@@ -117,11 +131,13 @@ export default defineSchema({
       v.literal("closed")
     ),
     url: v.optional(v.string()),
+    detectedVia: v.optional(prDetectedViaValidator),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
     .index("by_task", ["taskId"])
-    .index("by_status", ["status"]),
+    .index("by_status", ["status"])
+    .index("by_branch", ["branch"]),
 
   // PR comments - comments on PRs
   prComments: defineTable({
@@ -389,4 +405,81 @@ export default defineSchema({
   })
     .index("by_container", ["containerId"])
     .index("by_container_and_order", ["containerId", "order"]),
+
+  // Task phases - track individual phase executions for each task
+  taskPhases: defineTable({
+    taskId: v.id("tasks"),
+    phase: taskPhaseValidator,
+    status: phaseStatusValidator,
+    startedAt: v.optional(v.number()),
+    completedAt: v.optional(v.number()),
+    // Agent configuration used
+    provider: v.optional(v.string()),
+    model: v.optional(v.string()),
+    prompt: v.optional(v.string()),
+    permissionMode: v.optional(v.string()),
+    // Results
+    result: v.optional(v.string()),
+    error: v.optional(v.string()),
+    // References
+    agentSessionId: v.optional(v.string()),
+    containerId: v.optional(v.string()),
+    // Cost tracking
+    totalCostUsd: v.optional(v.number()),
+    numTurns: v.optional(v.number()),
+    order: v.number(),
+    // Remediation tracking (for remediation phase only)
+    currentRemediationCycle: v.optional(v.number()),
+    remediationTriggeredBy: v.optional(remediationTriggerValidator),
+  })
+    .index("by_task", ["taskId"])
+    .index("by_task_and_phase", ["taskId", "phase"])
+    .index("by_status", ["status"]),
+
+  // Remediation cycles - track individual remediation cycle executions
+  remediationCycles: defineTable({
+    taskId: v.id("tasks"),
+    cycleNumber: v.number(), // 1-indexed
+    triggeredBy: remediationTriggerValidator, // Which review phase triggered this cycle
+    feedback: v.optional(v.string()), // Human's feedback when they request changes
+    status: phaseStatusValidator,
+    startedAt: v.optional(v.number()),
+    completedAt: v.optional(v.number()),
+    // Agent configuration used
+    provider: v.optional(v.string()),
+    model: v.optional(v.string()),
+    prompt: v.optional(v.string()),
+    permissionMode: v.optional(v.string()),
+    // Results
+    result: v.optional(v.string()),
+    error: v.optional(v.string()),
+    // References
+    agentSessionId: v.optional(v.string()),
+    containerId: v.optional(v.string()),
+    // Cost tracking
+    totalCostUsd: v.optional(v.number()),
+    numTurns: v.optional(v.number()),
+    createdAt: v.number(),
+  })
+    .index("by_task", ["taskId"])
+    .index("by_task_and_cycle", ["taskId", "cycleNumber"])
+    .index("by_status", ["status"]),
+
+  // Phase configs - store default and per-task agent configurations
+  phaseConfigs: defineTable({
+    taskId: v.optional(v.id("tasks")), // null = global default
+    phase: taskPhaseValidator,
+    provider: v.string(),
+    model: v.string(),
+    permissionMode: v.string(),
+    promptTemplate: v.string(),
+    systemPrompt: v.optional(v.string()),
+    maxBudgetUsd: v.optional(v.number()),
+    maxRemediationCycles: v.optional(v.number()), // Limit on remediation cycles (default: 3)
+    enabled: v.boolean(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_phase", ["phase"])
+    .index("by_task_and_phase", ["taskId", "phase"]),
 });
