@@ -4,270 +4,278 @@
  * Syncs gateway events to Convex for persistence and frontend real-time updates.
  */
 
-import { ConvexHttpClient } from "convex/browser";
 import type {
-  ExecStartPayload,
-  ExecStreamPayload,
-  ExecCompletePayload,
-  CreateContainerResult,
-  CreateContainerRequest,
-} from "@agent-manager/agent-shared";
+	CreateContainerRequest,
+	CreateContainerResult,
+	ExecCompletePayload,
+	ExecStartPayload,
+	ExecStreamPayload,
+} from "@agent-manager/agent-shared"
+import { ConvexHttpClient } from "convex/browser"
 
 export class ConvexSync {
-  private client: ConvexHttpClient;
+	private client: ConvexHttpClient
 
-  constructor(convexUrl: string) {
-    this.client = new ConvexHttpClient(convexUrl);
-    console.log(`[convex] Initialized with URL: ${convexUrl}`);
-  }
+	constructor(convexUrl: string) {
+		this.client = new ConvexHttpClient(convexUrl)
+		console.log(`[convex] Initialized with URL: ${convexUrl}`)
+	}
 
-  /**
-   * Update container connection status
-   */
-  async updateContainerConnection(
-    containerId: string,
-    hostname: string,
-    connected: boolean
-  ): Promise<void> {
-    try {
-      // @ts-expect-error - API types will be generated
-      await this.client.mutation("containers:updateAgentStatus", {
-        containerId,
-        hostname,
-        agentStatus: connected ? "online" : "offline",
-        lastSeenAt: Date.now(),
-      });
-    } catch (error) {
-      console.error("[convex] Failed to update container connection:", error);
-    }
-  }
+	/**
+	 * Update container connection status
+	 */
+	async updateContainerConnection(
+		containerId: string,
+		hostname: string,
+		connected: boolean,
+	): Promise<void> {
+		try {
+			// @ts-expect-error - API types will be generated
+			await this.client.mutation("containers:updateAgentStatus", {
+				containerId,
+				hostname,
+				agentStatus: connected ? "online" : "offline",
+				lastSeenAt: Date.now(),
+			})
+		} catch (error) {
+			console.error("[convex] Failed to update container connection:", error)
+		}
+	}
 
-  /**
-   * Record execution start
-   */
-  async recordExecStart(
-    correlationId: string,
-    containerId: string,
-    options: ExecStartPayload,
-    taskId?: string,
-    projectId?: string
-  ): Promise<void> {
-    try {
-      // @ts-expect-error - API types will be generated
-      await this.client.mutation("agentSessions:create", {
-        sessionId: correlationId,
-        containerId,
-        prompt: options.message,
-        taskId,
-        projectId,
-        status: "starting",
-        startedAt: Date.now(),
-      });
-    } catch (error) {
-      console.error("[convex] Failed to record exec start:", error);
-    }
-  }
+	/**
+	 * Record execution start
+	 */
+	async recordExecStart(
+		correlationId: string,
+		containerId: string,
+		options: ExecStartPayload,
+		taskId?: string,
+		projectId?: string,
+	): Promise<void> {
+		try {
+			// @ts-expect-error - API types will be generated
+			await this.client.mutation("agentSessions:create", {
+				sessionId: correlationId,
+				containerId,
+				prompt: options.message,
+				taskId,
+				projectId,
+				status: "starting",
+				startedAt: Date.now(),
+			})
+		} catch (error) {
+			console.error("[convex] Failed to record exec start:", error)
+		}
+	}
 
-  /**
-   * Record streaming event
-   */
-  async recordStreamEvent(
-    correlationId: string,
-    containerId: string,
-    payload: ExecStreamPayload,
-    taskId?: string,
-    projectId?: string
-  ): Promise<void> {
-    try {
-      // Update session status to running on first stream event
-      // @ts-expect-error - API types will be generated
-      await this.client.mutation("agentSessions:updateStatus", {
-        sessionId: correlationId,
-        status: "running",
-      });
+	/**
+	 * Record streaming event
+	 */
+	async recordStreamEvent(
+		correlationId: string,
+		containerId: string,
+		payload: ExecStreamPayload,
+		taskId?: string,
+		projectId?: string,
+	): Promise<void> {
+		try {
+			// Update session status to running on first stream event
+			// @ts-expect-error - API types will be generated
+			await this.client.mutation("agentSessions:updateStatus", {
+				sessionId: correlationId,
+				status: "running",
+			})
 
-      // Record the message
-      // @ts-expect-error - API types will be generated
-      await this.client.mutation("agentMessages:create", {
-        sessionId: correlationId,
-        messageType: payload.streamType === "assistant" ? "assistant" :
-                     payload.streamType === "result" ? "result" : "system",
-        content: JSON.stringify(payload.data),
-        timestamp: Date.now(),
-      });
-    } catch (error) {
-      console.error("[convex] Failed to record stream event:", error);
-    }
-  }
+			// Record the message
+			// @ts-expect-error - API types will be generated
+			await this.client.mutation("agentMessages:create", {
+				sessionId: correlationId,
+				messageType:
+					payload.streamType === "assistant"
+						? "assistant"
+						: payload.streamType === "result"
+							? "result"
+							: "system",
+				content: JSON.stringify(payload.data),
+				timestamp: Date.now(),
+			})
+		} catch (error) {
+			console.error("[convex] Failed to record stream event:", error)
+		}
+	}
 
-  /**
-   * Record execution completion
-   */
-  async recordExecComplete(
-    correlationId: string,
-    containerId: string,
-    payload: ExecCompletePayload,
-    taskId?: string,
-    projectId?: string
-  ): Promise<void> {
-    try {
-      const status = payload.result === "success" ? "completed" :
-                     payload.result === "aborted" ? "cancelled" : "failed";
+	/**
+	 * Record execution completion
+	 */
+	async recordExecComplete(
+		correlationId: string,
+		containerId: string,
+		payload: ExecCompletePayload,
+		taskId?: string,
+		projectId?: string,
+	): Promise<void> {
+		try {
+			const status =
+				payload.result === "success"
+					? "completed"
+					: payload.result === "aborted"
+						? "cancelled"
+						: "failed"
 
-      // @ts-expect-error - API types will be generated
-      await this.client.mutation("agentSessions:updateStatus", {
-        sessionId: correlationId,
-        status,
-        completedAt: Date.now(),
-        totalCostUsd: payload.totalCostUsd,
-        numTurns: payload.numTurns,
-        error: payload.error,
-      });
-    } catch (error) {
-      console.error("[convex] Failed to record exec complete:", error);
-    }
-  }
+			// @ts-expect-error - API types will be generated
+			await this.client.mutation("agentSessions:updateStatus", {
+				sessionId: correlationId,
+				status,
+				completedAt: Date.now(),
+				totalCostUsd: payload.totalCostUsd,
+				numTurns: payload.numTurns,
+				error: payload.error,
+			})
+		} catch (error) {
+			console.error("[convex] Failed to record exec complete:", error)
+		}
+	}
 
-  /**
-   * Record new container created
-   */
-  async recordContainerCreated(
-    result: CreateContainerResult,
-    taskId?: string,
-    projectId?: string
-  ): Promise<void> {
-    try {
-      // Create container record
-      // @ts-expect-error - API types will be generated
-      await this.client.mutation("containers:createFromAgent", {
-        containerId: result.containerId,
-        name: result.name,
-        hostname: result.hostname,
-        repo: result.repo,
-        branch: result.branch,
-        server: result.server,
-        network: result.network,
-        lanIp: result.lanIp,
-        wgPort: result.wgPort,
-        taskId,
-        projectId,
-      });
-    } catch (error) {
-      console.error("[convex] Failed to record container created:", error);
-    }
-  }
+	/**
+	 * Record new container created
+	 */
+	async recordContainerCreated(
+		result: CreateContainerResult,
+		taskId?: string,
+		projectId?: string,
+	): Promise<void> {
+		try {
+			// Create container record
+			// @ts-expect-error - API types will be generated
+			await this.client.mutation("containers:createFromAgent", {
+				containerId: result.containerId,
+				name: result.name,
+				hostname: result.hostname,
+				repo: result.repo,
+				branch: result.branch,
+				server: result.server,
+				network: result.network,
+				lanIp: result.lanIp,
+				wgPort: result.wgPort,
+				taskId,
+				projectId,
+			})
+		} catch (error) {
+			console.error("[convex] Failed to record container created:", error)
+		}
+	}
 
-  /**
-   * Create a new build record with all phases initialized
-   */
-  async createBuild(
-    containerId: string,
-    request: CreateContainerRequest
-  ): Promise<void> {
-    try {
-      // @ts-expect-error - API types will be generated
-      await this.client.mutation("containerBuilds:create", {
-        containerId,
-        repo: request.repo,
-        branch: request.branch || "main",
-        server: request.server || "localhost",
-        taskId: request.taskId,
-        projectId: request.projectId,
-      });
-    } catch (error) {
-      console.error("[convex] Failed to create build:", error);
-    }
-  }
+	/**
+	 * Create a new build record with all phases initialized
+	 */
+	async createBuild(
+		containerId: string,
+		request: CreateContainerRequest,
+	): Promise<void> {
+		try {
+			// @ts-expect-error - API types will be generated
+			await this.client.mutation("containerBuilds:create", {
+				containerId,
+				repo: request.repo,
+				branch: request.branch || "main",
+				server: request.server || "localhost",
+				taskId: request.taskId,
+				projectId: request.projectId,
+			})
+		} catch (error) {
+			console.error("[convex] Failed to create build:", error)
+		}
+	}
 
-  /**
-   * Start a build phase
-   */
-  async startPhase(containerId: string, phase: string): Promise<void> {
-    try {
-      // @ts-expect-error - API types will be generated
-      await this.client.mutation("containerBuilds:startPhase", {
-        containerId,
-        phase,
-      });
-    } catch (error) {
-      console.error(`[convex] Failed to start phase ${phase}:`, error);
-    }
-  }
+	/**
+	 * Start a build phase
+	 */
+	async startPhase(containerId: string, phase: string): Promise<void> {
+		try {
+			// @ts-expect-error - API types will be generated
+			await this.client.mutation("containerBuilds:startPhase", {
+				containerId,
+				phase,
+			})
+		} catch (error) {
+			console.error(`[convex] Failed to start phase ${phase}:`, error)
+		}
+	}
 
-  /**
-   * Complete a build phase
-   */
-  async completePhase(
-    containerId: string,
-    phase: string,
-    logs?: string
-  ): Promise<void> {
-    try {
-      // @ts-expect-error - API types will be generated
-      await this.client.mutation("containerBuilds:completePhase", {
-        containerId,
-        phase,
-        logs,
-      });
-    } catch (error) {
-      console.error(`[convex] Failed to complete phase ${phase}:`, error);
-    }
-  }
+	/**
+	 * Complete a build phase
+	 */
+	async completePhase(
+		containerId: string,
+		phase: string,
+		logs?: string,
+	): Promise<void> {
+		try {
+			// @ts-expect-error - API types will be generated
+			await this.client.mutation("containerBuilds:completePhase", {
+				containerId,
+				phase,
+				logs,
+			})
+		} catch (error) {
+			console.error(`[convex] Failed to complete phase ${phase}:`, error)
+		}
+	}
 
-  /**
-   * Fail a build at the specified phase
-   */
-  async failBuild(
-    containerId: string,
-    phase: string,
-    error: string,
-    logs?: string
-  ): Promise<void> {
-    try {
-      // @ts-expect-error - API types will be generated
-      await this.client.mutation("containerBuilds:failBuild", {
-        containerId,
-        phase,
-        error,
-        logs,
-      });
-    } catch (error) {
-      console.error(`[convex] Failed to record build failure:`, error);
-    }
-  }
+	/**
+	 * Fail a build at the specified phase
+	 */
+	async failBuild(
+		containerId: string,
+		phase: string,
+		error: string,
+		logs?: string,
+	): Promise<void> {
+		try {
+			// @ts-expect-error - API types will be generated
+			await this.client.mutation("containerBuilds:failBuild", {
+				containerId,
+				phase,
+				error,
+				logs,
+			})
+		} catch (error) {
+			console.error(`[convex] Failed to record build failure:`, error)
+		}
+	}
 
-  /**
-   * Append logs to the current phase
-   */
-  async appendLogs(
-    containerId: string,
-    phase: string,
-    logs: string
-  ): Promise<void> {
-    try {
-      // @ts-expect-error - API types will be generated
-      await this.client.mutation("containerBuilds:appendLogs", {
-        containerId,
-        phase,
-        logs,
-      });
-    } catch (error) {
-      console.error(`[convex] Failed to append logs:`, error);
-    }
-  }
+	/**
+	 * Append logs to the current phase
+	 */
+	async appendLogs(
+		containerId: string,
+		phase: string,
+		logs: string,
+	): Promise<void> {
+		try {
+			// @ts-expect-error - API types will be generated
+			await this.client.mutation("containerBuilds:appendLogs", {
+				containerId,
+				phase,
+				logs,
+			})
+		} catch (error) {
+			console.error(`[convex] Failed to append logs:`, error)
+		}
+	}
 
-  /**
-   * Skip a build phase
-   */
-  async skipPhase(containerId: string, phase: string): Promise<void> {
-    try {
-      // @ts-expect-error - API types will be generated
-      await this.client.mutation("containerBuilds:skipPhase", {
-        containerId,
-        phase,
-      });
-    } catch (error) {
-      console.error(`[convex] Failed to skip phase ${phase}:`, error);
-    }
-  }
+	/**
+	 * Skip a build phase
+	 */
+	async skipPhase(containerId: string, phase: string): Promise<void> {
+		try {
+			// @ts-expect-error - API types will be generated
+			await this.client.mutation("containerBuilds:skipPhase", {
+				containerId,
+				phase,
+			})
+		} catch (error) {
+			console.error(`[convex] Failed to skip phase ${phase}:`, error)
+		}
+	}
 }

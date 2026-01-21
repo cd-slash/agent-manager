@@ -5,36 +5,37 @@
  * It is included in `src/index.html`.
  */
 
-import { StrictMode } from "react";
-import { createRoot } from "react-dom/client";
-import { ConvexProvider, ConvexReactClient } from "convex/react";
-import App from "./App";
-import { ToastProvider } from "./components/ToastProvider";
-import "./index.css";
+import { ConvexProvider, ConvexReactClient } from "convex/react"
+import { StrictMode } from "react"
+import { createRoot } from "react-dom/client"
+import App from "./App"
+import { ToastProvider } from "./components/ToastProvider"
+import "./index.css"
 
 // Initialize Convex client
 // Bun doesn't expose env vars to client bundle, so we use the URL directly
 // In production, this would be configured via build-time replacement
-const convexUrl = (typeof import.meta.env !== 'undefined' && import.meta.env.VITE_CONVEX_URL)
-  || "https://brazen-skunk-217.convex.cloud";
-const convex = new ConvexReactClient(convexUrl);
+const convexUrl =
+	(typeof import.meta.env !== "undefined" && import.meta.env.VITE_CONVEX_URL) ||
+	"https://brazen-skunk-217.convex.cloud"
+const convex = new ConvexReactClient(convexUrl)
 
-const elem = document.getElementById("root")!;
+const elem = document.getElementById("root")!
 const app = (
-  <StrictMode>
-    <ConvexProvider client={convex}>
-      <ToastProvider>
-        <App />
-      </ToastProvider>
-    </ConvexProvider>
-  </StrictMode>
-);
+	<StrictMode>
+		<ConvexProvider client={convex}>
+			<ToastProvider>
+				<App />
+			</ToastProvider>
+		</ConvexProvider>
+	</StrictMode>
+)
 
 if (import.meta.hot) {
-  // With hot module reloading, `import.meta.hot.data` is persisted.
-  const root = (import.meta.hot.data.root ??= createRoot(elem));
-  root.render(app);
+	// With hot module reloading, `import.meta.hot.data` is persisted.
+	const root = (import.meta.hot.data.root ??= createRoot(elem))
+	root.render(app)
 } else {
-  // The hot module reloading API is not available in production.
-  createRoot(elem).render(app);
+	// The hot module reloading API is not available in production.
+	createRoot(elem).render(app)
 }

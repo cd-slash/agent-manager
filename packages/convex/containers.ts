@@ -1,344 +1,350 @@
-import { query, mutation } from "./_generated/server";
-import { v } from "convex/values";
-import { containerStatusValidator } from "./validators";
-import { patchWithTimestamp } from "./internal/updateUtils";
+import { v } from "convex/values"
+import { mutation, query } from "./_generated/server"
+import { patchWithTimestamp } from "./internal/updateUtils"
+import { containerStatusValidator } from "./validators"
 
 // List all containers
 export const list = query({
-  args: {},
-  handler: async (ctx) => {
-    const containers = await ctx.db.query("containers").collect();
-    // Enrich with server info
-    const enriched = await Promise.all(
-      containers.map(async (container) => {
-        const server = container.serverId ? await ctx.db.get(container.serverId) : null;
-        return { ...container, serverName: server?.name ?? null };
-      })
-    );
-    return enriched;
-  },
-});
+	args: {},
+	handler: async (ctx) => {
+		const containers = await ctx.db.query("containers").collect()
+		// Enrich with server info
+		const enriched = await Promise.all(
+			containers.map(async (container) => {
+				const server = container.serverId
+					? await ctx.db.get(container.serverId)
+					: null
+				return { ...container, serverName: server?.name ?? null }
+			}),
+		)
+		return enriched
+	},
+})
 
 // List containers by server
 export const listByServer = query({
-  args: { serverId: v.id("servers") },
-  handler: async (ctx, args) => {
-    return await ctx.db
-      .query("containers")
-      .withIndex("by_server", (q) => q.eq("serverId", args.serverId))
-      .collect();
-  },
-});
+	args: { serverId: v.id("servers") },
+	handler: async (ctx, args) => {
+		return await ctx.db
+			.query("containers")
+			.withIndex("by_server", (q) => q.eq("serverId", args.serverId))
+			.collect()
+	},
+})
 
 // List containers by status
 export const listByStatus = query({
-  args: { status: containerStatusValidator },
-  handler: async (ctx, args) => {
-    return await ctx.db
-      .query("containers")
-      .withIndex("by_status", (q) => q.eq("status", args.status))
-      .collect();
-  },
-});
+	args: { status: containerStatusValidator },
+	handler: async (ctx, args) => {
+		return await ctx.db
+			.query("containers")
+			.withIndex("by_status", (q) => q.eq("status", args.status))
+			.collect()
+	},
+})
 
 // Get container by ID
 export const get = query({
-  args: { id: v.id("containers") },
-  handler: async (ctx, args) => {
-    const container = await ctx.db.get(args.id);
-    if (!container) return null;
+	args: { id: v.id("containers") },
+	handler: async (ctx, args) => {
+		const container = await ctx.db.get(args.id)
+		if (!container) return null
 
-    const server = container.serverId ? await ctx.db.get(container.serverId) : null;
-    return { ...container, serverName: server?.name ?? null };
-  },
-});
+		const server = container.serverId
+			? await ctx.db.get(container.serverId)
+			: null
+		return { ...container, serverName: server?.name ?? null }
+	},
+})
 
 // Get container stats
 export const getStats = query({
-  args: {},
-  handler: async (ctx) => {
-    const containers = await ctx.db.query("containers").collect();
+	args: {},
+	handler: async (ctx) => {
+		const containers = await ctx.db.query("containers").collect()
 
-    const running = containers.filter((c) => c.status === "running").length;
-    const stopped = containers.filter((c) => c.status === "stopped").length;
-    const restarting = containers.filter((c) => c.status === "restarting").length;
-    const paused = containers.filter((c) => c.status === "paused").length;
-    const exited = containers.filter((c) => c.status === "exited").length;
+		const running = containers.filter((c) => c.status === "running").length
+		const stopped = containers.filter((c) => c.status === "stopped").length
+		const restarting = containers.filter(
+			(c) => c.status === "restarting",
+		).length
+		const paused = containers.filter((c) => c.status === "paused").length
+		const exited = containers.filter((c) => c.status === "exited").length
 
-    return {
-      total: containers.length,
-      running,
-      stopped,
-      restarting,
-      paused,
-      exited,
-    };
-  },
-});
+		return {
+			total: containers.length,
+			running,
+			stopped,
+			restarting,
+			paused,
+			exited,
+		}
+	},
+})
 
 // Create a new container
 export const create = mutation({
-  args: {
-    serverId: v.id("servers"),
-    containerId: v.string(),
-    name: v.string(),
-    image: v.string(),
-    port: v.string(),
-    status: v.optional(containerStatusValidator),
-  },
-  handler: async (ctx, args) => {
-    // Verify server exists
-    const server = await ctx.db.get(args.serverId);
-    if (!server) throw new Error("Server not found");
+	args: {
+		serverId: v.id("servers"),
+		containerId: v.string(),
+		name: v.string(),
+		image: v.string(),
+		port: v.string(),
+		status: v.optional(containerStatusValidator),
+	},
+	handler: async (ctx, args) => {
+		// Verify server exists
+		const server = await ctx.db.get(args.serverId)
+		if (!server) throw new Error("Server not found")
 
-    const now = Date.now();
-    const id = await ctx.db.insert("containers", {
-      serverId: args.serverId,
-      containerId: args.containerId,
-      name: args.name,
-      image: args.image,
-      port: args.port,
-      status: args.status ?? "stopped",
-      createdAt: now,
-      updatedAt: now,
-    });
+		const now = Date.now()
+		const id = await ctx.db.insert("containers", {
+			serverId: args.serverId,
+			containerId: args.containerId,
+			name: args.name,
+			image: args.image,
+			port: args.port,
+			status: args.status ?? "stopped",
+			createdAt: now,
+			updatedAt: now,
+		})
 
-    return id;
-  },
-});
+		return id
+	},
+})
 
 // Update container details
 export const update = mutation({
-  args: {
-    id: v.id("containers"),
-    name: v.optional(v.string()),
-    image: v.optional(v.string()),
-    port: v.optional(v.string()),
-  },
-  handler: async (ctx, args) => {
-    const { id, ...updates } = args;
-    const existing = await ctx.db.get(id);
-    if (!existing) throw new Error("Container not found");
+	args: {
+		id: v.id("containers"),
+		name: v.optional(v.string()),
+		image: v.optional(v.string()),
+		port: v.optional(v.string()),
+	},
+	handler: async (ctx, args) => {
+		const { id, ...updates } = args
+		const existing = await ctx.db.get(id)
+		if (!existing) throw new Error("Container not found")
 
-    await patchWithTimestamp(ctx.db, id, updates);
-  },
-});
+		await patchWithTimestamp(ctx.db, id, updates)
+	},
+})
 
 // Update container status
 export const updateStatus = mutation({
-  args: {
-    id: v.id("containers"),
-    status: containerStatusValidator,
-  },
-  handler: async (ctx, args) => {
-    const existing = await ctx.db.get(args.id);
-    if (!existing) throw new Error("Container not found");
+	args: {
+		id: v.id("containers"),
+		status: containerStatusValidator,
+	},
+	handler: async (ctx, args) => {
+		const existing = await ctx.db.get(args.id)
+		if (!existing) throw new Error("Container not found")
 
-    await ctx.db.patch(args.id, {
-      status: args.status,
-      updatedAt: Date.now(),
-    });
-  },
-});
+		await ctx.db.patch(args.id, {
+			status: args.status,
+			updatedAt: Date.now(),
+		})
+	},
+})
 
 // Start a container
 export const start = mutation({
-  args: { id: v.id("containers") },
-  handler: async (ctx, args) => {
-    const existing = await ctx.db.get(args.id);
-    if (!existing) throw new Error("Container not found");
+	args: { id: v.id("containers") },
+	handler: async (ctx, args) => {
+		const existing = await ctx.db.get(args.id)
+		if (!existing) throw new Error("Container not found")
 
-    await ctx.db.patch(args.id, {
-      status: "running",
-      updatedAt: Date.now(),
-    });
-  },
-});
+		await ctx.db.patch(args.id, {
+			status: "running",
+			updatedAt: Date.now(),
+		})
+	},
+})
 
 // Stop a container
 export const stop = mutation({
-  args: { id: v.id("containers") },
-  handler: async (ctx, args) => {
-    const existing = await ctx.db.get(args.id);
-    if (!existing) throw new Error("Container not found");
+	args: { id: v.id("containers") },
+	handler: async (ctx, args) => {
+		const existing = await ctx.db.get(args.id)
+		if (!existing) throw new Error("Container not found")
 
-    await ctx.db.patch(args.id, {
-      status: "stopped",
-      updatedAt: Date.now(),
-    });
-  },
-});
+		await ctx.db.patch(args.id, {
+			status: "stopped",
+			updatedAt: Date.now(),
+		})
+	},
+})
 
 // Restart a container
 export const restart = mutation({
-  args: { id: v.id("containers") },
-  handler: async (ctx, args) => {
-    const existing = await ctx.db.get(args.id);
-    if (!existing) throw new Error("Container not found");
+	args: { id: v.id("containers") },
+	handler: async (ctx, args) => {
+		const existing = await ctx.db.get(args.id)
+		if (!existing) throw new Error("Container not found")
 
-    // First set to restarting
-    await ctx.db.patch(args.id, {
-      status: "restarting",
-      updatedAt: Date.now(),
-    });
+		// First set to restarting
+		await ctx.db.patch(args.id, {
+			status: "restarting",
+			updatedAt: Date.now(),
+		})
 
-    // In real implementation, this would trigger actual restart
-    // and the status would be updated via webhook/callback
-  },
-});
+		// In real implementation, this would trigger actual restart
+		// and the status would be updated via webhook/callback
+	},
+})
 
 // Pause a container
 export const pause = mutation({
-  args: { id: v.id("containers") },
-  handler: async (ctx, args) => {
-    const existing = await ctx.db.get(args.id);
-    if (!existing) throw new Error("Container not found");
+	args: { id: v.id("containers") },
+	handler: async (ctx, args) => {
+		const existing = await ctx.db.get(args.id)
+		if (!existing) throw new Error("Container not found")
 
-    await ctx.db.patch(args.id, {
-      status: "paused",
-      updatedAt: Date.now(),
-    });
-  },
-});
+		await ctx.db.patch(args.id, {
+			status: "paused",
+			updatedAt: Date.now(),
+		})
+	},
+})
 
 // Unpause a container
 export const unpause = mutation({
-  args: { id: v.id("containers") },
-  handler: async (ctx, args) => {
-    const existing = await ctx.db.get(args.id);
-    if (!existing) throw new Error("Container not found");
+	args: { id: v.id("containers") },
+	handler: async (ctx, args) => {
+		const existing = await ctx.db.get(args.id)
+		if (!existing) throw new Error("Container not found")
 
-    await ctx.db.patch(args.id, {
-      status: "running",
-      updatedAt: Date.now(),
-    });
-  },
-});
+		await ctx.db.patch(args.id, {
+			status: "running",
+			updatedAt: Date.now(),
+		})
+	},
+})
 
 // Delete a container
 export const deleteContainer = mutation({
-  args: { id: v.id("containers") },
-  handler: async (ctx, args) => {
-    const existing = await ctx.db.get(args.id);
-    if (!existing) throw new Error("Container not found");
+	args: { id: v.id("containers") },
+	handler: async (ctx, args) => {
+		const existing = await ctx.db.get(args.id)
+		if (!existing) throw new Error("Container not found")
 
-    await ctx.db.delete(args.id);
-  },
-});
+		await ctx.db.delete(args.id)
+	},
+})
 
 // Move container to different server
 export const moveToServer = mutation({
-  args: {
-    id: v.id("containers"),
-    newServerId: v.id("servers"),
-  },
-  handler: async (ctx, args) => {
-    const container = await ctx.db.get(args.id);
-    if (!container) throw new Error("Container not found");
+	args: {
+		id: v.id("containers"),
+		newServerId: v.id("servers"),
+	},
+	handler: async (ctx, args) => {
+		const container = await ctx.db.get(args.id)
+		if (!container) throw new Error("Container not found")
 
-    const server = await ctx.db.get(args.newServerId);
-    if (!server) throw new Error("Target server not found");
+		const server = await ctx.db.get(args.newServerId)
+		if (!server) throw new Error("Target server not found")
 
-    await ctx.db.patch(args.id, {
-      serverId: args.newServerId,
-      updatedAt: Date.now(),
-    });
-  },
-});
+		await ctx.db.patch(args.id, {
+			serverId: args.newServerId,
+			updatedAt: Date.now(),
+		})
+	},
+})
 
 // Update agent status (called by agent-gateway)
 export const updateAgentStatus = mutation({
-  args: {
-    containerId: v.string(),
-    hostname: v.string(),
-    agentStatus: v.union(v.literal("online"), v.literal("offline")),
-    lastSeenAt: v.number(),
-  },
-  handler: async (ctx, args) => {
-    // Find container by containerId (Docker ID or tailscale ID)
-    const container = await ctx.db
-      .query("containers")
-      .filter((q) => q.eq(q.field("containerId"), args.containerId))
-      .first();
+	args: {
+		containerId: v.string(),
+		hostname: v.string(),
+		agentStatus: v.union(v.literal("online"), v.literal("offline")),
+		lastSeenAt: v.number(),
+	},
+	handler: async (ctx, args) => {
+		// Find container by containerId (Docker ID or tailscale ID)
+		const container = await ctx.db
+			.query("containers")
+			.filter((q) => q.eq(q.field("containerId"), args.containerId))
+			.first()
 
-    if (!container) {
-      // Container not found - could be a new container, log and return
-      console.log(`Container not found: ${args.containerId}`);
-      return null;
-    }
+		if (!container) {
+			// Container not found - could be a new container, log and return
+			console.log(`Container not found: ${args.containerId}`)
+			return null
+		}
 
-    // Update the container status based on agent connection
-    const status = args.agentStatus === "online" ? "running" : container.status;
+		// Update the container status based on agent connection
+		const status = args.agentStatus === "online" ? "running" : container.status
 
-    await ctx.db.patch(container._id, {
-      status,
-      updatedAt: args.lastSeenAt,
-    });
+		await ctx.db.patch(container._id, {
+			status,
+			updatedAt: args.lastSeenAt,
+		})
 
-    return container._id;
-  },
-});
+		return container._id
+	},
+})
 
 // Get container by containerId (Docker/Tailscale ID)
 export const getByContainerId = query({
-  args: { containerId: v.string() },
-  handler: async (ctx, args) => {
-    return await ctx.db
-      .query("containers")
-      .filter((q) => q.eq(q.field("containerId"), args.containerId))
-      .first();
-  },
-});
+	args: { containerId: v.string() },
+	handler: async (ctx, args) => {
+		return await ctx.db
+			.query("containers")
+			.filter((q) => q.eq(q.field("containerId"), args.containerId))
+			.first()
+	},
+})
 
 // Create container from agent-gateway (called when a new container is created via create-agent)
 export const createFromAgent = mutation({
-  args: {
-    containerId: v.string(),
-    name: v.string(),
-    hostname: v.string(),
-    repo: v.string(),
-    branch: v.string(),
-    server: v.string(),
-    network: v.union(v.literal("macvlan"), v.literal("bridge")),
-    lanIp: v.optional(v.string()),
-    wgPort: v.optional(v.number()),
-    taskId: v.optional(v.id("tasks")),
-    projectId: v.optional(v.id("projects")),
-  },
-  handler: async (ctx, args) => {
-    const now = Date.now();
+	args: {
+		containerId: v.string(),
+		name: v.string(),
+		hostname: v.string(),
+		repo: v.string(),
+		branch: v.string(),
+		server: v.string(),
+		network: v.union(v.literal("macvlan"), v.literal("bridge")),
+		lanIp: v.optional(v.string()),
+		wgPort: v.optional(v.number()),
+		taskId: v.optional(v.id("tasks")),
+		projectId: v.optional(v.id("projects")),
+	},
+	handler: async (ctx, args) => {
+		const now = Date.now()
 
-    // Check if container already exists
-    const existing = await ctx.db
-      .query("containers")
-      .filter((q) => q.eq(q.field("containerId"), args.containerId))
-      .first();
+		// Check if container already exists
+		const existing = await ctx.db
+			.query("containers")
+			.filter((q) => q.eq(q.field("containerId"), args.containerId))
+			.first()
 
-    if (existing) {
-      // Update existing container
-      await ctx.db.patch(existing._id, {
-        name: args.name,
-        serverHostname: args.server,
-        tailscaleHostname: args.hostname,
-        status: "running",
-        updatedAt: now,
-      });
-      return existing._id;
-    }
+		if (existing) {
+			// Update existing container
+			await ctx.db.patch(existing._id, {
+				name: args.name,
+				serverHostname: args.server,
+				tailscaleHostname: args.hostname,
+				status: "running",
+				updatedAt: now,
+			})
+			return existing._id
+		}
 
-    // Create new container
-    const id = await ctx.db.insert("containers", {
-      containerId: args.containerId,
-      name: args.name,
-      image: `agent:${args.repo}@${args.branch}`,
-      status: "running",
-      port: args.network === "macvlan" ? "80" : String(args.wgPort || 4096),
-      serverHostname: args.server,
-      tailscaleHostname: args.hostname,
-      createdAt: now,
-      updatedAt: now,
-    });
+		// Create new container
+		const id = await ctx.db.insert("containers", {
+			containerId: args.containerId,
+			name: args.name,
+			image: `agent:${args.repo}@${args.branch}`,
+			status: "running",
+			port: args.network === "macvlan" ? "80" : String(args.wgPort || 4096),
+			serverHostname: args.server,
+			tailscaleHostname: args.hostname,
+			createdAt: now,
+			updatedAt: now,
+		})
 
-    return id;
-  },
-});
+		return id
+	},
+})

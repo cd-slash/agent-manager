@@ -9,32 +9,32 @@
 // =============================================================================
 
 export interface MessageOptions {
-  /** The message/prompt to send */
-  message: string;
-  /** Model to use: haiku, sonnet, or opus */
-  model?: string;
-  /** Session ID to resume a previous conversation */
-  sessionId?: string;
-  /** Continue the most recent session */
-  continue?: boolean;
-  /** Override the system prompt */
-  systemPrompt?: string;
-  /** Append to the system prompt */
-  appendSystemPrompt?: string;
-  /** List of allowed tools */
-  allowedTools?: string[];
-  /** List of disallowed tools */
-  disallowedTools?: string[];
-  /** Maximum budget in USD */
-  maxBudget?: number;
-  /** Permission mode: default, acceptEdits, bypassPermissions, plan */
-  permissionMode?: string;
-  /** Working directory for Claude CLI */
-  workingDirectory?: string;
-  /** Additional directories to allow tool access */
-  addDir?: string[];
-  /** Whether to stream the response */
-  stream?: boolean;
+	/** The message/prompt to send */
+	message: string
+	/** Model to use: haiku, sonnet, or opus */
+	model?: string
+	/** Session ID to resume a previous conversation */
+	sessionId?: string
+	/** Continue the most recent session */
+	continue?: boolean
+	/** Override the system prompt */
+	systemPrompt?: string
+	/** Append to the system prompt */
+	appendSystemPrompt?: string
+	/** List of allowed tools */
+	allowedTools?: string[]
+	/** List of disallowed tools */
+	disallowedTools?: string[]
+	/** Maximum budget in USD */
+	maxBudget?: number
+	/** Permission mode: default, acceptEdits, bypassPermissions, plan */
+	permissionMode?: string
+	/** Working directory for Claude CLI */
+	workingDirectory?: string
+	/** Additional directories to allow tool access */
+	addDir?: string[]
+	/** Whether to stream the response */
+	stream?: boolean
 }
 
 // =============================================================================
@@ -42,31 +42,31 @@ export interface MessageOptions {
 // =============================================================================
 
 export interface AuthStatus {
-  provider: string;
-  authenticated: boolean;
-  method?: string;
+	provider: string
+	authenticated: boolean
+	method?: string
 }
 
 export interface OAuthFlowState {
-  flowId: string;
-  url: string;
-  expiresAt: number;
-  port: number;
-  server: unknown;
-  process?: unknown; // ChildProcess handle for the auth login command
-  terminal?: unknown; // Bun.Terminal handle for PTY interaction
-  codeVerifier?: string; // PKCE code verifier for OAuth flow
+	flowId: string
+	url: string
+	expiresAt: number
+	port: number
+	server: unknown
+	process?: unknown // ChildProcess handle for the auth login command
+	terminal?: unknown // Bun.Terminal handle for PTY interaction
+	codeVerifier?: string // PKCE code verifier for OAuth flow
 }
 
 export interface OAuthStartResult {
-  flowId: string;
-  url: string;
-  expiresIn: number;
+	flowId: string
+	url: string
+	expiresIn: number
 }
 
 export interface OAuthCompleteResult {
-  success: boolean;
-  token: string;
+	success: boolean
+	token: string
 }
 
 // =============================================================================
@@ -74,17 +74,17 @@ export interface OAuthCompleteResult {
 // =============================================================================
 
 export interface Session {
-  id: string;
-  project: string;
-  createdAt: Date;
-  lastAccessedAt: Date;
+	id: string
+	project: string
+	createdAt: Date
+	lastAccessedAt: Date
 }
 
 export interface SessionMessage {
-  role: string;
-  content: unknown;
-  timestamp: string;
-  uuid: string;
+	role: string
+	content: unknown
+	timestamp: string
+	uuid: string
 }
 
 // =============================================================================
@@ -92,15 +92,15 @@ export interface SessionMessage {
 // =============================================================================
 
 export interface ProcessInfo {
-  processId: number;
-  sessionId?: string;
-  startedAt: number;
-  status: "running" | "completed" | "aborted" | "error";
+	processId: number
+	sessionId?: string
+	startedAt: number
+	status: "running" | "completed" | "aborted" | "error"
 }
 
 export interface ActiveProcesses {
-  count: number;
-  processIds: number[];
+	count: number
+	processIds: number[]
 }
 
 // =============================================================================
@@ -108,48 +108,48 @@ export interface ActiveProcesses {
 // =============================================================================
 
 export interface ClaudeStreamData {
-  type: string;
-  subtype?: string;
-  session_id?: string;
-  message?: {
-    role?: string;
-    content?: Array<{
-      type: string;
-      text?: string;
-      tool_use_id?: string;
-      name?: string;
-      input?: unknown;
-    }>;
-  };
-  result?: string;
-  is_error?: boolean;
-  total_cost_usd?: number;
-  duration_ms?: number;
-  num_turns?: number;
-  usage?: unknown;
-  modelUsage?: Record<string, ModelUsage>;
+	type: string
+	subtype?: string
+	session_id?: string
+	message?: {
+		role?: string
+		content?: Array<{
+			type: string
+			text?: string
+			tool_use_id?: string
+			name?: string
+			input?: unknown
+		}>
+	}
+	result?: string
+	is_error?: boolean
+	total_cost_usd?: number
+	duration_ms?: number
+	num_turns?: number
+	usage?: unknown
+	modelUsage?: Record<string, ModelUsage>
 }
 
 export interface ModelUsage {
-  costUSD: number;
-  inputTokens: number;
-  outputTokens: number;
-  cacheReadInputTokens?: number;
-  cacheWriteInputTokens?: number;
+	costUSD: number
+	inputTokens: number
+	outputTokens: number
+	cacheReadInputTokens?: number
+	cacheWriteInputTokens?: number
 }
 
 export interface MessageResult {
-  success: boolean;
-  processId: number;
-  result?: string;
-  session_id?: string;
-  total_cost_usd?: number;
-  duration_ms?: number;
-  num_turns?: number;
-  usage?: unknown;
-  modelUsage?: Record<string, ModelUsage>;
-  error?: string;
-  exitCode?: number;
+	success: boolean
+	processId: number
+	result?: string
+	session_id?: string
+	total_cost_usd?: number
+	duration_ms?: number
+	num_turns?: number
+	usage?: unknown
+	modelUsage?: Record<string, ModelUsage>
+	error?: string
+	exitCode?: number
 }
 
 // =============================================================================
@@ -157,10 +157,10 @@ export interface MessageResult {
 // =============================================================================
 
 export interface HealthStatus {
-  status: string;
-  activeProcesses: number;
-  version?: string;
-  uptime?: number;
+	status: string
+	activeProcesses: number
+	version?: string
+	uptime?: number
 }
 
 // =============================================================================
@@ -168,9 +168,9 @@ export interface HealthStatus {
 // =============================================================================
 
 export interface ModelInfo {
-  id: string;
-  name: string;
-  provider: string;
+	id: string
+	name: string
+	provider: string
 }
 
 // =============================================================================
@@ -178,43 +178,43 @@ export interface ModelInfo {
 // =============================================================================
 
 export type ContainerEventType =
-  | "auth:changed"
-  | "process:started"
-  | "process:output"
-  | "process:completed"
-  | "process:error"
-  | "session:created"
-  | "session:updated"
-  | "health:changed";
+	| "auth:changed"
+	| "process:started"
+	| "process:output"
+	| "process:completed"
+	| "process:error"
+	| "session:created"
+	| "session:updated"
+	| "health:changed"
 
 export interface ContainerEvent<T = unknown> {
-  type: ContainerEventType;
-  timestamp: number;
-  data: T;
+	type: ContainerEventType
+	timestamp: number
+	data: T
 }
 
 export interface AuthChangedEvent {
-  authenticated: boolean;
-  method?: string;
+	authenticated: boolean
+	method?: string
 }
 
 export interface ProcessStartedEvent {
-  processId: number;
-  sessionId?: string;
+	processId: number
+	sessionId?: string
 }
 
 export interface ProcessOutputEvent {
-  processId: number;
-  data: ClaudeStreamData;
+	processId: number
+	data: ClaudeStreamData
 }
 
 export interface ProcessCompletedEvent {
-  processId: number;
-  result: MessageResult;
+	processId: number
+	result: MessageResult
 }
 
 export interface ProcessErrorEvent {
-  processId: number;
-  error: string;
-  exitCode?: number;
+	processId: number
+	error: string
+	exitCode?: number
 }

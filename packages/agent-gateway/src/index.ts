@@ -6,224 +6,652 @@
  * Syncs execution events to Convex for persistence and real-time updates.
  */
 
-import type { ServerWebSocket } from "bun";
 import type {
-  WebSocketMessage,
-  ConnectPayload,
-  HeartbeatPayload,
-  ExecStartPayload,
-  ExecStreamPayload,
-  ExecCompletePayload,
-  StatusHealthPayload,
-  AuthStatusPayload,
-  CreateContainerRequest,
-  CreateContainerResult,
-} from "@agent-manager/agent-shared";
-import { parseMessage, isConnectMessage } from "@agent-manager/agent-shared";
-import { ConnectionManager, type ContainerContext } from "./connections";
-import { ConvexSync } from "./convex-sync";
+	AuthStatusPayload,
+	ConnectPayload,
+	CreateContainerRequest,
+	CreateContainerResult,
+	ExecCompletePayload,
+	ExecStartPayload,
+	ExecStreamPayload,
+	HeartbeatPayload,
+	StatusHealthPayload,
+	WebSocketMessage,
+} from "@agent-manager/agent-shared"
+import { isConnectMessage, parseMessage } from "@agent-manager/agent-shared"
+import type { ServerWebSocket } from "bun"
+import { ConnectionManager, type ContainerContext } from "./connections"
+import { ConvexSync } from "./convex-sync"
 
 // 3-letter words for random name generation
 const WORDS = [
-  "ace", "act", "add", "age", "ago", "aid", "aim", "air", "all", "ant", "ape", "apt", "arc", "are", "ark", "arm", "art", "ash",
-  "ask", "ate", "awe", "axe", "bad", "bag", "ban", "bar", "bat", "bay", "bed", "bee", "beg", "bet", "bid", "big", "bin", "bit",
-  "bog", "bow", "box", "boy", "bud", "bug", "bun", "bus", "but", "buy", "cab", "can", "cap", "car", "cat", "cob", "cod", "cog",
-  "cop", "cot", "cow", "cry", "cub", "cud", "cup", "cur", "cut", "dab", "dad", "dam", "day", "den", "dew", "did", "die", "dig",
-  "dim", "dip", "doe", "dog", "dot", "dry", "dub", "dud", "due", "dug", "dye", "ear", "eat", "eel", "egg", "ego", "elf", "elk",
-  "elm", "emu", "end", "era", "eve", "ewe", "eye", "fab", "fad", "fan", "far", "fat", "fax", "fed", "fee", "few", "fig", "fin",
-  "fir", "fit", "fix", "fly", "foe", "fog", "for", "fox", "fry", "fun", "fur", "gag", "gap", "gas", "gel", "gem", "get", "gig",
-  "gin", "god", "got", "gum", "gun", "gut", "guy", "gym", "had", "ham", "has", "hat", "hay", "hem", "hen", "her", "hid", "him",
-  "hip", "his", "hit", "hob", "hog", "hop", "hot", "how", "hub", "hue", "hug", "hum", "hut", "ice", "icy", "ill", "imp", "ink",
-  "inn", "ion", "ire", "irk", "ivy", "jab", "jag", "jam", "jar", "jaw", "jay", "jet", "jig", "job", "jog", "jot", "joy", "jug",
-  "jut", "keg", "ken", "key", "kid", "kin", "kit", "lab", "lac", "lad", "lag", "lap", "law", "lax", "lay", "lea", "led", "leg",
-  "let", "lid", "lie", "lip", "lit", "log", "lop", "lot", "low", "lug", "mad", "man", "map", "mar", "mat", "maw", "max", "may",
-  "men", "met", "mid", "mix", "mob", "mod", "mom", "mop", "mow", "mud", "mug", "mum", "nab", "nag", "nap", "nay", "net", "new",
-  "nip", "nit", "nob", "nod", "nor", "not", "now", "nub", "nun", "nut", "oak", "oar", "oat", "odd", "ode", "off", "oft", "oil",
-  "old", "one", "opt", "orb", "ore", "our", "out", "ova", "owe", "owl", "own", "pad", "pal", "pan", "pap", "par", "pat", "paw",
-  "pay", "pea", "peg", "pen", "pep", "per", "pet", "pew", "pie", "pig", "pin", "pit", "ply", "pod", "pop", "pot", "pow", "pox",
-  "pro", "pry", "pub", "pug", "pun", "pup", "put", "quo", "rag", "ram", "ran", "rap", "rat", "raw", "ray", "red", "ref", "rib",
-  "rid", "rig", "rim", "rip", "rob", "rod", "roe", "rot", "row", "rub", "rug", "run", "rut", "rye", "sac", "sad", "sag", "sap",
-  "sat", "saw", "say", "sea", "set", "sew", "she", "shy", "sin", "sip", "sir", "sit", "six", "ski", "sky", "sly", "sob", "sod",
-  "son", "sop", "sot", "sow", "soy", "spa", "spy", "sty", "sub", "sue", "sum", "sun", "sup", "tab", "tad", "tag", "tan", "tap",
-  "tar", "tat", "tax", "tea", "ten", "the", "thy", "tic", "tie", "tin", "tip", "tit", "toe", "tog", "tom", "ton", "too", "top",
-  "tot", "tow", "toy", "try", "tub", "tug", "two", "urn", "use", "van", "vat", "vet", "vex", "via", "vie", "vim", "vow", "wad",
-  "wag", "war", "was", "wax", "way", "web", "wed", "wee", "wet", "who", "wig", "win", "wit", "woe", "wok", "won", "woo", "wow",
-  "yak", "yam", "yap", "yaw", "yea", "yen", "yes", "yet", "yew", "yon", "you", "zap", "zed", "zen", "zip", "zit", "zoo",
-];
+	"ace",
+	"act",
+	"add",
+	"age",
+	"ago",
+	"aid",
+	"aim",
+	"air",
+	"all",
+	"ant",
+	"ape",
+	"apt",
+	"arc",
+	"are",
+	"ark",
+	"arm",
+	"art",
+	"ash",
+	"ask",
+	"ate",
+	"awe",
+	"axe",
+	"bad",
+	"bag",
+	"ban",
+	"bar",
+	"bat",
+	"bay",
+	"bed",
+	"bee",
+	"beg",
+	"bet",
+	"bid",
+	"big",
+	"bin",
+	"bit",
+	"bog",
+	"bow",
+	"box",
+	"boy",
+	"bud",
+	"bug",
+	"bun",
+	"bus",
+	"but",
+	"buy",
+	"cab",
+	"can",
+	"cap",
+	"car",
+	"cat",
+	"cob",
+	"cod",
+	"cog",
+	"cop",
+	"cot",
+	"cow",
+	"cry",
+	"cub",
+	"cud",
+	"cup",
+	"cur",
+	"cut",
+	"dab",
+	"dad",
+	"dam",
+	"day",
+	"den",
+	"dew",
+	"did",
+	"die",
+	"dig",
+	"dim",
+	"dip",
+	"doe",
+	"dog",
+	"dot",
+	"dry",
+	"dub",
+	"dud",
+	"due",
+	"dug",
+	"dye",
+	"ear",
+	"eat",
+	"eel",
+	"egg",
+	"ego",
+	"elf",
+	"elk",
+	"elm",
+	"emu",
+	"end",
+	"era",
+	"eve",
+	"ewe",
+	"eye",
+	"fab",
+	"fad",
+	"fan",
+	"far",
+	"fat",
+	"fax",
+	"fed",
+	"fee",
+	"few",
+	"fig",
+	"fin",
+	"fir",
+	"fit",
+	"fix",
+	"fly",
+	"foe",
+	"fog",
+	"for",
+	"fox",
+	"fry",
+	"fun",
+	"fur",
+	"gag",
+	"gap",
+	"gas",
+	"gel",
+	"gem",
+	"get",
+	"gig",
+	"gin",
+	"god",
+	"got",
+	"gum",
+	"gun",
+	"gut",
+	"guy",
+	"gym",
+	"had",
+	"ham",
+	"has",
+	"hat",
+	"hay",
+	"hem",
+	"hen",
+	"her",
+	"hid",
+	"him",
+	"hip",
+	"his",
+	"hit",
+	"hob",
+	"hog",
+	"hop",
+	"hot",
+	"how",
+	"hub",
+	"hue",
+	"hug",
+	"hum",
+	"hut",
+	"ice",
+	"icy",
+	"ill",
+	"imp",
+	"ink",
+	"inn",
+	"ion",
+	"ire",
+	"irk",
+	"ivy",
+	"jab",
+	"jag",
+	"jam",
+	"jar",
+	"jaw",
+	"jay",
+	"jet",
+	"jig",
+	"job",
+	"jog",
+	"jot",
+	"joy",
+	"jug",
+	"jut",
+	"keg",
+	"ken",
+	"key",
+	"kid",
+	"kin",
+	"kit",
+	"lab",
+	"lac",
+	"lad",
+	"lag",
+	"lap",
+	"law",
+	"lax",
+	"lay",
+	"lea",
+	"led",
+	"leg",
+	"let",
+	"lid",
+	"lie",
+	"lip",
+	"lit",
+	"log",
+	"lop",
+	"lot",
+	"low",
+	"lug",
+	"mad",
+	"man",
+	"map",
+	"mar",
+	"mat",
+	"maw",
+	"max",
+	"may",
+	"men",
+	"met",
+	"mid",
+	"mix",
+	"mob",
+	"mod",
+	"mom",
+	"mop",
+	"mow",
+	"mud",
+	"mug",
+	"mum",
+	"nab",
+	"nag",
+	"nap",
+	"nay",
+	"net",
+	"new",
+	"nip",
+	"nit",
+	"nob",
+	"nod",
+	"nor",
+	"not",
+	"now",
+	"nub",
+	"nun",
+	"nut",
+	"oak",
+	"oar",
+	"oat",
+	"odd",
+	"ode",
+	"off",
+	"oft",
+	"oil",
+	"old",
+	"one",
+	"opt",
+	"orb",
+	"ore",
+	"our",
+	"out",
+	"ova",
+	"owe",
+	"owl",
+	"own",
+	"pad",
+	"pal",
+	"pan",
+	"pap",
+	"par",
+	"pat",
+	"paw",
+	"pay",
+	"pea",
+	"peg",
+	"pen",
+	"pep",
+	"per",
+	"pet",
+	"pew",
+	"pie",
+	"pig",
+	"pin",
+	"pit",
+	"ply",
+	"pod",
+	"pop",
+	"pot",
+	"pow",
+	"pox",
+	"pro",
+	"pry",
+	"pub",
+	"pug",
+	"pun",
+	"pup",
+	"put",
+	"quo",
+	"rag",
+	"ram",
+	"ran",
+	"rap",
+	"rat",
+	"raw",
+	"ray",
+	"red",
+	"ref",
+	"rib",
+	"rid",
+	"rig",
+	"rim",
+	"rip",
+	"rob",
+	"rod",
+	"roe",
+	"rot",
+	"row",
+	"rub",
+	"rug",
+	"run",
+	"rut",
+	"rye",
+	"sac",
+	"sad",
+	"sag",
+	"sap",
+	"sat",
+	"saw",
+	"say",
+	"sea",
+	"set",
+	"sew",
+	"she",
+	"shy",
+	"sin",
+	"sip",
+	"sir",
+	"sit",
+	"six",
+	"ski",
+	"sky",
+	"sly",
+	"sob",
+	"sod",
+	"son",
+	"sop",
+	"sot",
+	"sow",
+	"soy",
+	"spa",
+	"spy",
+	"sty",
+	"sub",
+	"sue",
+	"sum",
+	"sun",
+	"sup",
+	"tab",
+	"tad",
+	"tag",
+	"tan",
+	"tap",
+	"tar",
+	"tat",
+	"tax",
+	"tea",
+	"ten",
+	"the",
+	"thy",
+	"tic",
+	"tie",
+	"tin",
+	"tip",
+	"tit",
+	"toe",
+	"tog",
+	"tom",
+	"ton",
+	"too",
+	"top",
+	"tot",
+	"tow",
+	"toy",
+	"try",
+	"tub",
+	"tug",
+	"two",
+	"urn",
+	"use",
+	"van",
+	"vat",
+	"vet",
+	"vex",
+	"via",
+	"vie",
+	"vim",
+	"vow",
+	"wad",
+	"wag",
+	"war",
+	"was",
+	"wax",
+	"way",
+	"web",
+	"wed",
+	"wee",
+	"wet",
+	"who",
+	"wig",
+	"win",
+	"wit",
+	"woe",
+	"wok",
+	"won",
+	"woo",
+	"wow",
+	"yak",
+	"yam",
+	"yap",
+	"yaw",
+	"yea",
+	"yen",
+	"yes",
+	"yet",
+	"yew",
+	"yon",
+	"you",
+	"zap",
+	"zed",
+	"zen",
+	"zip",
+	"zit",
+	"zoo",
+]
 
 /**
  * Generate a random 3-word name (e.g., "tar-bat-sag")
  */
 function generateRandomName(): string {
-  const pick = () => WORDS[Math.floor(Math.random() * WORDS.length)];
-  return `${pick()}-${pick()}-${pick()}`;
+	const pick = () => WORDS[Math.floor(Math.random() * WORDS.length)]
+	return `${pick()}-${pick()}-${pick()}`
 }
 
 /**
  * Generate a unique WireGuard port from hostname hash (range: 42000-42999)
  */
 function generateWgPort(hostname: string): number {
-  const hash = new Bun.CryptoHasher("sha1").update(hostname).digest("hex");
-  return 42000 + (parseInt(hash.slice(0, 4), 16) % 1000);
+	const hash = new Bun.CryptoHasher("sha1").update(hostname).digest("hex")
+	return 42000 + (parseInt(hash.slice(0, 4), 16) % 1000)
 }
 
 /**
  * Fetch secrets from Convex
  */
 async function fetchSecrets(
-  convexUrl: string,
-  keys: string[]
+	convexUrl: string,
+	keys: string[],
 ): Promise<Record<string, string>> {
-  const response = await fetch(`${convexUrl}/api/query`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      path: "secrets:getMultiple",
-      args: { keys },
-    }),
-  });
+	const response = await fetch(`${convexUrl}/api/query`, {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({
+			path: "secrets:getMultiple",
+			args: { keys },
+		}),
+	})
 
-  if (!response.ok) {
-    throw new Error(`Failed to fetch secrets: ${response.statusText}`);
-  }
+	if (!response.ok) {
+		throw new Error(`Failed to fetch secrets: ${response.statusText}`)
+	}
 
-  const result = await response.json();
-  return result.value || {};
+	const result = await response.json()
+	return result.value || {}
 }
 
 // Paths for binary building
-const BINARY_PATH = new URL("../container-api-binary", import.meta.url).pathname;
-const CONTAINER_API_SRC = new URL("../../container-api/src", import.meta.url).pathname;
-const CONTAINER_API_PKG = new URL("../../container-api", import.meta.url).pathname;
+const BINARY_PATH = new URL("../container-api-binary", import.meta.url).pathname
+const CONTAINER_API_SRC = new URL("../../container-api/src", import.meta.url)
+	.pathname
+const CONTAINER_API_PKG = new URL("../../container-api", import.meta.url)
+	.pathname
 
 /**
  * Get the latest modification time of all source files in a directory
  */
 async function getLatestSourceMtime(dir: string): Promise<number> {
-  const glob = new Bun.Glob("**/*.ts");
-  let latestMtime = 0;
+	const glob = new Bun.Glob("**/*.ts")
+	let latestMtime = 0
 
-  for await (const file of glob.scan({ cwd: dir, absolute: true })) {
-    try {
-      const stat = await Bun.file(file).stat();
-      if (stat && stat.mtime.getTime() > latestMtime) {
-        latestMtime = stat.mtime.getTime();
-      }
-    } catch {
-      // Skip files we can't stat
-    }
-  }
+	for await (const file of glob.scan({ cwd: dir, absolute: true })) {
+		try {
+			const stat = await Bun.file(file).stat()
+			if (stat && stat.mtime.getTime() > latestMtime) {
+				latestMtime = stat.mtime.getTime()
+			}
+		} catch {
+			// Skip files we can't stat
+		}
+	}
 
-  // Also check package.json for dependency changes
-  try {
-    const pkgStat = await Bun.file(`${CONTAINER_API_PKG}/package.json`).stat();
-    if (pkgStat && pkgStat.mtime.getTime() > latestMtime) {
-      latestMtime = pkgStat.mtime.getTime();
-    }
-  } catch {
-    // Skip if package.json doesn't exist
-  }
+	// Also check package.json for dependency changes
+	try {
+		const pkgStat = await Bun.file(`${CONTAINER_API_PKG}/package.json`).stat()
+		if (pkgStat && pkgStat.mtime.getTime() > latestMtime) {
+			latestMtime = pkgStat.mtime.getTime()
+		}
+	} catch {
+		// Skip if package.json doesn't exist
+	}
 
-  return latestMtime;
+	return latestMtime
 }
 
 /**
  * Check if the container-api binary needs to be rebuilt
  */
 async function shouldRebuildBinary(): Promise<boolean> {
-  const binaryFile = Bun.file(BINARY_PATH);
+	const binaryFile = Bun.file(BINARY_PATH)
 
-  // If binary doesn't exist, we need to build it
-  if (!(await binaryFile.exists())) {
-    return true;
-  }
+	// If binary doesn't exist, we need to build it
+	if (!(await binaryFile.exists())) {
+		return true
+	}
 
-  // Get binary modification time
-  const binaryStat = await binaryFile.stat();
-  if (!binaryStat) {
-    return true;
-  }
-  const binaryMtime = binaryStat.mtime.getTime();
+	// Get binary modification time
+	const binaryStat = await binaryFile.stat()
+	if (!binaryStat) {
+		return true
+	}
+	const binaryMtime = binaryStat.mtime.getTime()
 
-  // Get latest source file modification time
-  const sourceMtime = await getLatestSourceMtime(CONTAINER_API_SRC);
+	// Get latest source file modification time
+	const sourceMtime = await getLatestSourceMtime(CONTAINER_API_SRC)
 
-  // Rebuild if any source file is newer than the binary
-  return sourceMtime > binaryMtime;
+	// Rebuild if any source file is newer than the binary
+	return sourceMtime > binaryMtime
 }
 
 /**
  * Build the container-api binary
  */
 async function buildContainerApiBinary(): Promise<void> {
-  console.log("[gateway] Building container-api binary...");
+	console.log("[gateway] Building container-api binary...")
 
-  const entryPoint = `${CONTAINER_API_PKG}/src/index.ts`;
-  const proc = Bun.spawn(
-    ["bun", "build", "--compile", "--outfile", BINARY_PATH, entryPoint],
-    {
-      cwd: CONTAINER_API_PKG,
-      stdout: "pipe",
-      stderr: "pipe",
-    }
-  );
+	const entryPoint = `${CONTAINER_API_PKG}/src/index.ts`
+	const proc = Bun.spawn(
+		["bun", "build", "--compile", "--outfile", BINARY_PATH, entryPoint],
+		{
+			cwd: CONTAINER_API_PKG,
+			stdout: "pipe",
+			stderr: "pipe",
+		},
+	)
 
-  const stderr = await new Response(proc.stderr).text();
-  const exitCode = await proc.exited;
+	const stderr = await new Response(proc.stderr).text()
+	const exitCode = await proc.exited
 
-  if (exitCode !== 0) {
-    throw new Error(`Failed to build container-api binary: ${stderr}`);
-  }
+	if (exitCode !== 0) {
+		throw new Error(`Failed to build container-api binary: ${stderr}`)
+	}
 
-  console.log("[gateway] Container-api binary built successfully");
+	console.log("[gateway] Container-api binary built successfully")
 }
 
 /**
  * Ensure the container-api binary is up to date
  */
 async function ensureBinaryUpToDate(): Promise<void> {
-  if (await shouldRebuildBinary()) {
-    await buildContainerApiBinary();
-  }
+	if (await shouldRebuildBinary()) {
+		await buildContainerApiBinary()
+	}
 }
 
 /**
  * Create a container on a remote server using inline SSH
  */
 async function createContainerOnServer(
-  request: CreateContainerRequest,
-  secrets: Record<string, string>,
-  buildTracker?: ConvexSync
+	request: CreateContainerRequest,
+	secrets: Record<string, string>,
+	buildTracker?: ConvexSync,
 ): Promise<CreateContainerResult> {
-  const { repo, branch = "main", name, server = "localhost", sshUser = "ubuntu" } = request;
-  const containerName = name || generateRandomName();
-  const wgPort = generateWgPort(containerName);
-  // Build SSH target (user@host for remote, just localhost for local)
-  const sshTarget = server === "localhost" ? "localhost" : `${sshUser}@${server}`;
+	const {
+		repo,
+		branch = "main",
+		name,
+		server = "localhost",
+		sshUser = "ubuntu",
+	} = request
+	const containerName = name || generateRandomName()
+	const wgPort = generateWgPort(containerName)
+	// Build SSH target (user@host for remote, just localhost for local)
+	const sshTarget =
+		server === "localhost" ? "localhost" : `${sshUser}@${server}`
 
-  // Initialize build tracking
-  if (buildTracker) {
-    await buildTracker.createBuild(containerName, request);
-  }
+	// Initialize build tracking
+	if (buildTracker) {
+		await buildTracker.createBuild(containerName, request)
+	}
 
-  // Phase 1: Building binary (if needed)
-  if (buildTracker) await buildTracker.startPhase(containerName, "building_binary");
-  try {
-    const needsRebuild = await shouldRebuildBinary();
-    if (needsRebuild) {
-      await buildContainerApiBinary();
-      if (buildTracker) await buildTracker.completePhase(containerName, "building_binary", "Binary rebuilt successfully");
-    } else {
-      if (buildTracker) await buildTracker.completePhase(containerName, "building_binary", "Binary already up to date");
-    }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (buildTracker) await buildTracker.failBuild(containerName, "building_binary", message);
-    throw error;
-  }
+	// Phase 1: Building binary (if needed)
+	if (buildTracker)
+		await buildTracker.startPhase(containerName, "building_binary")
+	try {
+		const needsRebuild = await shouldRebuildBinary()
+		if (needsRebuild) {
+			await buildContainerApiBinary()
+			if (buildTracker)
+				await buildTracker.completePhase(
+					containerName,
+					"building_binary",
+					"Binary rebuilt successfully",
+				)
+		} else {
+			if (buildTracker)
+				await buildTracker.completePhase(
+					containerName,
+					"building_binary",
+					"Binary already up to date",
+				)
+		}
+	} catch (error) {
+		const message = error instanceof Error ? error.message : String(error)
+		if (buildTracker)
+			await buildTracker.failBuild(containerName, "building_binary", message)
+		throw error
+	}
 
-  // Inline Dockerfile (self-contained, no monorepo needed)
-  const dockerfile = `FROM debian:bookworm-slim
+	// Inline Dockerfile (self-contained, no monorepo needed)
+	const dockerfile = `FROM debian:bookworm-slim
 ARG TZ=UTC
 ARG GH_USERNAME
 ARG GH_TOKEN
@@ -258,10 +686,10 @@ RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash - && \\
 RUN mkdir -p /opt/container-api
 
 RUN mkdir -p /workspace
-WORKDIR /workspace`;
+WORKDIR /workspace`
 
-  // Inline entrypoint script
-  const entrypoint = `#!/bin/bash
+	// Inline entrypoint script
+	const entrypoint = `#!/bin/bash
 set -euo pipefail
 
 # Start Tailscale (using --state=mem: for ephemeral nodes that auto-remove when offline)
@@ -293,9 +721,9 @@ if [ -x /opt/container-api/container-api ]; then
   tailscale serve --bg --http 80 http://localhost:4096 2>/dev/null || true
 fi
 
-exec "\$@"`;
+exec "$@"`
 
-  const composeYml = `services:
+	const composeYml = `services:
   server:
     build:
       context: /tmp/agent-build
@@ -322,10 +750,10 @@ exec "\$@"`;
     restart: unless-stopped
     mem_limit: 4096m
     labels:
-      - "agent-manager.tailscale-hostname=${containerName}"`;
+      - "agent-manager.tailscale-hostname=${containerName}"`
 
-  // Step 1: Build and start container (without binary)
-  const buildScript = `set -e
+	// Step 1: Build and start container (without binary)
+	const buildScript = `set -e
 BUILD_DIR="/tmp/agent-build"
 rm -rf "$BUILD_DIR" && mkdir -p "$BUILD_DIR"
 
@@ -347,650 +775,767 @@ ${composeYml}
 COMPOSE
 
 docker compose -f /tmp/compose-${containerName}.yml --project-name ${containerName} up --build -d
-rm -rf "$BUILD_DIR" /tmp/compose-${containerName}.yml`;
+rm -rf "$BUILD_DIR" /tmp/compose-${containerName}.yml`
 
-  console.log(`[gateway] Creating container ${containerName} on ${server}...`);
+	console.log(`[gateway] Creating container ${containerName} on ${server}...`)
 
-  // Phase 2: Building image
-  if (buildTracker) await buildTracker.startPhase(containerName, "building_image");
-  let buildLogs = "";
-  try {
-    // Execute build script on server
-    const buildProc = server === "localhost"
-      ? Bun.spawn(["bash", "-c", buildScript], { stdout: "pipe", stderr: "pipe" })
-      : Bun.spawn(["ssh", sshTarget, "bash", "-s"], {
-          stdin: new Blob([buildScript]),
-          stdout: "pipe",
-          stderr: "pipe",
-        });
+	// Phase 2: Building image
+	if (buildTracker)
+		await buildTracker.startPhase(containerName, "building_image")
+	let buildLogs = ""
+	try {
+		// Execute build script on server
+		const buildProc =
+			server === "localhost"
+				? Bun.spawn(["bash", "-c", buildScript], {
+						stdout: "pipe",
+						stderr: "pipe",
+					})
+				: Bun.spawn(["ssh", sshTarget, "bash", "-s"], {
+						stdin: new Blob([buildScript]),
+						stdout: "pipe",
+						stderr: "pipe",
+					})
 
-    const buildStdout = await new Response(buildProc.stdout).text();
-    const buildStderr = await new Response(buildProc.stderr).text();
-    buildLogs = buildStdout + buildStderr;
-    const buildExit = await buildProc.exited;
+		const buildStdout = await new Response(buildProc.stdout).text()
+		const buildStderr = await new Response(buildProc.stderr).text()
+		buildLogs = buildStdout + buildStderr
+		const buildExit = await buildProc.exited
 
-    if (buildExit !== 0) {
-      throw new Error(`Container build failed: ${buildStderr}`);
-    }
-    if (buildTracker) await buildTracker.completePhase(containerName, "building_image", buildLogs);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (buildTracker) await buildTracker.failBuild(containerName, "building_image", message, buildLogs);
-    throw error;
-  }
+		if (buildExit !== 0) {
+			throw new Error(`Container build failed: ${buildStderr}`)
+		}
+		if (buildTracker)
+			await buildTracker.completePhase(
+				containerName,
+				"building_image",
+				buildLogs,
+			)
+	} catch (error) {
+		const message = error instanceof Error ? error.message : String(error)
+		if (buildTracker)
+			await buildTracker.failBuild(
+				containerName,
+				"building_image",
+				message,
+				buildLogs,
+			)
+		throw error
+	}
 
-  console.log(`[gateway] Container ${containerName} started, waiting for Tailscale...`);
+	console.log(
+		`[gateway] Container ${containerName} started, waiting for Tailscale...`,
+	)
 
-  // Phase 3: Starting container (waiting for Tailscale)
-  if (buildTracker) await buildTracker.startPhase(containerName, "starting_container");
-  try {
-    // Wait for container to be running
-    await new Promise((resolve) => setTimeout(resolve, 5000));
-    if (buildTracker) await buildTracker.completePhase(containerName, "starting_container", "Container started, Tailscale connecting...");
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (buildTracker) await buildTracker.failBuild(containerName, "starting_container", message);
-    throw error;
-  }
+	// Phase 3: Starting container (waiting for Tailscale)
+	if (buildTracker)
+		await buildTracker.startPhase(containerName, "starting_container")
+	try {
+		// Wait for container to be running
+		await new Promise((resolve) => setTimeout(resolve, 5000))
+		if (buildTracker)
+			await buildTracker.completePhase(
+				containerName,
+				"starting_container",
+				"Container started, Tailscale connecting...",
+			)
+	} catch (error) {
+		const message = error instanceof Error ? error.message : String(error)
+		if (buildTracker)
+			await buildTracker.failBuild(containerName, "starting_container", message)
+		throw error
+	}
 
-  // Phase 4: Deploying binary
-  if (buildTracker) await buildTracker.startPhase(containerName, "deploying_binary");
-  console.log(`[gateway] Copying container-api binary...`);
+	// Phase 4: Deploying binary
+	if (buildTracker)
+		await buildTracker.startPhase(containerName, "deploying_binary")
+	console.log(`[gateway] Copying container-api binary...`)
 
-  // Check if binary exists
-  let deployLogs = "";
-  const binaryFile = Bun.file(BINARY_PATH);
-  if (!(await binaryFile.exists())) {
-    console.warn(`[gateway] Binary not found at ${BINARY_PATH}, skipping SCP`);
-    if (buildTracker) await buildTracker.skipPhase(containerName, "deploying_binary");
-    if (buildTracker) await buildTracker.skipPhase(containerName, "starting_api");
-  } else {
-    try {
-      if (server === "localhost") {
-        // Direct docker cp for localhost
-        const copyProc = Bun.spawn([
-          "bash", "-c",
-          `docker cp "${BINARY_PATH}" ${containerName}:/opt/container-api/container-api && \
-           docker exec ${containerName} chmod +x /opt/container-api/container-api`
-        ], { stdout: "pipe", stderr: "pipe" });
-        const copyStdout = await new Response(copyProc.stdout).text();
-        const copyStderr = await new Response(copyProc.stderr).text();
-        deployLogs = copyStdout + copyStderr;
-        const copyExit = await copyProc.exited;
-        if (copyExit !== 0) {
-          throw new Error(`Failed to copy binary: ${copyStderr}`);
-        }
-      } else {
-        // SCP to server, then docker cp
-        const scpProc = Bun.spawn(["scp", BINARY_PATH, `${sshTarget}:/tmp/container-api-binary`], {
-          stdout: "pipe",
-          stderr: "pipe",
-        });
-        const scpStderr = await new Response(scpProc.stderr).text();
-        const scpExit = await scpProc.exited;
-        if (scpExit !== 0) {
-          throw new Error(`SCP failed: ${scpStderr}`);
-        }
+	// Check if binary exists
+	let deployLogs = ""
+	const binaryFile = Bun.file(BINARY_PATH)
+	if (!(await binaryFile.exists())) {
+		console.warn(`[gateway] Binary not found at ${BINARY_PATH}, skipping SCP`)
+		if (buildTracker)
+			await buildTracker.skipPhase(containerName, "deploying_binary")
+		if (buildTracker)
+			await buildTracker.skipPhase(containerName, "starting_api")
+	} else {
+		try {
+			if (server === "localhost") {
+				// Direct docker cp for localhost
+				const copyProc = Bun.spawn(
+					[
+						"bash",
+						"-c",
+						`docker cp "${BINARY_PATH}" ${containerName}:/opt/container-api/container-api && \
+           docker exec ${containerName} chmod +x /opt/container-api/container-api`,
+					],
+					{ stdout: "pipe", stderr: "pipe" },
+				)
+				const copyStdout = await new Response(copyProc.stdout).text()
+				const copyStderr = await new Response(copyProc.stderr).text()
+				deployLogs = copyStdout + copyStderr
+				const copyExit = await copyProc.exited
+				if (copyExit !== 0) {
+					throw new Error(`Failed to copy binary: ${copyStderr}`)
+				}
+			} else {
+				// SCP to server, then docker cp
+				const scpProc = Bun.spawn(
+					["scp", BINARY_PATH, `${sshTarget}:/tmp/container-api-binary`],
+					{
+						stdout: "pipe",
+						stderr: "pipe",
+					},
+				)
+				const scpStderr = await new Response(scpProc.stderr).text()
+				const scpExit = await scpProc.exited
+				if (scpExit !== 0) {
+					throw new Error(`SCP failed: ${scpStderr}`)
+				}
 
-        const copyScript = `set -e
+				const copyScript = `set -e
 docker cp /tmp/container-api-binary ${containerName}:/opt/container-api/container-api
 docker exec ${containerName} chmod +x /opt/container-api/container-api
-rm /tmp/container-api-binary`;
+rm /tmp/container-api-binary`
 
-        const copyProc = Bun.spawn(["ssh", sshTarget, "bash", "-s"], {
-          stdin: new Blob([copyScript]),
-          stdout: "pipe",
-          stderr: "pipe",
-        });
-        const copyStdout = await new Response(copyProc.stdout).text();
-        const copyStderr = await new Response(copyProc.stderr).text();
-        deployLogs = copyStdout + copyStderr;
-        const copyExit = await copyProc.exited;
-        if (copyExit !== 0) {
-          throw new Error(`Failed to copy binary: ${copyStderr}`);
-        }
-      }
-      if (buildTracker) await buildTracker.completePhase(containerName, "deploying_binary", deployLogs || "Binary deployed successfully");
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      if (buildTracker) await buildTracker.failBuild(containerName, "deploying_binary", message, deployLogs);
-      throw error;
-    }
+				const copyProc = Bun.spawn(["ssh", sshTarget, "bash", "-s"], {
+					stdin: new Blob([copyScript]),
+					stdout: "pipe",
+					stderr: "pipe",
+				})
+				const copyStdout = await new Response(copyProc.stdout).text()
+				const copyStderr = await new Response(copyProc.stderr).text()
+				deployLogs = copyStdout + copyStderr
+				const copyExit = await copyProc.exited
+				if (copyExit !== 0) {
+					throw new Error(`Failed to copy binary: ${copyStderr}`)
+				}
+			}
+			if (buildTracker)
+				await buildTracker.completePhase(
+					containerName,
+					"deploying_binary",
+					deployLogs || "Binary deployed successfully",
+				)
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error)
+			if (buildTracker)
+				await buildTracker.failBuild(
+					containerName,
+					"deploying_binary",
+					message,
+					deployLogs,
+				)
+			throw error
+		}
 
-    // Phase 5: Starting API
-    if (buildTracker) await buildTracker.startPhase(containerName, "starting_api");
-    console.log(`[gateway] Starting container-api...`);
+		// Phase 5: Starting API
+		if (buildTracker)
+			await buildTracker.startPhase(containerName, "starting_api")
+		console.log(`[gateway] Starting container-api...`)
 
-    let startLogs = "";
-    try {
-      const startCommand = `docker exec -d ${containerName} bash -c 'PORT=4096 /opt/container-api/container-api &'
+		let startLogs = ""
+		try {
+			const startCommand = `docker exec -d ${containerName} bash -c 'PORT=4096 /opt/container-api/container-api &'
 sleep 2
-docker exec ${containerName} tailscale serve --bg --http 80 http://localhost:4096 2>/dev/null || true`;
+docker exec ${containerName} tailscale serve --bg --http 80 http://localhost:4096 2>/dev/null || true`
 
-      const startProc = server === "localhost"
-        ? Bun.spawn(["bash", "-c", startCommand], { stdout: "pipe", stderr: "pipe" })
-        : Bun.spawn(["ssh", sshTarget, "bash", "-s"], {
-            stdin: new Blob([startCommand]),
-            stdout: "pipe",
-            stderr: "pipe",
-          });
+			const startProc =
+				server === "localhost"
+					? Bun.spawn(["bash", "-c", startCommand], {
+							stdout: "pipe",
+							stderr: "pipe",
+						})
+					: Bun.spawn(["ssh", sshTarget, "bash", "-s"], {
+							stdin: new Blob([startCommand]),
+							stdout: "pipe",
+							stderr: "pipe",
+						})
 
-      const startStdout = await new Response(startProc.stdout).text();
-      const startStderr = await new Response(startProc.stderr).text();
-      startLogs = startStdout + startStderr;
-      await startProc.exited;
+			const startStdout = await new Response(startProc.stdout).text()
+			const startStderr = await new Response(startProc.stderr).text()
+			startLogs = startStdout + startStderr
+			await startProc.exited
 
-      if (buildTracker) await buildTracker.completePhase(containerName, "starting_api", startLogs || "API started successfully");
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      if (buildTracker) await buildTracker.failBuild(containerName, "starting_api", message, startLogs);
-      throw error;
-    }
-  }
+			if (buildTracker)
+				await buildTracker.completePhase(
+					containerName,
+					"starting_api",
+					startLogs || "API started successfully",
+				)
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error)
+			if (buildTracker)
+				await buildTracker.failBuild(
+					containerName,
+					"starting_api",
+					message,
+					startLogs,
+				)
+			throw error
+		}
+	}
 
-  // Phase 6: Ready
-  if (buildTracker) await buildTracker.startPhase(containerName, "ready");
-  if (buildTracker) await buildTracker.completePhase(containerName, "ready", "Container is fully operational");
-  console.log(`[gateway] Container ${containerName} ready!`);
+	// Phase 6: Ready
+	if (buildTracker) await buildTracker.startPhase(containerName, "ready")
+	if (buildTracker)
+		await buildTracker.completePhase(
+			containerName,
+			"ready",
+			"Container is fully operational",
+		)
+	console.log(`[gateway] Container ${containerName} ready!`)
 
-  return {
-    name: containerName,
-    containerId: containerName,
-    hostname: containerName,
-    repo,
-    branch,
-    server,
-    network: "bridge",
-    wgPort,
-  };
+	return {
+		name: containerName,
+		containerId: containerName,
+		hostname: containerName,
+		repo,
+		branch,
+		server,
+		network: "bridge",
+		wgPort,
+	}
 }
 
 // Configuration from environment
-const PORT = Number(process.env.AGENT_GATEWAY_PORT) || 3100;
-const CONVEX_URL = process.env.CONVEX_URL || "";
-const SERVER_ID = process.env.SERVER_ID || `gateway-${crypto.randomUUID().slice(0, 8)}`;
-const PING_INTERVAL = 30000; // 30 seconds
-const PRUNE_INTERVAL = 60000; // 60 seconds
+const PORT = Number(process.env.AGENT_GATEWAY_PORT) || 3100
+const CONVEX_URL = process.env.CONVEX_URL || ""
+const SERVER_ID =
+	process.env.SERVER_ID || `gateway-${crypto.randomUUID().slice(0, 8)}`
+const PING_INTERVAL = 30000 // 30 seconds
+const PRUNE_INTERVAL = 60000 // 60 seconds
 
-const connections = new ConnectionManager(SERVER_ID);
-const convexSync = CONVEX_URL ? new ConvexSync(CONVEX_URL) : null;
+const connections = new ConnectionManager(SERVER_ID)
+const convexSync = CONVEX_URL ? new ConvexSync(CONVEX_URL) : null
 
 // Active executions tracking (correlationId -> { containerId, taskId, projectId })
 const activeExecutions = new Map<
-  string,
-  { containerId: string; taskId?: string; projectId?: string; startedAt: number }
->();
+	string,
+	{
+		containerId: string
+		taskId?: string
+		projectId?: string
+		startedAt: number
+	}
+>()
 
 /**
  * Handle incoming WebSocket messages from containers
  */
 function handleContainerMessage(
-  ws: ServerWebSocket<ContainerContext>,
-  message: WebSocketMessage
+	ws: ServerWebSocket<ContainerContext>,
+	message: WebSocketMessage,
 ): void {
-  // Handle connect (registration)
-  if (isConnectMessage(message)) {
-    const payload = message.payload as ConnectPayload;
-    connections.registerContainer(ws, payload);
+	// Handle connect (registration)
+	if (isConnectMessage(message)) {
+		const payload = message.payload as ConnectPayload
+		connections.registerContainer(ws, payload)
 
-    // Update Convex with container status
-    if (convexSync) {
-      convexSync.updateContainerConnection(payload.containerId, payload.hostname, true);
-    }
-    return;
-  }
+		// Update Convex with container status
+		if (convexSync) {
+			convexSync.updateContainerConnection(
+				payload.containerId,
+				payload.hostname,
+				true,
+			)
+		}
+		return
+	}
 
-  // All other messages require registration
-  if (!ws.data.registered || !ws.data.containerId) {
-    console.warn("[gateway] Received message from unregistered container");
-    return;
-  }
+	// All other messages require registration
+	if (!ws.data.registered || !ws.data.containerId) {
+		console.warn("[gateway] Received message from unregistered container")
+		return
+	}
 
-  const containerId = ws.data.containerId;
+	const containerId = ws.data.containerId
 
-  switch (message.type) {
-    case "heartbeat": {
-      const payload = message.payload as HeartbeatPayload;
-      connections.updateHeartbeat(containerId);
-      // Echo heartbeat back
-      connections.send(ws, "heartbeat", { seq: payload.seq, sentAt: Date.now() });
-      break;
-    }
+	switch (message.type) {
+		case "heartbeat": {
+			const payload = message.payload as HeartbeatPayload
+			connections.updateHeartbeat(containerId)
+			// Echo heartbeat back
+			connections.send(ws, "heartbeat", {
+				seq: payload.seq,
+				sentAt: Date.now(),
+			})
+			break
+		}
 
-    case "status:health": {
-      const payload = message.payload as StatusHealthPayload;
-      connections.updateHealth(containerId, payload);
-      break;
-    }
+		case "status:health": {
+			const payload = message.payload as StatusHealthPayload
+			connections.updateHealth(containerId, payload)
+			break
+		}
 
-    case "auth:status": {
-      const payload = message.payload as AuthStatusPayload;
-      console.log(`[gateway] Auth status from ${containerId}:`, payload);
-      // Could sync to Convex if needed
-      break;
-    }
+		case "auth:status": {
+			const payload = message.payload as AuthStatusPayload
+			console.log(`[gateway] Auth status from ${containerId}:`, payload)
+			// Could sync to Convex if needed
+			break
+		}
 
-    case "exec:stream": {
-      const payload = message.payload as ExecStreamPayload;
-      handleExecStream(containerId, payload, message.correlationId);
-      break;
-    }
+		case "exec:stream": {
+			const payload = message.payload as ExecStreamPayload
+			handleExecStream(containerId, payload, message.correlationId)
+			break
+		}
 
-    case "exec:complete": {
-      const payload = message.payload as ExecCompletePayload;
-      handleExecComplete(containerId, payload, message.correlationId);
-      break;
-    }
+		case "exec:complete": {
+			const payload = message.payload as ExecCompletePayload
+			handleExecComplete(containerId, payload, message.correlationId)
+			break
+		}
 
-    default:
-      console.log(`[gateway] Unhandled message type: ${message.type}`);
-  }
+		default:
+			console.log(`[gateway] Unhandled message type: ${message.type}`)
+	}
 }
 
 /**
  * Handle streaming execution output
  */
 function handleExecStream(
-  containerId: string,
-  payload: ExecStreamPayload,
-  correlationId?: string
+	containerId: string,
+	payload: ExecStreamPayload,
+	correlationId?: string,
 ): void {
-  const execution = correlationId ? activeExecutions.get(correlationId) : null;
+	const execution = correlationId ? activeExecutions.get(correlationId) : null
 
-  // Log stream events
-  console.log(
-    `[gateway] Stream from ${containerId}:`,
-    payload.streamType,
-    payload.data.type
-  );
+	// Log stream events
+	console.log(
+		`[gateway] Stream from ${containerId}:`,
+		payload.streamType,
+		payload.data.type,
+	)
 
-  // Sync to Convex
-  if (convexSync && execution) {
-    convexSync.recordStreamEvent(
-      correlationId!,
-      containerId,
-      payload,
-      execution.taskId,
-      execution.projectId
-    );
-  }
+	// Sync to Convex
+	if (convexSync && execution) {
+		convexSync.recordStreamEvent(
+			correlationId!,
+			containerId,
+			payload,
+			execution.taskId,
+			execution.projectId,
+		)
+	}
 }
 
 /**
  * Handle execution completion
  */
 function handleExecComplete(
-  containerId: string,
-  payload: ExecCompletePayload,
-  correlationId?: string
+	containerId: string,
+	payload: ExecCompletePayload,
+	correlationId?: string,
 ): void {
-  const execution = correlationId ? activeExecutions.get(correlationId) : null;
+	const execution = correlationId ? activeExecutions.get(correlationId) : null
 
-  console.log(
-    `[gateway] Execution complete from ${containerId}:`,
-    payload.result,
-    payload.sessionId ? `session=${payload.sessionId}` : ""
-  );
+	console.log(
+		`[gateway] Execution complete from ${containerId}:`,
+		payload.result,
+		payload.sessionId ? `session=${payload.sessionId}` : "",
+	)
 
-  // Sync to Convex
-  if (convexSync && execution) {
-    convexSync.recordExecComplete(
-      correlationId!,
-      containerId,
-      payload,
-      execution.taskId,
-      execution.projectId
-    );
-  }
+	// Sync to Convex
+	if (convexSync && execution) {
+		convexSync.recordExecComplete(
+			correlationId!,
+			containerId,
+			payload,
+			execution.taskId,
+			execution.projectId,
+		)
+	}
 
-  // Clean up
-  if (correlationId) {
-    activeExecutions.delete(correlationId);
-  }
+	// Clean up
+	if (correlationId) {
+		activeExecutions.delete(correlationId)
+	}
 }
 
 /**
  * Start an execution on a container
  */
 function startExecution(
-  containerId: string,
-  options: ExecStartPayload
+	containerId: string,
+	options: ExecStartPayload,
 ): { correlationId: string; success: boolean; error?: string } {
-  const container = connections.getContainer(containerId);
-  if (!container) {
-    return { correlationId: "", success: false, error: "Container not found" };
-  }
+	const container = connections.getContainer(containerId)
+	if (!container) {
+		return { correlationId: "", success: false, error: "Container not found" }
+	}
 
-  const correlationId = crypto.randomUUID();
+	const correlationId = crypto.randomUUID()
 
-  // Track the execution
-  activeExecutions.set(correlationId, {
-    containerId,
-    taskId: options.taskId,
-    projectId: options.projectId,
-    startedAt: Date.now(),
-  });
+	// Track the execution
+	activeExecutions.set(correlationId, {
+		containerId,
+		taskId: options.taskId,
+		projectId: options.projectId,
+		startedAt: Date.now(),
+	})
 
-  // Send exec:start to container
-  const sent = connections.sendToContainer(
-    containerId,
-    "exec:start",
-    options,
-    correlationId
-  );
+	// Send exec:start to container
+	const sent = connections.sendToContainer(
+		containerId,
+		"exec:start",
+		options,
+		correlationId,
+	)
 
-  if (!sent) {
-    activeExecutions.delete(correlationId);
-    return { correlationId, success: false, error: "Failed to send to container" };
-  }
+	if (!sent) {
+		activeExecutions.delete(correlationId)
+		return {
+			correlationId,
+			success: false,
+			error: "Failed to send to container",
+		}
+	}
 
-  // Record in Convex
-  if (convexSync) {
-    convexSync.recordExecStart(
-      correlationId,
-      containerId,
-      options,
-      options.taskId,
-      options.projectId
-    );
-  }
+	// Record in Convex
+	if (convexSync) {
+		convexSync.recordExecStart(
+			correlationId,
+			containerId,
+			options,
+			options.taskId,
+			options.projectId,
+		)
+	}
 
-  return { correlationId, success: true };
+	return { correlationId, success: true }
 }
 
 /**
  * HTTP API handler
  */
 async function handleHttpRequest(req: Request): Promise<Response> {
-  const url = new URL(req.url);
+	const url = new URL(req.url)
 
-  // CORS headers
-  const corsHeaders = {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
-  };
+	// CORS headers
+	const corsHeaders = {
+		"Access-Control-Allow-Origin": "*",
+		"Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
+		"Access-Control-Allow-Headers": "Content-Type",
+	}
 
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
+	if (req.method === "OPTIONS") {
+		return new Response(null, { headers: corsHeaders })
+	}
 
-  // Health check
-  if (url.pathname === "/health") {
-    const stats = connections.getStats();
-    return Response.json(
-      { status: "ok", serverId: SERVER_ID, ...stats },
-      { headers: corsHeaders }
-    );
-  }
+	// Health check
+	if (url.pathname === "/health") {
+		const stats = connections.getStats()
+		return Response.json(
+			{ status: "ok", serverId: SERVER_ID, ...stats },
+			{ headers: corsHeaders },
+		)
+	}
 
-  // List connected containers
-  if (url.pathname === "/containers" && req.method === "GET") {
-    const containers = connections.getAllContainers().map((c) => ({
-      containerId: c.info.containerId,
-      hostname: c.info.hostname,
-      version: c.info.version,
-      capabilities: c.info.capabilities,
-      health: c.health,
-      connectedAt: c.connectedAt,
-      lastHeartbeat: c.lastHeartbeat,
-    }));
-    return Response.json({ containers }, { headers: corsHeaders });
-  }
+	// List connected containers
+	if (url.pathname === "/containers" && req.method === "GET") {
+		const containers = connections.getAllContainers().map((c) => ({
+			containerId: c.info.containerId,
+			hostname: c.info.hostname,
+			version: c.info.version,
+			capabilities: c.info.capabilities,
+			health: c.health,
+			connectedAt: c.connectedAt,
+			lastHeartbeat: c.lastHeartbeat,
+		}))
+		return Response.json({ containers }, { headers: corsHeaders })
+	}
 
-  // Get specific container
-  if (url.pathname.match(/^\/containers\/[^/]+$/) && req.method === "GET") {
-    const containerId = url.pathname.split("/")[2];
-    const container = connections.getContainer(containerId!);
-    if (!container) {
-      return Response.json(
-        { error: "Container not found" },
-        { status: 404, headers: corsHeaders }
-      );
-    }
-    return Response.json(
-      {
-        containerId: container.info.containerId,
-        hostname: container.info.hostname,
-        version: container.info.version,
-        capabilities: container.info.capabilities,
-        health: container.health,
-        connectedAt: container.connectedAt,
-        lastHeartbeat: container.lastHeartbeat,
-      },
-      { headers: corsHeaders }
-    );
-  }
+	// Get specific container
+	if (url.pathname.match(/^\/containers\/[^/]+$/) && req.method === "GET") {
+		const containerId = url.pathname.split("/")[2]
+		const container = connections.getContainer(containerId!)
+		if (!container) {
+			return Response.json(
+				{ error: "Container not found" },
+				{ status: 404, headers: corsHeaders },
+			)
+		}
+		return Response.json(
+			{
+				containerId: container.info.containerId,
+				hostname: container.info.hostname,
+				version: container.info.version,
+				capabilities: container.info.capabilities,
+				health: container.health,
+				connectedAt: container.connectedAt,
+				lastHeartbeat: container.lastHeartbeat,
+			},
+			{ headers: corsHeaders },
+		)
+	}
 
-  // Start execution on a container
-  if (url.pathname === "/exec" && req.method === "POST") {
-    try {
-      const body = (await req.json()) as ExecStartPayload & { containerId?: string };
-      const { containerId, ...options } = body;
+	// Start execution on a container
+	if (url.pathname === "/exec" && req.method === "POST") {
+		try {
+			const body = (await req.json()) as ExecStartPayload & {
+				containerId?: string
+			}
+			const { containerId, ...options } = body
 
-      // Find container (specific or available)
-      let targetContainerId = containerId;
-      if (!targetContainerId) {
-        const available = connections.findAvailableContainer();
-        if (!available) {
-          return Response.json(
-            { error: "No available containers" },
-            { status: 503, headers: corsHeaders }
-          );
-        }
-        targetContainerId = available.info.containerId;
-      }
+			// Find container (specific or available)
+			let targetContainerId = containerId
+			if (!targetContainerId) {
+				const available = connections.findAvailableContainer()
+				if (!available) {
+					return Response.json(
+						{ error: "No available containers" },
+						{ status: 503, headers: corsHeaders },
+					)
+				}
+				targetContainerId = available.info.containerId
+			}
 
-      const result = startExecution(targetContainerId, options);
+			const result = startExecution(targetContainerId, options)
 
-      if (!result.success) {
-        return Response.json(
-          { error: result.error },
-          { status: 400, headers: corsHeaders }
-        );
-      }
+			if (!result.success) {
+				return Response.json(
+					{ error: result.error },
+					{ status: 400, headers: corsHeaders },
+				)
+			}
 
-      return Response.json(
-        {
-          correlationId: result.correlationId,
-          containerId: targetContainerId,
-          status: "started",
-        },
-        { status: 201, headers: corsHeaders }
-      );
-    } catch (error) {
-      console.error("[gateway] Failed to start execution:", error);
-      return Response.json(
-        { error: "Invalid request body" },
-        { status: 400, headers: corsHeaders }
-      );
-    }
-  }
+			return Response.json(
+				{
+					correlationId: result.correlationId,
+					containerId: targetContainerId,
+					status: "started",
+				},
+				{ status: 201, headers: corsHeaders },
+			)
+		} catch (error) {
+			console.error("[gateway] Failed to start execution:", error)
+			return Response.json(
+				{ error: "Invalid request body" },
+				{ status: 400, headers: corsHeaders },
+			)
+		}
+	}
 
-  // Abort execution
-  if (url.pathname.match(/^\/exec\/[^/]+\/abort$/) && req.method === "POST") {
-    const correlationId = url.pathname.split("/")[2];
-    const execution = activeExecutions.get(correlationId!);
+	// Abort execution
+	if (url.pathname.match(/^\/exec\/[^/]+\/abort$/) && req.method === "POST") {
+		const correlationId = url.pathname.split("/")[2]
+		const execution = activeExecutions.get(correlationId!)
 
-    if (!execution) {
-      return Response.json(
-        { error: "Execution not found" },
-        { status: 404, headers: corsHeaders }
-      );
-    }
+		if (!execution) {
+			return Response.json(
+				{ error: "Execution not found" },
+				{ status: 404, headers: corsHeaders },
+			)
+		}
 
-    // TODO: Send abort message to container
-    // connections.sendToContainer(execution.containerId, "exec:abort", { processId: ? });
+		// TODO: Send abort message to container
+		// connections.sendToContainer(execution.containerId, "exec:abort", { processId: ? });
 
-    return Response.json({ status: "abort_requested" }, { headers: corsHeaders });
-  }
+		return Response.json(
+			{ status: "abort_requested" },
+			{ headers: corsHeaders },
+		)
+	}
 
-  // Push auth token to container
-  if (url.pathname.match(/^\/containers\/[^/]+\/auth$/) && req.method === "POST") {
-    const containerId = url.pathname.split("/")[2];
-    try {
-      const { token } = (await req.json()) as { token: string };
+	// Push auth token to container
+	if (
+		url.pathname.match(/^\/containers\/[^/]+\/auth$/) &&
+		req.method === "POST"
+	) {
+		const containerId = url.pathname.split("/")[2]
+		try {
+			const { token } = (await req.json()) as { token: string }
 
-      const sent = connections.sendToContainer(containerId!, "auth:request", { token });
+			const sent = connections.sendToContainer(containerId!, "auth:request", {
+				token,
+			})
 
-      if (!sent) {
-        return Response.json(
-          { error: "Container not found or not connected" },
-          { status: 404, headers: corsHeaders }
-        );
-      }
+			if (!sent) {
+				return Response.json(
+					{ error: "Container not found or not connected" },
+					{ status: 404, headers: corsHeaders },
+				)
+			}
 
-      return Response.json({ status: "token_sent" }, { headers: corsHeaders });
-    } catch {
-      return Response.json(
-        { error: "Invalid request" },
-        { status: 400, headers: corsHeaders }
-      );
-    }
-  }
+			return Response.json({ status: "token_sent" }, { headers: corsHeaders })
+		} catch {
+			return Response.json(
+				{ error: "Invalid request" },
+				{ status: 400, headers: corsHeaders },
+			)
+		}
+	}
 
-  // Create container (inline SSH with secrets from Convex)
-  if (url.pathname === "/containers/create" && req.method === "POST") {
-    try {
-      const body = (await req.json()) as CreateContainerRequest;
+	// Create container (inline SSH with secrets from Convex)
+	if (url.pathname === "/containers/create" && req.method === "POST") {
+		try {
+			const body = (await req.json()) as CreateContainerRequest
 
-      if (!body.repo) {
-        return Response.json(
-          { error: "repo is required" },
-          { status: 400, headers: corsHeaders }
-        );
-      }
+			if (!body.repo) {
+				return Response.json(
+					{ error: "repo is required" },
+					{ status: 400, headers: corsHeaders },
+				)
+			}
 
-      console.log("[gateway] Creating container for repo:", body.repo);
+			console.log("[gateway] Creating container for repo:", body.repo)
 
-      // Fetch secrets from Convex
-      if (!CONVEX_URL) {
-        return Response.json(
-          { error: "CONVEX_URL not configured - cannot fetch secrets" },
-          { status: 500, headers: corsHeaders }
-        );
-      }
+			// Fetch secrets from Convex
+			if (!CONVEX_URL) {
+				return Response.json(
+					{ error: "CONVEX_URL not configured - cannot fetch secrets" },
+					{ status: 500, headers: corsHeaders },
+				)
+			}
 
-      const secrets = await fetchSecrets(CONVEX_URL, [
-        "TS_AUTHKEY",
-        "GH_USERNAME",
-        "GH_TOKEN",
-        "MANAGER_WS_URL",
-      ]);
+			const secrets = await fetchSecrets(CONVEX_URL, [
+				"TS_AUTHKEY",
+				"GH_USERNAME",
+				"GH_TOKEN",
+				"MANAGER_WS_URL",
+			])
 
-      // Validate required secrets
-      const requiredSecrets = ["TS_AUTHKEY", "GH_USERNAME", "GH_TOKEN"];
-      const missingSecrets = requiredSecrets.filter((key) => !secrets[key]);
-      if (missingSecrets.length > 0) {
-        return Response.json(
-          { error: `Missing required secrets: ${missingSecrets.join(", ")}` },
-          { status: 500, headers: corsHeaders }
-        );
-      }
+			// Validate required secrets
+			const requiredSecrets = ["TS_AUTHKEY", "GH_USERNAME", "GH_TOKEN"]
+			const missingSecrets = requiredSecrets.filter((key) => !secrets[key])
+			if (missingSecrets.length > 0) {
+				return Response.json(
+					{ error: `Missing required secrets: ${missingSecrets.join(", ")}` },
+					{ status: 500, headers: corsHeaders },
+				)
+			}
 
-      // Default MANAGER_WS_URL if not set
-      if (!secrets.MANAGER_WS_URL) {
-        secrets.MANAGER_WS_URL = `ws://localhost:${PORT}`;
-      }
+			// Default MANAGER_WS_URL if not set
+			if (!secrets.MANAGER_WS_URL) {
+				secrets.MANAGER_WS_URL = `ws://localhost:${PORT}`
+			}
 
-      const result = await createContainerOnServer(body, secrets, convexSync ?? undefined);
+			const result = await createContainerOnServer(
+				body,
+				secrets,
+				convexSync ?? undefined,
+			)
 
-      // Record in Convex
-      if (convexSync) {
-        convexSync.recordContainerCreated(result, body.taskId, body.projectId);
-      }
+			// Record in Convex
+			if (convexSync) {
+				convexSync.recordContainerCreated(result, body.taskId, body.projectId)
+			}
 
-      return Response.json(result, { status: 201, headers: corsHeaders });
-    } catch (error) {
-      console.error("[gateway] Failed to create container:", error);
-      const message = error instanceof Error ? error.message : "Unknown error";
-      return Response.json(
-        { error: "Failed to create container", details: message },
-        { status: 500, headers: corsHeaders }
-      );
-    }
-  }
+			return Response.json(result, { status: 201, headers: corsHeaders })
+		} catch (error) {
+			console.error("[gateway] Failed to create container:", error)
+			const message = error instanceof Error ? error.message : "Unknown error"
+			return Response.json(
+				{ error: "Failed to create container", details: message },
+				{ status: 500, headers: corsHeaders },
+			)
+		}
+	}
 
-  // Stop container (SSH docker stop)
-  if (url.pathname.match(/^\/containers\/[^/]+\/stop$/) && req.method === "POST") {
-    const containerName = url.pathname.split("/")[2];
-    try {
-      const body = (await req.json()) as { server: string; sshUser?: string };
+	// Stop container (SSH docker stop)
+	if (
+		url.pathname.match(/^\/containers\/[^/]+\/stop$/) &&
+		req.method === "POST"
+	) {
+		const containerName = url.pathname.split("/")[2]
+		try {
+			const body = (await req.json()) as { server: string; sshUser?: string }
 
-      if (!body.server) {
-        return Response.json(
-          { error: "server is required" },
-          { status: 400, headers: corsHeaders }
-        );
-      }
+			if (!body.server) {
+				return Response.json(
+					{ error: "server is required" },
+					{ status: 400, headers: corsHeaders },
+				)
+			}
 
-      console.log(`[gateway] Stopping container ${containerName} on ${body.server}...`);
+			console.log(
+				`[gateway] Stopping container ${containerName} on ${body.server}...`,
+			)
 
-      const sshTarget = body.server === "localhost" ? "localhost" : `${body.sshUser || "ubuntu"}@${body.server}`;
+			const sshTarget =
+				body.server === "localhost"
+					? "localhost"
+					: `${body.sshUser || "ubuntu"}@${body.server}`
 
-      // Find container by label first, fallback to direct name
-      const stopScript = `
+			// Find container by label first, fallback to direct name
+			const stopScript = `
 CONTAINER_ID=$(docker ps -aq --filter "label=agent-manager.tailscale-hostname=${containerName}" | head -1)
 if [ -z "$CONTAINER_ID" ]; then
   CONTAINER_ID="${containerName}"
 fi
 docker stop "$CONTAINER_ID"
-`;
+`
 
-      const stopProc = body.server === "localhost"
-        ? Bun.spawn(["bash", "-c", stopScript], { stdout: "pipe", stderr: "pipe" })
-        : Bun.spawn(["ssh", sshTarget, "bash", "-s"], {
-            stdin: new Blob([stopScript]),
-            stdout: "pipe",
-            stderr: "pipe",
-          });
+			const stopProc =
+				body.server === "localhost"
+					? Bun.spawn(["bash", "-c", stopScript], {
+							stdout: "pipe",
+							stderr: "pipe",
+						})
+					: Bun.spawn(["ssh", sshTarget, "bash", "-s"], {
+							stdin: new Blob([stopScript]),
+							stdout: "pipe",
+							stderr: "pipe",
+						})
 
-      const stdout = await new Response(stopProc.stdout).text();
-      const stderr = await new Response(stopProc.stderr).text();
-      const exitCode = await stopProc.exited;
+			const stdout = await new Response(stopProc.stdout).text()
+			const stderr = await new Response(stopProc.stderr).text()
+			const exitCode = await stopProc.exited
 
-      if (exitCode !== 0) {
-        console.error(`[gateway] Failed to stop container: ${stderr}`);
-        return Response.json(
-          { error: "Failed to stop container", details: stderr },
-          { status: 500, headers: corsHeaders }
-        );
-      }
+			if (exitCode !== 0) {
+				console.error(`[gateway] Failed to stop container: ${stderr}`)
+				return Response.json(
+					{ error: "Failed to stop container", details: stderr },
+					{ status: 500, headers: corsHeaders },
+				)
+			}
 
-      console.log(`[gateway] Container ${containerName} stopped successfully (ID: ${stdout.trim()})`);
-      return Response.json(
-        { status: "stopped", containerName, output: stdout.trim() },
-        { headers: corsHeaders }
-      );
-    } catch (error) {
-      console.error("[gateway] Failed to stop container:", error);
-      const message = error instanceof Error ? error.message : "Unknown error";
-      return Response.json(
-        { error: "Failed to stop container", details: message },
-        { status: 500, headers: corsHeaders }
-      );
-    }
-  }
+			console.log(
+				`[gateway] Container ${containerName} stopped successfully (ID: ${stdout.trim()})`,
+			)
+			return Response.json(
+				{ status: "stopped", containerName, output: stdout.trim() },
+				{ headers: corsHeaders },
+			)
+		} catch (error) {
+			console.error("[gateway] Failed to stop container:", error)
+			const message = error instanceof Error ? error.message : "Unknown error"
+			return Response.json(
+				{ error: "Failed to stop container", details: message },
+				{ status: 500, headers: corsHeaders },
+			)
+		}
+	}
 
-  // Delete container (SSH docker rm - only works on stopped containers)
-  if (url.pathname.match(/^\/containers\/[^/]+$/) && req.method === "DELETE") {
-    const containerName = url.pathname.split("/")[2];
-    try {
-      const body = (await req.json()) as { server: string; sshUser?: string };
+	// Delete container (SSH docker rm - only works on stopped containers)
+	if (url.pathname.match(/^\/containers\/[^/]+$/) && req.method === "DELETE") {
+		const containerName = url.pathname.split("/")[2]
+		try {
+			const body = (await req.json()) as { server: string; sshUser?: string }
 
-      if (!body.server) {
-        return Response.json(
-          { error: "server is required" },
-          { status: 400, headers: corsHeaders }
-        );
-      }
+			if (!body.server) {
+				return Response.json(
+					{ error: "server is required" },
+					{ status: 400, headers: corsHeaders },
+				)
+			}
 
-      console.log(`[gateway] Deleting container ${containerName} on ${body.server}...`);
+			console.log(
+				`[gateway] Deleting container ${containerName} on ${body.server}...`,
+			)
 
-      const sshTarget = body.server === "localhost" ? "localhost" : `${body.sshUser || "ubuntu"}@${body.server}`;
+			const sshTarget =
+				body.server === "localhost"
+					? "localhost"
+					: `${body.sshUser || "ubuntu"}@${body.server}`
 
-      // Find container by label first, check if running, then delete
-      const deleteScript = `
+			// Find container by label first, check if running, then delete
+			const deleteScript = `
 CONTAINER_ID=$(docker ps -aq --filter "label=agent-manager.tailscale-hostname=${containerName}" | head -1)
 if [ -z "$CONTAINER_ID" ]; then
   CONTAINER_ID="${containerName}"
@@ -1011,123 +1556,129 @@ fi
 
 # Delete the container
 docker rm "$CONTAINER_ID"
-`;
+`
 
-      const deleteProc = body.server === "localhost"
-        ? Bun.spawn(["bash", "-c", deleteScript], { stdout: "pipe", stderr: "pipe" })
-        : Bun.spawn(["ssh", sshTarget, "bash", "-s"], {
-            stdin: new Blob([deleteScript]),
-            stdout: "pipe",
-            stderr: "pipe",
-          });
+			const deleteProc =
+				body.server === "localhost"
+					? Bun.spawn(["bash", "-c", deleteScript], {
+							stdout: "pipe",
+							stderr: "pipe",
+						})
+					: Bun.spawn(["ssh", sshTarget, "bash", "-s"], {
+							stdin: new Blob([deleteScript]),
+							stdout: "pipe",
+							stderr: "pipe",
+						})
 
-      const stdout = (await new Response(deleteProc.stdout).text()).trim();
-      const stderr = await new Response(deleteProc.stderr).text();
-      const exitCode = await deleteProc.exited;
+			const stdout = (await new Response(deleteProc.stdout).text()).trim()
+			const stderr = await new Response(deleteProc.stderr).text()
+			const exitCode = await deleteProc.exited
 
-      if (stdout === "NOT_FOUND") {
-        return Response.json(
-          { error: "Container not found" },
-          { status: 404, headers: corsHeaders }
-        );
-      }
+			if (stdout === "NOT_FOUND") {
+				return Response.json(
+					{ error: "Container not found" },
+					{ status: 404, headers: corsHeaders },
+				)
+			}
 
-      if (stdout === "STILL_RUNNING" || exitCode !== 0) {
-        if (stdout === "STILL_RUNNING") {
-          return Response.json(
-            { error: "Container is running. Stop it first before deleting." },
-            { status: 400, headers: corsHeaders }
-          );
-        }
-        console.error(`[gateway] Failed to delete container: ${stderr}`);
-        return Response.json(
-          { error: "Failed to delete container", details: stderr },
-          { status: 500, headers: corsHeaders }
-        );
-      }
+			if (stdout === "STILL_RUNNING" || exitCode !== 0) {
+				if (stdout === "STILL_RUNNING") {
+					return Response.json(
+						{ error: "Container is running. Stop it first before deleting." },
+						{ status: 400, headers: corsHeaders },
+					)
+				}
+				console.error(`[gateway] Failed to delete container: ${stderr}`)
+				return Response.json(
+					{ error: "Failed to delete container", details: stderr },
+					{ status: 500, headers: corsHeaders },
+				)
+			}
 
-      console.log(`[gateway] Container ${containerName} deleted successfully (ID: ${stdout})`);
-      return Response.json(
-        { status: "deleted", containerName, output: stdout.trim() },
-        { headers: corsHeaders }
-      );
-    } catch (error) {
-      console.error("[gateway] Failed to delete container:", error);
-      const message = error instanceof Error ? error.message : "Unknown error";
-      return Response.json(
-        { error: "Failed to delete container", details: message },
-        { status: 500, headers: corsHeaders }
-      );
-    }
-  }
+			console.log(
+				`[gateway] Container ${containerName} deleted successfully (ID: ${stdout})`,
+			)
+			return Response.json(
+				{ status: "deleted", containerName, output: stdout.trim() },
+				{ headers: corsHeaders },
+			)
+		} catch (error) {
+			console.error("[gateway] Failed to delete container:", error)
+			const message = error instanceof Error ? error.message : "Unknown error"
+			return Response.json(
+				{ error: "Failed to delete container", details: message },
+				{ status: 500, headers: corsHeaders },
+			)
+		}
+	}
 
-  return Response.json(
-    { error: "Not found" },
-    { status: 404, headers: corsHeaders }
-  );
+	return Response.json(
+		{ error: "Not found" },
+		{ status: 404, headers: corsHeaders },
+	)
 }
 
 // Start the server
 const server = Bun.serve({
-  port: PORT,
-  fetch: handleHttpRequest,
-  websocket: {
-    open(ws: ServerWebSocket<ContainerContext>) {
-      console.log("[gateway] New WebSocket connection");
-      ws.data = { containerId: null, registered: false };
-      connections.addPendingSocket(ws);
-    },
+	port: PORT,
+	fetch: handleHttpRequest,
+	websocket: {
+		open(ws: ServerWebSocket<ContainerContext>) {
+			console.log("[gateway] New WebSocket connection")
+			ws.data = { containerId: null, registered: false }
+			connections.addPendingSocket(ws)
+		},
 
-    message(ws: ServerWebSocket<ContainerContext>, message: string | Buffer) {
-      try {
-        const data = parseMessage(message.toString());
-        handleContainerMessage(ws, data);
-      } catch (error) {
-        console.error("[gateway] Failed to parse message:", error);
-      }
-    },
+		message(ws: ServerWebSocket<ContainerContext>, message: string | Buffer) {
+			try {
+				const data = parseMessage(message.toString())
+				handleContainerMessage(ws, data)
+			} catch (error) {
+				console.error("[gateway] Failed to parse message:", error)
+			}
+		},
 
-    close(ws: ServerWebSocket<ContainerContext>) {
-      if (ws.data.containerId) {
-        console.log(`[gateway] Container disconnected: ${ws.data.containerId}`);
-        if (convexSync) {
-          convexSync.updateContainerConnection(ws.data.containerId, "", false);
-        }
-        connections.unregisterContainer(ws.data.containerId);
-      } else {
-        connections.removePendingSocket(ws);
-      }
-    },
-  },
-});
+		close(ws: ServerWebSocket<ContainerContext>) {
+			if (ws.data.containerId) {
+				console.log(`[gateway] Container disconnected: ${ws.data.containerId}`)
+				if (convexSync) {
+					convexSync.updateContainerConnection(ws.data.containerId, "", false)
+				}
+				connections.unregisterContainer(ws.data.containerId)
+			} else {
+				connections.removePendingSocket(ws)
+			}
+		},
+	},
+})
 
 // Periodic ping to all containers
 setInterval(() => {
-  connections.pingAll();
-}, PING_INTERVAL);
+	connections.pingAll()
+}, PING_INTERVAL)
 
 // Periodic pruning of stale connections
 setInterval(() => {
-  const pruned = connections.pruneStaleConnections();
-  if (pruned.length > 0) {
-    console.log(`[gateway] Pruned ${pruned.length} stale connections`);
-    // Update Convex for pruned containers
-    if (convexSync) {
-      for (const containerId of pruned) {
-        convexSync.updateContainerConnection(containerId, "", false);
-      }
-    }
-  }
-}, PRUNE_INTERVAL);
+	const pruned = connections.pruneStaleConnections()
+	if (pruned.length > 0) {
+		console.log(`[gateway] Pruned ${pruned.length} stale connections`)
+		// Update Convex for pruned containers
+		if (convexSync) {
+			for (const containerId of pruned) {
+				convexSync.updateContainerConnection(containerId, "", false)
+			}
+		}
+	}
+}, PRUNE_INTERVAL)
 
-console.log(`[gateway] Agent Gateway started`);
-console.log(`[gateway]   Server ID: ${SERVER_ID}`);
-console.log(`[gateway]   WebSocket: ws://localhost:${PORT}`);
-console.log(`[gateway]   HTTP API:  http://localhost:${PORT}`);
+console.log(`[gateway] Agent Gateway started`)
+console.log(`[gateway]   Server ID: ${SERVER_ID}`)
+console.log(`[gateway]   WebSocket: ws://localhost:${PORT}`)
+console.log(`[gateway]   HTTP API:  http://localhost:${PORT}`)
 if (convexSync) {
-  console.log(`[gateway]   Convex:    enabled`);
+	console.log(`[gateway]   Convex:    enabled`)
 } else {
-  console.log(`[gateway]   Convex:    disabled (set CONVEX_URL to enable)`);
+	console.log(`[gateway]   Convex:    disabled (set CONVEX_URL to enable)`)
 }
 
-export { server };
+export { server }
