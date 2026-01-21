@@ -75,7 +75,7 @@ function formatModelName(model: string): string {
 }
 
 export function PhaseStatusHeader({
-	phase,
+	phase: _phase,
 	phaseRecord,
 	onViewConfig,
 	className,

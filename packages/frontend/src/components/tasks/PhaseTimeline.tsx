@@ -241,7 +241,7 @@ export function PhaseTimeline({
 // Mini version for use in task cards
 export function PhaseTimelineMini({
 	phases,
-	currentPhase,
+	currentPhase: _currentPhase,
 }: Pick<PhaseTimelineProps, "phases" | "currentPhase">) {
 	const phaseMap = new Map(phases.map((p) => [p.phase, p]))
 

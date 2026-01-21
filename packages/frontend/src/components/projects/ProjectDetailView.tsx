@@ -45,7 +45,7 @@ interface ProjectDetailViewProps {
 export function ProjectDetailView({
 	project,
 	onTaskClick,
-	onUpdateProject,
+	onUpdateProject: _onUpdateProject,
 	onNewTask,
 }: ProjectDetailViewProps) {
 	const [activeTab, setActiveTab] = useState("tasks")
