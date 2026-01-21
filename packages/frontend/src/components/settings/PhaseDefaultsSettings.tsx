@@ -146,6 +146,7 @@ function PhaseConfigCard({
 					</div>
 				</div>
 				<div className="flex items-center gap-3">
+					{/* biome-ignore lint/a11y/noStaticElementInteractions: stopPropagation only */}
 					<div
 						className="flex items-center gap-2"
 						onClick={(e) => e.stopPropagation()}
