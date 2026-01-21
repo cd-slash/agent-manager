@@ -122,8 +122,9 @@ function PhaseConfigCard({
 
 	return (
 		<div className="bg-surface border border-border rounded-lg overflow-hidden">
-			<div
-				className="flex items-center justify-between p-4 cursor-pointer hover:bg-surface/80 transition-colors"
+			<button
+				type="button"
+				className="w-full flex items-center justify-between p-4 cursor-pointer hover:bg-surface/80 transition-colors text-left"
 				onClick={() => setIsExpanded(!isExpanded)}
 			>
 				<div className="flex items-center gap-3">
@@ -166,7 +167,7 @@ function PhaseConfigCard({
 						<ChevronDown size={18} className="text-muted-foreground" />
 					)}
 				</div>
-			</div>
+			</button>
 
 			{isExpanded && (
 				<div className="border-t border-border p-4 space-y-4 bg-background/50">
