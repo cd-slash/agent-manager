@@ -163,9 +163,13 @@ function SectionPanel({
 			</button>
 
 			{isExpanded && (
+				// biome-ignore lint/a11y/useSemanticElements: double-click edit region needs to wrap content
 				<div
+					role="button"
+					tabIndex={0}
 					className="px-4 pb-4 pt-1 text-sm"
 					onDoubleClick={() => setIsEditing(true)}
+					onKeyDown={(e) => e.key === "Enter" && setIsEditing(true)}
 				>
 					{isEditing ? (
 						<Textarea

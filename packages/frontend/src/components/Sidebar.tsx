@@ -94,6 +94,7 @@ export function Sidebar({
 
 					const NavButton = (
 						<button
+							type="button"
 							key={item.id}
 							onClick={() => onViewChange(item.id)}
 							className={cn(

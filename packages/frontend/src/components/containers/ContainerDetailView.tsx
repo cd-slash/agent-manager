@@ -158,17 +158,17 @@ export function ContainerDetailView({
 											<div className="bg-surface border border-border rounded-lg p-4">
 												<div className="grid grid-cols-2 gap-6">
 													<div>
-														<label className="text-xs text-muted-foreground uppercase font-semibold">
+														<span className="text-xs text-muted-foreground uppercase font-semibold">
 															Image
-														</label>
+														</span>
 														<div className="text-foreground font-mono mt-1">
 															{container.image}
 														</div>
 													</div>
 													<div>
-														<label className="text-xs text-muted-foreground uppercase font-semibold">
+														<span className="text-xs text-muted-foreground uppercase font-semibold">
 															Server
-														</label>
+														</span>
 														<div className="text-foreground font-mono mt-1 flex items-center">
 															<Server
 																size={14}
@@ -188,25 +188,25 @@ export function ContainerDetailView({
 											<div className="bg-surface border border-border rounded-lg p-4">
 												<div className="grid grid-cols-2 gap-6">
 													<div>
-														<label className="text-xs text-muted-foreground uppercase font-semibold">
+														<span className="text-xs text-muted-foreground uppercase font-semibold">
 															Proxied Ports
-														</label>
+														</span>
 														<div className="text-foreground font-mono text-lg mt-1">
 															{container.port}
 														</div>
 													</div>
 													<div>
-														<label className="text-xs text-muted-foreground uppercase font-semibold">
+														<span className="text-xs text-muted-foreground uppercase font-semibold">
 															Tailscale IP
-														</label>
+														</span>
 														<div className="text-foreground font-mono text-lg mt-1">
 															100.x.y.z
 														</div>
 													</div>
 													<div className="col-span-2">
-														<label className="text-xs text-muted-foreground uppercase font-semibold">
+														<span className="text-xs text-muted-foreground uppercase font-semibold">
 															FQDN (Tailscale)
-														</label>
+														</span>
 														<div className="text-feature-blue font-mono text-lg mt-1">
 															{container.name}.tail-scale.ts.net
 														</div>
@@ -222,17 +222,17 @@ export function ContainerDetailView({
 											<div className="bg-surface border border-border rounded-lg p-4">
 												<div className="space-y-4">
 													<div>
-														<label className="text-xs text-muted-foreground uppercase font-semibold">
+														<span className="text-xs text-muted-foreground uppercase font-semibold">
 															Command
-														</label>
+														</span>
 														<div className="bg-background p-2 rounded text-muted-foreground font-mono text-sm mt-1">
 															docker-entrypoint.sh npm start
 														</div>
 													</div>
 													<div>
-														<label className="text-xs text-muted-foreground uppercase font-semibold">
+														<span className="text-xs text-muted-foreground uppercase font-semibold">
 															Uptime
-														</label>
+														</span>
 														<div className="text-foreground mt-1">
 															14 days, 3 hours
 														</div>

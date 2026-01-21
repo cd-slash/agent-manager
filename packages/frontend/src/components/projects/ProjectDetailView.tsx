@@ -162,15 +162,15 @@ export function ProjectDetailView({
 											</h3>
 											<div className="bg-surface border border-border rounded-lg p-section space-y-card">
 												<div>
-													<label className="block text-xs font-medium text-muted-foreground uppercase tracking-wider mb-item">
+													<span className="block text-xs font-medium text-muted-foreground uppercase tracking-wider mb-item">
 														Project Name
-													</label>
+													</span>
 													<Input value={project.name} readOnly />
 												</div>
 												<div>
-													<label className="block text-xs font-medium text-muted-foreground uppercase tracking-wider mb-item">
+													<span className="block text-xs font-medium text-muted-foreground uppercase tracking-wider mb-item">
 														Description
-													</label>
+													</span>
 													<Textarea
 														value={project.description}
 														readOnly
@@ -178,9 +178,9 @@ export function ProjectDetailView({
 													/>
 												</div>
 												<div>
-													<label className="block text-xs font-medium text-muted-foreground uppercase tracking-wider mb-item">
+													<span className="block text-xs font-medium text-muted-foreground uppercase tracking-wider mb-item">
 														Repository URL
-													</label>
+													</span>
 													<div className="flex">
 														<Input
 															value={`github.com/demo-user/${project.name.toLowerCase().replace(/\s+/g, "-")}`}
@@ -196,9 +196,9 @@ export function ProjectDetailView({
 													</div>
 												</div>
 												<div>
-													<label className="block text-xs font-medium text-muted-foreground uppercase tracking-wider mb-item">
+													<span className="block text-xs font-medium text-muted-foreground uppercase tracking-wider mb-item">
 														Branch
-													</label>
+													</span>
 													<Select defaultValue="main">
 														<SelectTrigger>
 															<SelectValue />

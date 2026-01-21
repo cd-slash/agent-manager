@@ -117,6 +117,7 @@ export function BuildTimeline({
 
 					return (
 						<button
+							type="button"
 							key={phase.phase}
 							onClick={() => onSelectPhase(phase.phase)}
 							className={cn(
