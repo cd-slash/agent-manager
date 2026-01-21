@@ -26,199 +26,438 @@ Each phase in the task lifecycle uses a specialized agent with its own configura
 
 ### Planning Agent
 
-**Purpose**: Analyze task requirements and prepare for implementation
+**Purpose**: Explore the codebase and design an implementation approach
 
 **Inputs**:
 - Task title and description
-- Project context
+- Custom prompt/instructions
+- Repository and branch context
+- Acceptance criteria (if provided)
 
 **Outputs**:
-- Acceptance criteria (checklist items)
-- Implementation prompt (detailed instructions for Implementation Agent)
-- Test cases (expected behaviors to verify)
+- Files to modify/create
+- Implementation steps
+- Testing strategy
+- Risks/considerations
 
-**Default Prompt Template**:
+**Default Prompt Template** (from `phase-prompts.ts`):
 ```
-You are a planning agent. Analyze this task and prepare it for implementation.
+# Task: {title}
 
-Task: {{task.title}}
-Description: {{task.description}}
+## Description
+{description}
 
-Your job is to:
-1. Create detailed acceptance criteria that define when this task is complete
-2. Write the implementation prompt that will be given to the implementation agent
-3. Define test cases that should pass when the implementation is complete
+## Additional Instructions (if any)
+{prompt}
 
-Output structured JSON with:
-- acceptanceCriteria: array of criteria strings
-- implementationPrompt: the full prompt for the implementation agent
-- testCases: array of test definitions
+## Acceptance Criteria
+{acceptanceCriteria}
+
+## Your Role
+You are a software architect. Your job is to:
+
+1. **Explore** the codebase to understand the existing architecture
+2. **Identify** the files that need to be modified or created
+3. **Design** a step-by-step implementation plan
+4. **Consider** edge cases, error handling, and testing
+5. **Document** any risks or technical decisions
+
+## Context
+- Repository: {repo}
+- Branch: {branch}
+
+## Instructions
+1. Use the available tools to read and explore the codebase
+2. Understand the patterns and conventions used
+3. Create a detailed implementation plan
+
+## Output Format
+Provide:
+1. **Files to Modify**: List each file with what changes are needed
+2. **New Files**: List any new files to create
+3. **Implementation Steps**: Numbered list of concrete steps
+4. **Testing Strategy**: How to verify the implementation
+5. **Risks/Considerations**: Any concerns or alternatives
+
+Do NOT write implementation code yet. Focus on planning.
 ```
+
+**Configuration**: Model: sonnet, Permission: plan, Budget: $2.00
 
 ### Implementation Agent
 
 **Purpose**: Write code to implement the planned feature
 
 **Inputs**:
-- Implementation prompt from Planning phase
+- Task title and description
 - Acceptance criteria
+- Planning phase output (if available)
 - Repository state
 
 **Outputs**:
 - Code changes committed to feature branch
 - Pull request created
+- Summary of what was implemented
 
-**Default Prompt Template**:
+**Default Prompt Template** (from `phase-prompts.ts`):
 ```
-You are an implementation agent. Complete this coding task.
+# Task: {title}
 
-Task: {{task.title}}
-{{task.implementationPrompt}}
+## Description
+{description}
 
-Acceptance Criteria:
-{{#each task.acceptanceCriteria}}
-- {{this}}
-{{/each}}
+## Additional Instructions (if any)
+{prompt}
 
-Requirements:
-1. Write clean, well-tested code following project conventions
-2. Create a feature branch: task-{{task.id}}
-3. Make atomic commits with clear messages
-4. Run tests to verify acceptance criteria are met
-5. Create a pull request when complete
+## Acceptance Criteria
+{acceptanceCriteria}
+
+## Implementation Plan (from planning phase)
+{planningOutput}
+
+## Your Role
+You are a senior software engineer. Your job is to:
+
+1. **Implement** the task according to the requirements and plan
+2. **Follow** existing code patterns and conventions
+3. **Write** clean, maintainable, well-documented code
+4. **Create** or update tests as needed
+5. **Commit** your changes with clear commit messages
+
+## Context
+- Repository: {repo}
+- Branch: {branch}
+
+## Instructions
+1. Create a new feature branch from {branch}
+2. Implement the required changes
+3. Run existing tests to ensure nothing breaks
+4. Add new tests if appropriate
+5. Commit your changes with descriptive messages
+6. Push the branch and create a pull request
+
+## Code Quality Requirements
+- Follow the existing code style and patterns
+- Add appropriate error handling
+- Include comments for complex logic
+- Ensure type safety (if TypeScript)
+- Do not introduce security vulnerabilities
+
+## Output
+After completing the implementation:
+1. Summarize what was implemented
+2. List all files modified/created
+3. Describe any decisions made during implementation
+4. Note any concerns or follow-up items
 ```
+
+**Configuration**: Model: sonnet, Permission: acceptEdits, Budget: $10.00
 
 ### AI Review Agent
 
 **Purpose**: Review the PR for quality, security, and correctness
 
 **Inputs**:
-- Pull request details
+- Task description and acceptance criteria
+- Pull request details (number, URL, branch)
 - Code diff
-- Acceptance criteria
 
 **Outputs**:
-- Review comments on PR
-- Approval or request for changes
-- Issues list with severity
+- Summary of changes
+- Acceptance criteria status check
+- Issues list with severity (critical, major, minor, suggestion)
+- Verdict: APPROVE, REQUEST_CHANGES, or NEEDS_DISCUSSION
 
-**Default Prompt Template**:
+**Default Prompt Template** (from `phase-prompts.ts`):
 ```
-You are a code review agent. Review this pull request thoroughly.
+# Code Review: {title}
 
-Task: {{task.title}}
-Pull Request: #{{pr.number}}
-Branch: {{pr.branch}} → {{pr.baseBranch}}
+## Original Task Description
+{description}
 
-Review the code for:
-1. Correctness - does it meet the acceptance criteria?
-2. Code quality - is it clean, readable, maintainable?
-3. Security - any vulnerabilities or unsafe patterns?
-4. Performance - any obvious performance issues?
-5. Test coverage - are the tests adequate?
+## Acceptance Criteria
+{acceptanceCriteria}
 
-Approve or request changes based on your findings.
+## Pull Request
+- PR #{prNumber}
+- URL: {prUrl}
+- Branch: {prBranch}
+
+## Your Role
+You are a senior code reviewer. Your job is to:
+
+1. **Review** all changes in the pull request
+2. **Verify** the implementation meets the acceptance criteria
+3. **Check** for bugs, security issues, and code quality problems
+4. **Identify** any missing tests or edge cases
+5. **Provide** constructive feedback
+
+## Review Checklist
+- [ ] Code correctness - Does it work as intended?
+- [ ] Code quality - Is it clean, readable, and maintainable?
+- [ ] Error handling - Are errors handled appropriately?
+- [ ] Security - Are there any security vulnerabilities?
+- [ ] Performance - Are there any performance concerns?
+- [ ] Testing - Are there adequate tests?
+- [ ] Documentation - Is the code well-documented?
+- [ ] Style - Does it follow project conventions?
+
+## Context
+- Repository: {repo}
+- Branch: {branch}
+
+## Instructions
+1. Read the diff of all changed files
+2. Understand what was implemented
+3. Verify against acceptance criteria
+4. Look for issues and improvements
+
+## Output Format
+Provide:
+1. **Summary**: Brief overview of the changes
+2. **Acceptance Criteria Status**: Check each criterion
+3. **Issues Found**: List any problems (with severity)
+4. **Recommendations**: Suggestions for improvement
+5. **Verdict**: APPROVE, REQUEST_CHANGES, or NEEDS_DISCUSSION
 ```
+
+**Configuration**: Model: sonnet, Permission: plan (read-only), Budget: $3.00
 
 ### Remediation Agent
 
 **Purpose**: Fix issues identified during AI or Human review
 
 **Inputs**:
-- Issues from AI review (when triggered by AI)
-- Human feedback text (when triggered by Human)
+- Issues from AI review (with severity, file path, line number)
+- Human feedback text (when triggered by human)
 - Current PR state
 
 **Outputs**:
 - Code fixes committed to feature branch
 - Updated PR
+- List of how each issue was addressed
 
-**Default Prompt Template**:
+**Default Prompt Template** (from `phase-prompts.ts`):
 ```
-You are a remediation agent. Fix the issues identified during code review.
+# Remediation: {title}
 
-Task: {{task.title}}
-Remediation Cycle: {{remediation.cycleNumber}} of {{remediation.maxCycles}}
-Triggered By: {{remediation.triggeredBy}}
+## Original Task Description
+{description}
 
-{{#if remediation.feedback}}
-Human Feedback:
-{{remediation.feedback}}
-{{/if}}
+## Pull Request
+- PR #{prNumber}
+- Branch: {prBranch}
 
-{{#if remediation.aiReviewIssues}}
-AI Review Issues:
-{{#each remediation.aiReviewIssues}}
-- {{this.file}}:{{this.line}} - {{this.issue}}
-{{/each}}
-{{/if}}
+## Issues to Fix
+{issues - formatted as:}
+### Issue 1: {issueTitle}
+- **Severity**: {severity}
+- **Description**: {issueDescription}
+- **File**: {filePath}:{lineNumber}
 
-Your job is to:
-1. Address each issue identified in the review
-2. Make the necessary code changes
-3. Ensure tests still pass after your changes
-4. Commit your fixes with clear messages
+## Human Reviewer Feedback (if triggered by human)
+{humanFeedback}
+
+## Your Role
+You are a software engineer fixing issues found during code review. Your job is to:
+
+1. **Address** each issue identified in the review
+2. **Fix** bugs, security issues, and code quality problems
+3. **Add** missing tests or error handling
+4. **Update** documentation if needed
+5. **Commit** your fixes with clear messages
+
+## Context
+- Repository: {repo}
+- Branch: {branch}
+
+## Instructions
+1. Review each issue carefully
+2. Make the necessary fixes
+3. Ensure fixes don't introduce new problems
+4. Run tests to verify the fixes
+5. Commit and push your changes
+
+## Output
+After completing remediation:
+1. List each issue and how it was addressed
+2. Describe any additional changes made
+3. Note any issues that couldn't be fully resolved
+4. Confirm tests are passing
 ```
+
+**Configuration**: Model: sonnet, Permission: acceptEdits, Budget: $5.00
 
 ### Human Review Assistant Agent
 
 **Purpose**: Help human reviewer understand and test the changes
 
 **Inputs**:
+- Task description
 - PR details and history
 - AI review results
-- Preview deployment URL (when available)
 
 **Outputs**:
 - Answers to human's questions
 - Explanations of code changes
-- Testing suggestions
+- Testing assistance
 
-**Default Prompt Template**:
+**Default Prompt Template** (from `phase-prompts.ts`):
 ```
-You are a review assistant helping a human reviewer evaluate this PR.
+# Assisting Human Review: {title}
 
-Task: {{task.title}}
-Pull Request: #{{pr.number}}
-Preview URL: {{deployment.previewUrl}}
+## Original Task Description
+{description}
 
-Help the human reviewer by:
-1. Explaining what the code does
-2. Highlighting any concerns from the AI review
-3. Suggesting things to test in the preview deployment
-4. Answering technical questions about the implementation
+## Pull Request
+- PR #{prNumber}
+- URL: {prUrl}
+- Branch: {prBranch}
 
-Be helpful and concise. The human makes the final approval decision.
+## Your Role
+You are an assistant helping a human reviewer test and evaluate the changes.
+Your job is to:
+
+1. **Answer** questions about the implementation
+2. **Run** specific tests or commands as requested
+3. **Demonstrate** functionality as needed
+4. **Explain** code changes and decisions
+5. **Help** identify any remaining issues
+
+## Context
+- Repository: {repo}
+- Branch: {branch}
+
+## Instructions
+You are now in an interactive session with the human reviewer.
+- Respond to their questions and requests
+- Run commands they ask you to run
+- Help them understand and test the changes
+- Be ready to make minor fixes if requested
+
+Await the reviewer's instructions.
 ```
+
+**Configuration**: Model: sonnet, Permission: default (interactive), Budget: $5.00
 
 ### Merge Agent
 
 **Purpose**: Merge the approved PR to main branch
 
 **Inputs**:
-- Approved PR
+- Approved PR details
 - Main branch state
 
 **Outputs**:
 - Merged PR
 - Deleted feature branch
+- Merge commit hash
 
-**Default Prompt Template**:
+**Default Prompt Template** (from `phase-prompts.ts`):
 ```
-You are a merge agent. Merge this approved pull request.
+# Merge: {title}
 
-Task: {{task.title}}
-Pull Request: #{{pr.number}}
+## Task Description
+{description}
 
-Steps:
-1. Verify all required reviews are approved
-2. Verify all CI checks are passing
-3. Check for merge conflicts with main
-4. If conflicts exist, resolve them preserving the intent of both changes
-5. Perform squash merge with a clear commit message
-6. Verify the merge was successful
-7. Delete the feature branch
+## Pull Request
+- PR #{prNumber}
+- Branch: {prBranch}
+
+## Your Role
+You are completing the task by merging the approved pull request. Your job is to:
+
+1. **Verify** all checks are passing
+2. **Merge** the pull request
+3. **Clean up** the feature branch if appropriate
+4. **Update** any related documentation or tracking
+
+## Context
+- Repository: {repo}
+- Target Branch: {branch}
+
+## Instructions
+1. Check that all CI checks have passed
+2. Verify the PR is approved
+3. Merge the pull request (prefer squash merge for cleaner history)
+4. Delete the feature branch
+5. Confirm the merge was successful
+
+## Output
+After completing the merge:
+1. Confirm the PR was merged successfully
+2. Note the merge commit hash
+3. Confirm the feature branch was deleted
+4. Any post-merge notes or follow-up items
 ```
+
+**Configuration**: Model: sonnet, Permission: acceptEdits, Budget: $1.00
+
+## Task Execution via Gateway
+
+When a user initiates a task phase from the frontend, execution flows through the Agent Gateway:
+
+### Frontend → Gateway → Container Flow
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        TASK PHASE EXECUTION                                  │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  Frontend:                                                                  │
+│    agentGateway.startPhaseExecution({                                       │
+│      taskId: "abc123",                                                      │
+│      phase: "implementation"                                                │
+│    })                                                                       │
+│         │                                                                   │
+│         ▼                                                                   │
+│  Gateway HTTP API:                                                          │
+│    POST /tasks/abc123/phases/implementation/start                           │
+│         │                                                                   │
+│         ▼                                                                   │
+│  TaskOrchestrator:                                                          │
+│    1. Fetch task and project from Convex                                    │
+│    2. Build TaskContext with all relevant data                              │
+│    3. Enrich context (PR info, issues, planning output)                     │
+│    4. Generate prompt using phase-prompts.ts                                │
+│    5. Find available container                                              │
+│    6. Send exec:start via WebSocket                                         │
+│         │                                                                   │
+│         ▼                                                                   │
+│  Container:                                                                 │
+│    claude -p --output-format stream-json                                    │
+│         │                                                                   │
+│         ▼                                                                   │
+│  Stream back: exec:stream → Convex → Frontend (real-time)                  │
+│  Complete:    exec:complete → Update phase status → Trigger next phase      │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Gateway API Endpoints
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/tasks/:taskId/phases/:phase/start` | POST | Start phase execution |
+| `/tasks/executions` | GET | List active executions |
+| `/auth/status` | GET | Check for stored auth token |
+| `/auth/setup/start` | POST | Start OAuth flow |
+| `/auth/setup/complete` | POST | Complete OAuth with code |
+| `/auth/token` | POST | Manually set token |
+
+### Authentication
+
+Authentication is handled once at the gateway level:
+
+1. **One-time setup**: Admin runs OAuth flow via `/auth/setup/start`
+2. **Token storage**: Token stored in Convex `secrets` table
+3. **Auto-push**: When containers connect, gateway pushes token via `auth:request`
+4. **Container ready**: Container sets `ANTHROPIC_AUTH_TOKEN` env var
+
+This means:
+- No per-container authentication required
+- Token is shared across all containers
+- Containers are immediately ready to execute
 
 ## Remediation Cycle Flow
 

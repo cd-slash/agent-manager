@@ -250,7 +250,10 @@ packages/agent-gateway/    # Bun WebSocket server
 ├── src/
 │   ├── index.ts           # Server entry point
 │   ├── connections.ts     # Container connection management
-│   └── convex-sync.ts     # Convex integration
+│   ├── convex-sync.ts     # Convex integration
+│   ├── claude-auth.ts     # One-time OAuth token setup via PTY
+│   ├── phase-prompts.ts   # Phase prompt templates for all 6 phases
+│   └── task-orchestrator.ts # Task execution orchestration
 └── bin/
     └── create-agent       # Container creation script
 
@@ -620,6 +623,149 @@ class ConvexSync {
   skipPhase(containerId, phase)            // Skip a phase
 }
 ```
+
+## Task Execution Flow
+
+When a user starts a task phase from the frontend, the system orchestrates execution through multiple components:
+
+### Execution Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           TASK EXECUTION FLOW                                │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  1. Frontend                 2. Gateway                  3. Container        │
+│  ───────────                 ──────────                  ────────────        │
+│                                                                              │
+│  User clicks              TaskOrchestrator            Container API         │
+│  "Start Phase"            receives request            runs Claude CLI       │
+│       │                         │                           │               │
+│       ▼                         ▼                           ▼               │
+│  ┌──────────┐           ┌──────────────┐           ┌──────────────┐        │
+│  │  Call    │──────────▶│   Fetch      │           │              │        │
+│  │  Gateway │           │   Task/Proj  │           │              │        │
+│  │  API     │           │   from Convex│           │              │        │
+│  └──────────┘           └──────────────┘           │              │        │
+│                                │                    │              │        │
+│                                ▼                    │              │        │
+│                         ┌──────────────┐           │              │        │
+│                         │  Generate    │           │              │        │
+│                         │  Phase Prompt│           │              │        │
+│                         │  (templates) │           │              │        │
+│                         └──────────────┘           │              │        │
+│                                │                    │              │        │
+│                                ▼                    │              │        │
+│                         ┌──────────────┐           │              │        │
+│                         │ Find/Assign  │           │              │        │
+│                         │  Container   │           │              │        │
+│                         └──────────────┘           │              │        │
+│                                │                    │              │        │
+│                                ▼                    ▼              │        │
+│                         ┌──────────────┐    ┌──────────────┐      │        │
+│                         │ Send via WS  │───▶│  exec:start  │      │        │
+│                         │ exec:start   │    │  received    │      │        │
+│                         └──────────────┘    └──────────────┘      │        │
+│                                │                    │              │        │
+│                                │                    ▼              │        │
+│                                │             ┌──────────────┐      │        │
+│                                │             │ claude -p    │      │        │
+│                                │             │ with prompt  │      │        │
+│                                │             └──────────────┘      │        │
+│                                │                    │              │        │
+│                                │◀───────────────────│              │        │
+│                         ┌──────────────┐    exec:stream            │        │
+│  ┌──────────┐           │  Sync to     │           │              │        │
+│  │  Convex  │◀──────────│   Convex     │           │              │        │
+│  │  Updates │           │  (messages)  │           │              │        │
+│  └──────────┘           └──────────────┘           │              │        │
+│       │                         │                    │              │        │
+│       ▼                         │◀───────────────────│              │        │
+│  ┌──────────┐           ┌──────────────┐    exec:complete          │        │
+│  │ Real-time│           │ Update Phase │           │              │        │
+│  │ Subscribe│◀──────────│  Status      │           │              │        │
+│  │ (React)  │           │  in Convex   │           │              │        │
+│  └──────────┘           └──────────────┘           │              │        │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Gateway HTTP Endpoints for Task Execution
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/tasks/:taskId/phases/:phase/start` | POST | Start execution of a task phase |
+| `/tasks/executions` | GET | List active task executions |
+| `/auth/status` | GET | Check if gateway has stored auth token |
+| `/auth/setup/start` | POST | Start OAuth flow for Claude authentication |
+| `/auth/setup/complete` | POST | Complete OAuth with authorization code |
+| `/auth/token` | POST | Manually set auth token |
+
+### Task Orchestrator
+
+The `TaskOrchestrator` class (`packages/agent-gateway/src/task-orchestrator.ts`) handles:
+
+1. **Task/Project Loading**: Fetches task details and project info from Convex
+2. **Context Enrichment**: Adds phase-specific context (PR info, issues, planning output)
+3. **Prompt Generation**: Uses phase templates to generate appropriate prompts
+4. **Container Assignment**: Finds an available container or uses a specified one
+5. **Execution Tracking**: Tracks active executions and handles completion
+6. **Phase Status Updates**: Updates Convex with phase status changes
+
+### Phase Prompt Templates
+
+The `phase-prompts.ts` module generates prompts for each phase:
+
+| Phase | Permission Mode | Default Model | Budget |
+|-------|-----------------|---------------|--------|
+| Requirements | plan | sonnet | $0.50 |
+| Planning | plan | sonnet | $2.00 |
+| Implementation | acceptEdits | sonnet | $10.00 |
+| AI Review | plan | sonnet | $3.00 |
+| Remediation | acceptEdits | sonnet | $5.00 |
+| Human Review | default | sonnet | $5.00 |
+| Merge | acceptEdits | sonnet | $1.00 |
+
+### Authentication Flow
+
+Claude authentication uses a one-time setup process:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        AUTHENTICATION FLOW                                   │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  ONE-TIME SETUP (via Gateway):                                              │
+│  ──────────────────────────────                                             │
+│                                                                              │
+│  1. Admin calls POST /auth/setup/start                                      │
+│  2. Gateway spawns `claude setup-token` via PTY                             │
+│  3. Gateway extracts OAuth URL from PTY output                              │
+│  4. Gateway returns URL to admin                                            │
+│  5. Admin visits URL, authenticates with Claude                             │
+│  6. Admin gets authorization code from redirect                             │
+│  7. Admin calls POST /auth/setup/complete with code                         │
+│  8. Gateway sends code to PTY, extracts token                               │
+│  9. Gateway stores token in Convex secrets table                            │
+│                                                                              │
+│  CONTAINER AUTHENTICATION (automatic):                                       │
+│  ─────────────────────────────────────                                       │
+│                                                                              │
+│  1. Container connects to gateway via WebSocket                             │
+│  2. Gateway detects new connection                                          │
+│  3. Gateway fetches stored token from Convex                                │
+│  4. Gateway sends auth:request message with token                           │
+│  5. Container sets ANTHROPIC_AUTH_TOKEN environment                         │
+│  6. Container is ready to execute Claude CLI commands                       │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+This approach means:
+- Token is obtained once and stored securely in Convex
+- All containers automatically receive the token on connect
+- No per-container authentication flow required
+- Token can be manually updated via POST /auth/token if needed
 
 ## Container API Architecture
 

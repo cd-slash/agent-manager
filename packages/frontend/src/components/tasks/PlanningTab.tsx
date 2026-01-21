@@ -1,5 +1,3 @@
-import { api } from "@agent-manager/convex/api"
-import { useMutation } from "convex/react"
 import {
 	Activity,
 	CheckSquare,
@@ -12,6 +10,7 @@ import {
 } from "lucide-react"
 import { useState } from "react"
 import { useToast } from "@/components/ToastProvider"
+import { agentGateway } from "@/lib/agent-gateway"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import type { TaskId, TaskPhaseDoc } from "@/types"
@@ -53,8 +52,6 @@ export function PlanningTab({
 	const [showPrompt, setShowPrompt] = useState(false)
 	const [isStarting, setIsStarting] = useState(false)
 
-	const startPhase = useMutation(api.taskPhases.startPhase)
-
 	const status = planningPhase?.status || "pending"
 	const isPending = status === "pending"
 	const isInProgress = status === "in_progress"
@@ -63,13 +60,15 @@ export function PlanningTab({
 	const handleStartPlanning = async () => {
 		setIsStarting(true)
 		try {
-			await startPhase({
-				taskId,
+			// Call gateway to start phase execution
+			const result = await agentGateway.startPhaseExecution({
+				taskId: taskId as string,
 				phase: "planning",
 			})
+
 			toast.success(
 				"Planning started",
-				"The planning agent has begun analyzing the task",
+				`Agent running on container ${result.containerId}`,
 			)
 		} catch (error) {
 			toast.error(

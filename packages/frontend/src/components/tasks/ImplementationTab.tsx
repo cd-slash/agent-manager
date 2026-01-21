@@ -1,5 +1,3 @@
-import { api } from "@agent-manager/convex/api"
-import { useMutation } from "convex/react"
 import {
 	Code2,
 	Loader2,
@@ -11,6 +9,7 @@ import {
 } from "lucide-react"
 import { useState } from "react"
 import { useToast } from "@/components/ToastProvider"
+import { agentGateway } from "@/lib/agent-gateway"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import type { TaskId, TaskPhaseDoc } from "@/types"
@@ -32,8 +31,6 @@ export function ImplementationTab({
 	const [showConfig, setShowConfig] = useState(false)
 	const [isStarting, setIsStarting] = useState(false)
 
-	const startPhase = useMutation(api.taskPhases.startPhase)
-
 	const status = implementationPhase?.status || "pending"
 	const isPending = status === "pending"
 	const isInProgress = status === "in_progress"
@@ -43,13 +40,16 @@ export function ImplementationTab({
 	const handleStartImplementation = async () => {
 		setIsStarting(true)
 		try {
-			await startPhase({
-				taskId,
+			// Call gateway to start phase execution
+			// This will create/assign a container, generate prompt, and start the agent
+			const result = await agentGateway.startPhaseExecution({
+				taskId: taskId as string,
 				phase: "implementation",
 			})
+
 			toast.success(
 				"Implementation started",
-				"The implementation agent has begun coding",
+				`Agent running on container ${result.containerId}`,
 			)
 		} catch (error) {
 			toast.error(

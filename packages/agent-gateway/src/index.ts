@@ -20,8 +20,11 @@ import type {
 } from "@agent-manager/agent-shared"
 import { isConnectMessage, parseMessage } from "@agent-manager/agent-shared"
 import type { ServerWebSocket } from "bun"
+import { ClaudeAuth } from "./claude-auth"
 import { ConnectionManager, type ContainerContext } from "./connections"
 import { ConvexSync } from "./convex-sync"
+import type { TaskPhase } from "./phase-prompts"
+import { TaskOrchestrator } from "./task-orchestrator"
 
 // 3-letter words for random name generation
 const WORDS = [
@@ -1010,6 +1013,10 @@ const PRUNE_INTERVAL = 60000 // 60 seconds
 
 const connections = new ConnectionManager(SERVER_ID)
 const convexSync = CONVEX_URL ? new ConvexSync(CONVEX_URL) : null
+const claudeAuth = CONVEX_URL ? new ClaudeAuth(CONVEX_URL) : null
+const taskOrchestrator = CONVEX_URL
+	? new TaskOrchestrator(CONVEX_URL, connections)
+	: null
 
 // Active executions tracking (correlationId -> { containerId, taskId, projectId })
 const activeExecutions = new Map<
@@ -1021,6 +1028,28 @@ const activeExecutions = new Map<
 		startedAt: number
 	}
 >()
+
+/**
+ * Push stored auth token to a container
+ */
+async function pushTokenToContainer(containerId: string): Promise<boolean> {
+	if (!claudeAuth) return false
+
+	const token = await claudeAuth.getStoredToken()
+	if (!token) {
+		console.log(`[gateway] No stored token to push to ${containerId}`)
+		return false
+	}
+
+	const sent = connections.sendToContainer(containerId, "auth:request", {
+		token,
+	})
+
+	if (sent) {
+		console.log(`[gateway] Pushed auth token to ${containerId}`)
+	}
+	return sent
+}
 
 /**
  * Handle incoming WebSocket messages from containers
@@ -1042,6 +1071,10 @@ function handleContainerMessage(
 				true,
 			)
 		}
+
+		// Auto-push auth token to newly connected container
+		pushTokenToContainer(payload.containerId)
+
 		return
 	}
 
@@ -1151,6 +1184,15 @@ function handleExecComplete(
 		)
 	}
 
+	// Notify orchestrator to update phase status
+	if (taskOrchestrator && correlationId) {
+		taskOrchestrator.handleExecutionComplete(correlationId, payload.result, {
+			totalCostUsd: payload.totalCostUsd,
+			numTurns: payload.numTurns,
+			error: payload.error,
+		})
+	}
+
 	// Clean up
 	if (correlationId) {
 		activeExecutions.delete(correlationId)
@@ -1230,10 +1272,125 @@ async function handleHttpRequest(req: Request): Promise<Response> {
 	// Health check
 	if (url.pathname === "/health") {
 		const stats = connections.getStats()
+		const hasToken = claudeAuth ? await claudeAuth.hasValidToken() : false
 		return Response.json(
-			{ status: "ok", serverId: SERVER_ID, ...stats },
+			{ status: "ok", serverId: SERVER_ID, hasAuthToken: hasToken, ...stats },
 			{ headers: corsHeaders },
 		)
+	}
+
+	// Auth status - check if we have a stored token
+	if (url.pathname === "/auth/status" && req.method === "GET") {
+		if (!claudeAuth) {
+			return Response.json(
+				{ error: "Auth not configured (CONVEX_URL not set)" },
+				{ status: 500, headers: corsHeaders },
+			)
+		}
+		const hasToken = await claudeAuth.hasValidToken()
+		return Response.json({ hasToken }, { headers: corsHeaders })
+	}
+
+	// Start OAuth flow to get a token
+	if (url.pathname === "/auth/setup/start" && req.method === "POST") {
+		if (!claudeAuth) {
+			return Response.json(
+				{ error: "Auth not configured (CONVEX_URL not set)" },
+				{ status: 500, headers: corsHeaders },
+			)
+		}
+
+		try {
+			const result = await claudeAuth.startOAuthFlow()
+			return Response.json(result, { headers: corsHeaders })
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error)
+			return Response.json(
+				{ error: message },
+				{ status: 500, headers: corsHeaders },
+			)
+		}
+	}
+
+	// Complete OAuth flow with authorization code
+	if (url.pathname === "/auth/setup/complete" && req.method === "POST") {
+		if (!claudeAuth) {
+			return Response.json(
+				{ error: "Auth not configured (CONVEX_URL not set)" },
+				{ status: 500, headers: corsHeaders },
+			)
+		}
+
+		try {
+			const { flowId, code } = (await req.json()) as {
+				flowId: string
+				code: string
+			}
+
+			if (!flowId || !code) {
+				return Response.json(
+					{ error: "flowId and code are required" },
+					{ status: 400, headers: corsHeaders },
+				)
+			}
+
+			const result = await claudeAuth.completeOAuthFlow(flowId, code)
+
+			if (result.success) {
+				// Push the new token to all connected containers
+				const containers = connections.getAllContainers()
+				for (const container of containers) {
+					pushTokenToContainer(container.info.containerId)
+				}
+			}
+
+			return Response.json(result, { headers: corsHeaders })
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error)
+			return Response.json(
+				{ error: message },
+				{ status: 500, headers: corsHeaders },
+			)
+		}
+	}
+
+	// Manually set auth token (for testing or importing existing token)
+	if (url.pathname === "/auth/token" && req.method === "POST") {
+		if (!claudeAuth) {
+			return Response.json(
+				{ error: "Auth not configured (CONVEX_URL not set)" },
+				{ status: 500, headers: corsHeaders },
+			)
+		}
+
+		try {
+			const { token } = (await req.json()) as { token: string }
+
+			if (!token) {
+				return Response.json(
+					{ error: "token is required" },
+					{ status: 400, headers: corsHeaders },
+				)
+			}
+
+			const stored = await claudeAuth.storeToken(token)
+
+			if (stored) {
+				// Push the token to all connected containers
+				const containers = connections.getAllContainers()
+				for (const container of containers) {
+					pushTokenToContainer(container.info.containerId)
+				}
+			}
+
+			return Response.json({ success: stored }, { headers: corsHeaders })
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error)
+			return Response.json(
+				{ error: message },
+				{ status: 500, headers: corsHeaders },
+			)
+		}
 	}
 
 	// List connected containers
@@ -1352,6 +1509,84 @@ async function handleHttpRequest(req: Request): Promise<Response> {
 			{ status: "abort_requested" },
 			{ headers: corsHeaders },
 		)
+	}
+
+	// Start task phase execution
+	if (
+		url.pathname.match(/^\/tasks\/[^/]+\/phases\/[^/]+\/start$/) &&
+		req.method === "POST"
+	) {
+		if (!taskOrchestrator) {
+			return Response.json(
+				{ error: "Task orchestrator not configured (CONVEX_URL not set)" },
+				{ status: 500, headers: corsHeaders },
+			)
+		}
+
+		const parts = url.pathname.split("/")
+		const taskId = parts[2]
+		const phase = parts[4] as TaskPhase
+
+		if (!taskId || !phase) {
+			return Response.json(
+				{ error: "Task ID and phase are required" },
+				{ status: 400, headers: corsHeaders },
+			)
+		}
+
+		try {
+			const body = (await req.json().catch(() => ({}))) as {
+				containerId?: string
+				customPrompt?: string
+				configOverrides?: Record<string, unknown>
+			}
+
+			const result = await taskOrchestrator.startPhaseExecution({
+				taskId,
+				phase,
+				containerId: body.containerId,
+				customPrompt: body.customPrompt,
+				configOverrides: body.configOverrides,
+			})
+
+			if (!result.success) {
+				return Response.json(
+					{ error: result.error },
+					{ status: 400, headers: corsHeaders },
+				)
+			}
+
+			return Response.json(
+				{
+					correlationId: result.correlationId,
+					containerId: result.containerId,
+					taskId,
+					phase,
+					status: "started",
+				},
+				{ status: 201, headers: corsHeaders },
+			)
+		} catch (error) {
+			console.error("[gateway] Failed to start phase execution:", error)
+			const message = error instanceof Error ? error.message : String(error)
+			return Response.json(
+				{ error: message },
+				{ status: 500, headers: corsHeaders },
+			)
+		}
+	}
+
+	// Get active task executions
+	if (url.pathname === "/tasks/executions" && req.method === "GET") {
+		if (!taskOrchestrator) {
+			return Response.json(
+				{ error: "Task orchestrator not configured" },
+				{ status: 500, headers: corsHeaders },
+			)
+		}
+
+		const executions = taskOrchestrator.getActiveExecutions()
+		return Response.json({ executions }, { headers: corsHeaders })
 	}
 
 	// Push auth token to container

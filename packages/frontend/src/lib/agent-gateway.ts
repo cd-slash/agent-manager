@@ -45,9 +45,52 @@ export interface ContainerInfo {
 export interface GatewayHealth {
 	status: string
 	serverId: string
+	hasAuthToken: boolean
 	totalConnections: number
 	registeredContainers: number
 }
+
+export interface AuthStatus {
+	hasToken: boolean
+}
+
+export interface OAuthFlowResult {
+	flowId: string
+	url: string
+	expiresIn: number
+}
+
+export interface OAuthCompleteResult {
+	success: boolean
+	token?: string
+	error?: string
+}
+
+export interface PhaseExecutionResult {
+	correlationId: string
+	containerId: string
+	taskId: string
+	phase: string
+	status: string
+}
+
+export interface ActiveExecution {
+	correlationId: string
+	containerId: string
+	taskId: string
+	projectId: string
+	phase: string
+	startedAt: number
+}
+
+export type TaskPhase =
+	| "requirements"
+	| "planning"
+	| "implementation"
+	| "ai_review"
+	| "remediation"
+	| "human_review"
+	| "merge"
 
 // Default gateway URL - can be overridden
 const DEFAULT_GATEWAY_URL =
@@ -189,6 +232,88 @@ class AgentGatewayClient {
 			method: "DELETE",
 			body: JSON.stringify({ server, sshUser }),
 		})
+	}
+
+	// ==========================================================================
+	// Authentication Methods
+	// ==========================================================================
+
+	/**
+	 * Get auth status - check if gateway has a stored token
+	 */
+	async getAuthStatus(): Promise<AuthStatus> {
+		return this.request<AuthStatus>("/auth/status")
+	}
+
+	/**
+	 * Start OAuth flow to get a new token
+	 * Returns a URL for the user to visit
+	 */
+	async startAuthSetup(): Promise<OAuthFlowResult> {
+		return this.request<OAuthFlowResult>("/auth/setup/start", {
+			method: "POST",
+		})
+	}
+
+	/**
+	 * Complete OAuth flow with authorization code
+	 */
+	async completeAuthSetup(
+		flowId: string,
+		code: string,
+	): Promise<OAuthCompleteResult> {
+		return this.request<OAuthCompleteResult>("/auth/setup/complete", {
+			method: "POST",
+			body: JSON.stringify({ flowId, code }),
+		})
+	}
+
+	/**
+	 * Manually set auth token
+	 */
+	async setAuthToken(token: string): Promise<{ success: boolean }> {
+		return this.request<{ success: boolean }>("/auth/token", {
+			method: "POST",
+			body: JSON.stringify({ token }),
+		})
+	}
+
+	// ==========================================================================
+	// Task Phase Execution Methods
+	// ==========================================================================
+
+	/**
+	 * Start execution of a task phase
+	 */
+	async startPhaseExecution(options: {
+		taskId: string
+		phase: TaskPhase
+		containerId?: string
+		customPrompt?: string
+		configOverrides?: {
+			model?: string
+			permissionMode?: string
+			maxBudget?: number
+		}
+	}): Promise<PhaseExecutionResult> {
+		return this.request<PhaseExecutionResult>(
+			`/tasks/${options.taskId}/phases/${options.phase}/start`,
+			{
+				method: "POST",
+				body: JSON.stringify({
+					containerId: options.containerId,
+					customPrompt: options.customPrompt,
+					configOverrides: options.configOverrides,
+				}),
+			},
+		)
+	}
+
+	/**
+	 * Get active task executions
+	 */
+	async getActiveExecutions(): Promise<{ executions: ActiveExecution[] }> {
+		return this.request<{ executions: ActiveExecution[] }>("/tasks/executions")
 	}
 }
 

@@ -1,5 +1,5 @@
 import { api } from "@agent-manager/convex/api"
-import { useMutation, useQuery } from "convex/react"
+import { useQuery } from "convex/react"
 import {
 	AlertCircle,
 	Bot,
@@ -16,6 +16,7 @@ import {
 } from "lucide-react"
 import { useState } from "react"
 import { useToast } from "@/components/ToastProvider"
+import { agentGateway } from "@/lib/agent-gateway"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -211,8 +212,6 @@ export function RemediationTab({
 	const cycles = useQuery(api.remediationCycles.listByTask, { taskId }) ?? []
 	const summary = useQuery(api.remediationCycles.getSummary, { taskId })
 
-	const startPhase = useMutation(api.taskPhases.startPhase)
-
 	const status = remediationPhase?.status || "pending"
 	const isPending = status === "pending"
 	const isInProgress = status === "in_progress"
@@ -223,13 +222,15 @@ export function RemediationTab({
 	const handleStartRemediation = async () => {
 		setIsStarting(true)
 		try {
-			await startPhase({
-				taskId,
+			// Call gateway to start phase execution
+			const result = await agentGateway.startPhaseExecution({
+				taskId: taskId as string,
 				phase: "remediation",
 			})
+
 			toast.success(
 				"Remediation started",
-				"The remediation agent has begun fixing issues",
+				`Agent running on container ${result.containerId}`,
 			)
 		} catch (error) {
 			toast.error(
