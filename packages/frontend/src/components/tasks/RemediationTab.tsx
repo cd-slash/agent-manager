@@ -81,7 +81,10 @@ function RemediationCycleCard({
 				className={`border rounded-lg overflow-hidden ${isCurrentCycle ? "border-primary" : "border-border"}`}
 			>
 				<CollapsibleTrigger asChild>
-					<button type="button" className="w-full flex items-center justify-between p-4 bg-surface hover:bg-surface-elevated/50 transition-colors">
+					<button
+						type="button"
+						className="w-full flex items-center justify-between p-4 bg-surface hover:bg-surface-elevated/50 transition-colors"
+					>
 						<div className="flex items-center gap-3">
 							{isOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
 							<span className="font-medium text-foreground">

@@ -115,14 +115,13 @@ export function DataTable<TData, TValue>({
 	const clearSelection = useCallback(() => setRowSelection({}), [])
 
 	// Call onSelectionChange only when rowSelection changes
+	// biome-ignore lint/correctness/useExhaustiveDependencies: intentionally only trigger on rowSelection change
 	useEffect(() => {
 		if (!onSelectionChange) return
 		const selected = table
 			.getFilteredSelectedRowModel()
 			.rows.map((row) => row.original)
 		onSelectionChange(selected, clearSelection)
-		// Only trigger when rowSelection state changes, not on every render
-		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [rowSelection])
 
 	return (
@@ -156,7 +155,10 @@ export function DataTable<TData, TValue>({
 										}}
 									>
 										{header.isPlaceholder ? null : (
+											// biome-ignore lint/a11y/noStaticElementInteractions: sortable header with keyboard support
+											// biome-ignore lint/a11y/useSemanticElements: div needed for table header styling
 											<div
+												role={header.column.getCanSort() ? "button" : undefined}
 												className={cn(
 													header.column.getCanSort() &&
 														"flex h-full cursor-pointer items-center justify-between gap-2 select-none",

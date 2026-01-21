@@ -439,6 +439,7 @@ export function TaskDetailView({
 																		{depTask.category}
 																	</Badge>
 																	<button
+																		type="button"
 																		onClick={() =>
 																			handleRemoveDependency(depId)
 																		}
@@ -588,6 +589,7 @@ export function TaskDetailView({
 													No Pull Request created yet.
 												</p>
 												<button
+													type="button"
 													onClick={handleCreatePR}
 													className="mt-4 text-feature-blue hover:text-feature-blue text-sm flex items-center hover:underline"
 												>
@@ -849,7 +851,9 @@ export function TaskDetailView({
 															Deployment URL:
 														</span>
 														<a
-															href="#"
+															href="https://pr-4829.staging.app-planner.com"
+															target="_blank"
+															rel="noopener noreferrer"
 															className="text-feature-blue text-sm hover:underline font-mono"
 														>
 															https://pr-4829.staging.app-planner.com
@@ -972,7 +976,7 @@ export function TaskDetailView({
 													</h4>
 													<div className="space-y-3">
 														<div className="bg-background rounded-lg border border-red-900/50 overflow-hidden">
-															<button className="w-full flex items-center justify-between p-3 bg-red-950/20 hover:bg-red-950/30 transition-colors border-b border-red-900/30">
+															<button type="button" className="w-full flex items-center justify-between p-3 bg-red-950/20 hover:bg-red-950/30 transition-colors border-b border-red-900/30">
 																<div className="flex items-center space-x-2 text-sm font-mono text-foreground">
 																	<ChevronDown size={16} />
 																	<span>src/utils/cart.js</span>
@@ -1055,7 +1059,7 @@ export function TaskDetailView({
 														</div>
 
 														<div className="bg-background rounded-lg border border-red-900/50 overflow-hidden">
-															<button className="w-full flex items-center justify-between p-3 bg-red-950/20 hover:bg-red-950/30 transition-colors">
+															<button type="button" className="w-full flex items-center justify-between p-3 bg-red-950/20 hover:bg-red-950/30 transition-colors">
 																<div className="flex items-center space-x-2 text-sm font-mono text-foreground">
 																	<ChevronRight size={16} />
 																	<span>src/components/Checkout.jsx</span>
@@ -1142,6 +1146,7 @@ export function TaskDetailView({
 													className="bg-background rounded-lg border border-border overflow-hidden"
 												>
 													<button
+														type="button"
 														onClick={() => toggleFile(file.filename)}
 														className="w-full flex items-center justify-between p-3 bg-surface/50 hover:bg-surface transition-colors border-b border-border"
 													>
