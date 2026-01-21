@@ -215,7 +215,7 @@ export class WebSocketIntegration {
 				switch (event.type) {
 					case "start": {
 						// Capture and send process ID
-						currentProcessId = event.processId!
+						currentProcessId = event.processId ?? ""
 						const streamStart: ExecStreamPayload = {
 							processId: currentProcessId,
 							streamType: "system",
@@ -227,10 +227,11 @@ export class WebSocketIntegration {
 
 					case "data": {
 						// Forward stream data with tracked process ID
+						if (!event.data) break
 						const streamData: ExecStreamPayload = {
 							processId: currentProcessId,
-							streamType: event.data?.type as ExecStreamPayload["streamType"],
-							data: event.data!,
+							streamType: event.data.type as ExecStreamPayload["streamType"],
+							data: event.data,
 						}
 						this.connection.send("exec:stream", streamData, correlationId)
 						break

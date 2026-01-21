@@ -234,13 +234,14 @@ export const update = mutation({
 
 		// Check for duplicate name if changing name
 		if (updates.name && updates.name !== template.name) {
+			const newName = updates.name
 			const existing = await ctx.db
 				.query("taskTemplates")
-				.withIndex("by_name", (q) => q.eq("name", updates.name!))
+				.withIndex("by_name", (q) => q.eq("name", newName))
 				.first()
 
 			if (existing) {
-				throw new Error(`Template with name "${updates.name}" already exists`)
+				throw new Error(`Template with name "${newName}" already exists`)
 			}
 		}
 

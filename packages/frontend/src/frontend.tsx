@@ -19,6 +19,7 @@ const convexUrl =
 	import.meta.env?.VITE_CONVEX_URL || "https://brazen-skunk-217.convex.cloud"
 const convex = new ConvexReactClient(convexUrl)
 
+// biome-ignore lint/style/noNonNullAssertion: Root element guaranteed to exist in index.html
 const elem = document.getElementById("root")!
 const app = (
 	<StrictMode>

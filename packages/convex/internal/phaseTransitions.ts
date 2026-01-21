@@ -69,7 +69,8 @@ function deriveTransitionsFromPhases(
 	const hasAIReview = phases.includes("ai_review")
 
 	for (let i = 0; i < phases.length; i++) {
-		const phase = phases[i]!
+		const phase = phases[i]
+		if (!phase) continue
 		const nextPhase = phases[i + 1] as TaskPhase | undefined
 
 		if (phase === "ai_review") {

@@ -93,7 +93,8 @@ export const initializePhases = internalMutation({
 		const firstPhase = phases[0]
 
 		for (let i = 0; i < phases.length; i++) {
-			const phase = phases[i]!
+			const phase = phases[i]
+			if (!phase) continue
 			const phaseId = await ctx.db.insert("taskPhases", {
 				taskId: args.taskId,
 				phase,

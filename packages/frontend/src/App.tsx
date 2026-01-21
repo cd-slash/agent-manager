@@ -343,9 +343,10 @@ function App() {
 						/>
 					)
 				}
+				if (!selectedProject) return null
 				return (
 					<ProjectDetailView
-						project={selectedProject!}
+						project={selectedProject}
 						onTaskClick={(task) => setSelectedTaskId(task.id as Id<"tasks">)}
 						onUpdateProject={handleProjectUpdate}
 						onNewTask={() => setIsQuickTaskModalOpen(true)}

@@ -312,11 +312,13 @@ export const reorder = mutation({
 	},
 	handler: async (ctx, args) => {
 		for (let i = 0; i < args.taskIds.length; i++) {
-			const taskId = args.taskIds[i]!
-			await ctx.db.patch(taskId, {
-				order: i + 1,
-				updatedAt: Date.now(),
-			})
+			const taskId = args.taskIds[i]
+			if (taskId) {
+				await ctx.db.patch(taskId, {
+					order: i + 1,
+					updatedAt: Date.now(),
+				})
+			}
 		}
 	},
 })

@@ -21,7 +21,7 @@ import {
 	ChevronsRight,
 	ChevronUp,
 } from "lucide-react"
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
@@ -112,9 +112,11 @@ export function DataTable<TData, TValue>({
 		...(getRowId && { getRowId }),
 	})
 
-	const selectedRows = table
-		.getFilteredSelectedRowModel()
-		.rows.map((row) => row.original)
+	const selectedRows = useMemo(
+		() => table.getFilteredSelectedRowModel().rows.map((row) => row.original),
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+		[rowSelection, data],
+	)
 	const clearSelection = useCallback(() => setRowSelection({}), [])
 
 	useEffect(() => {

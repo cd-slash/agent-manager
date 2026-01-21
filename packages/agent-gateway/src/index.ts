@@ -1113,9 +1113,9 @@ function handleExecStream(
 	)
 
 	// Sync to Convex
-	if (convexSync && execution) {
+	if (convexSync && execution && correlationId) {
 		convexSync.recordStreamEvent(
-			correlationId!,
+			correlationId,
 			containerId,
 			payload,
 			execution.taskId,
@@ -1141,9 +1141,9 @@ function handleExecComplete(
 	)
 
 	// Sync to Convex
-	if (convexSync && execution) {
+	if (convexSync && execution && correlationId) {
 		convexSync.recordExecComplete(
-			correlationId!,
+			correlationId,
 			containerId,
 			payload,
 			execution.taskId,
@@ -1253,7 +1253,13 @@ async function handleHttpRequest(req: Request): Promise<Response> {
 	// Get specific container
 	if (url.pathname.match(/^\/containers\/[^/]+$/) && req.method === "GET") {
 		const containerId = url.pathname.split("/")[2]
-		const container = connections.getContainer(containerId!)
+		if (!containerId) {
+			return Response.json(
+				{ error: "Container ID required" },
+				{ status: 400, headers: corsHeaders },
+			)
+		}
+		const container = connections.getContainer(containerId)
 		if (!container) {
 			return Response.json(
 				{ error: "Container not found" },
@@ -1324,7 +1330,13 @@ async function handleHttpRequest(req: Request): Promise<Response> {
 	// Abort execution
 	if (url.pathname.match(/^\/exec\/[^/]+\/abort$/) && req.method === "POST") {
 		const correlationId = url.pathname.split("/")[2]
-		const execution = activeExecutions.get(correlationId!)
+		if (!correlationId) {
+			return Response.json(
+				{ error: "Correlation ID required" },
+				{ status: 400, headers: corsHeaders },
+			)
+		}
+		const execution = activeExecutions.get(correlationId)
 
 		if (!execution) {
 			return Response.json(
@@ -1348,10 +1360,16 @@ async function handleHttpRequest(req: Request): Promise<Response> {
 		req.method === "POST"
 	) {
 		const containerId = url.pathname.split("/")[2]
+		if (!containerId) {
+			return Response.json(
+				{ error: "Container ID required" },
+				{ status: 400, headers: corsHeaders },
+			)
+		}
 		try {
 			const { token } = (await req.json()) as { token: string }
 
-			const sent = connections.sendToContainer(containerId!, "auth:request", {
+			const sent = connections.sendToContainer(containerId, "auth:request", {
 				token,
 			})
 

@@ -301,7 +301,8 @@ export class ManagerConnection extends EventEmitter {
 
 			// Handle correlated responses
 			if (msg.correlationId && this.pendingRequests.has(msg.correlationId)) {
-				const pending = this.pendingRequests.get(msg.correlationId)!
+				const pending = this.pendingRequests.get(msg.correlationId)
+				if (!pending) return
 				clearTimeout(pending.timeout)
 				this.pendingRequests.delete(msg.correlationId)
 

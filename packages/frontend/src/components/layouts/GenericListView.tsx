@@ -183,9 +183,9 @@ export function GenericListView<TData>({
 			)}
 
 			{/* Selection actions toolbar */}
-			{hasSelectionActions && (
+			{hasSelectionActions && clearSelectionFn && (
 				<div className="mb-card">
-					{selectionActions(selectedRows, clearSelectionFn!)}
+					{selectionActions(selectedRows, clearSelectionFn)}
 				</div>
 			)}
 

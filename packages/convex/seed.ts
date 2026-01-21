@@ -38,13 +38,15 @@ export const seedTaskData = mutation({
 				]
 
 				for (let i = 0; i < sampleCriteria.length; i++) {
-					const criteria = sampleCriteria[i]!
-					await ctx.db.insert("acceptanceCriteria", {
-						taskId: task._id,
-						text: criteria.text,
-						done: criteria.done,
-						order: i + 1,
-					})
+					const criteria = sampleCriteria[i]
+					if (criteria) {
+						await ctx.db.insert("acceptanceCriteria", {
+							taskId: task._id,
+							text: criteria.text,
+							done: criteria.done,
+							order: i + 1,
+						})
+					}
 				}
 
 				// Add sample tests
