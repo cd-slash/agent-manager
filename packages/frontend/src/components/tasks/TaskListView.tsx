@@ -10,7 +10,7 @@ import {
 	Plus,
 	Trash2,
 } from "lucide-react"
-import { useMemo, useState } from "react"
+import { useCallback, useMemo, useState } from "react"
 import {
 	type FilterConfig,
 	GenericListView,
@@ -46,24 +46,27 @@ export function TaskListView({
 	)
 	const [deletingTasks, setDeletingTasks] = useState<Set<string>>(new Set())
 
-	const handleDeleteTask = async (task: Task) => {
-		setDeletingTasks((prev) => new Set(prev).add(task.id.toString()))
-		try {
-			await deleteTask({ id: task.id as unknown as Id<"tasks"> })
-			toast.success("Task deleted", `"${task.title}" has been deleted`)
-		} catch (error) {
-			toast.error(
-				"Delete failed",
-				error instanceof Error ? error.message : "Failed to delete task",
-			)
-		} finally {
-			setDeletingTasks((prev) => {
-				const next = new Set(prev)
-				next.delete(task.id.toString())
-				return next
-			})
-		}
-	}
+	const handleDeleteTask = useCallback(
+		async (task: Task) => {
+			setDeletingTasks((prev) => new Set(prev).add(task.id.toString()))
+			try {
+				await deleteTask({ id: task.id as unknown as Id<"tasks"> })
+				toast.success("Task deleted", `"${task.title}" has been deleted`)
+			} catch (error) {
+				toast.error(
+					"Delete failed",
+					error instanceof Error ? error.message : "Failed to delete task",
+				)
+			} finally {
+				setDeletingTasks((prev) => {
+					const next = new Set(prev)
+					next.delete(task.id.toString())
+					return next
+				})
+			}
+		},
+		[deleteTask, toast],
+	)
 
 	const handleDeleteSelected = async () => {
 		try {

@@ -11,7 +11,7 @@ import {
 	Terminal,
 	Trash2,
 } from "lucide-react"
-import { useMemo, useState } from "react"
+import { useCallback, useMemo, useState } from "react"
 import {
 	type FilterConfig,
 	GenericListView,
@@ -71,67 +71,75 @@ export function ContainerView({
 	const deleteContainerFromDb = useMutation(api.containers.deleteContainer)
 	const toast = useToast()
 
-	const handleStopContainer = async (container: Container) => {
-		const serverHostname =
-			container.serverHostname || container.server || "localhost"
-		setStoppingContainers((prev) => new Set(prev).add(container.id))
-		try {
-			await agentGateway.stopContainer(container.name, serverHostname)
-			await updateContainerStatus({
-				id: container.id as Parameters<typeof updateContainerStatus>[0]["id"],
-				status: "stopped",
-			})
-			toast.success(
-				"Container stopped",
-				`Container "${container.name}" has been stopped`,
-			)
-		} catch (error) {
-			toast.error(
-				"Failed to stop container",
-				error instanceof Error ? error.message : "Unknown error",
-			)
-		} finally {
-			setStoppingContainers((prev) => {
-				const next = new Set(prev)
-				next.delete(container.id)
-				return next
-			})
-		}
-	}
+	const handleStopContainer = useCallback(
+		async (container: Container) => {
+			const serverHostname =
+				container.serverHostname || container.server || "localhost"
+			setStoppingContainers((prev) => new Set(prev).add(container.id))
+			try {
+				await agentGateway.stopContainer(container.name, serverHostname)
+				await updateContainerStatus({
+					id: container.id as Parameters<typeof updateContainerStatus>[0]["id"],
+					status: "stopped",
+				})
+				toast.success(
+					"Container stopped",
+					`Container "${container.name}" has been stopped`,
+				)
+			} catch (error) {
+				toast.error(
+					"Failed to stop container",
+					error instanceof Error ? error.message : "Unknown error",
+				)
+			} finally {
+				setStoppingContainers((prev) => {
+					const next = new Set(prev)
+					next.delete(container.id)
+					return next
+				})
+			}
+		},
+		[updateContainerStatus, toast],
+	)
 
-	const handleDeleteContainer = async (container: Container) => {
-		if (container.status === "running") {
-			toast.error(
-				"Cannot delete running container",
-				"Stop the container first before deleting",
-			)
-			return
-		}
-		const serverHostname =
-			container.serverHostname || container.server || "localhost"
-		setDeletingContainers((prev) => new Set(prev).add(container.id))
-		try {
-			await agentGateway.deleteContainer(container.name, serverHostname)
-			await deleteContainerFromDb({
-				id: container.id as Parameters<typeof deleteContainerFromDb>[0]["id"],
-			})
-			toast.success(
-				"Container deleted",
-				`Container "${container.name}" has been deleted`,
-			)
-		} catch (error) {
-			toast.error(
-				"Failed to delete container",
-				error instanceof Error ? error.message : "Unknown error",
-			)
-		} finally {
-			setDeletingContainers((prev) => {
-				const next = new Set(prev)
-				next.delete(container.id)
-				return next
-			})
-		}
-	}
+	const handleDeleteContainer = useCallback(
+		async (container: Container) => {
+			if (container.status === "running") {
+				toast.error(
+					"Cannot delete running container",
+					"Stop the container first before deleting",
+				)
+				return
+			}
+			const serverHostname =
+				container.serverHostname || container.server || "localhost"
+			setDeletingContainers((prev) => new Set(prev).add(container.id))
+			try {
+				await agentGateway.deleteContainer(container.name, serverHostname)
+				await deleteContainerFromDb({
+					id: container.id as Parameters<
+						typeof deleteContainerFromDb
+					>[0]["id"],
+				})
+				toast.success(
+					"Container deleted",
+					`Container "${container.name}" has been deleted`,
+				)
+			} catch (error) {
+				toast.error(
+					"Failed to delete container",
+					error instanceof Error ? error.message : "Unknown error",
+				)
+			} finally {
+				setDeletingContainers((prev) => {
+					const next = new Set(prev)
+					next.delete(container.id)
+					return next
+				})
+			}
+		},
+		[deleteContainerFromDb, toast],
+	)
 
 	const handleBulkStop = async () => {
 		const toStop = selectedContainers.filter((c) => c.status === "running")
@@ -385,10 +393,10 @@ export function ContainerView({
 			},
 		],
 		[
-			deletingContainers.has,
+			deletingContainers,
 			handleDeleteContainer,
 			handleStopContainer,
-			stoppingContainers.has,
+			stoppingContainers,
 		],
 	)
 

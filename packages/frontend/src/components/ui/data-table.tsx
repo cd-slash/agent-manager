@@ -21,7 +21,7 @@ import {
 	ChevronsRight,
 	ChevronUp,
 } from "lucide-react"
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
@@ -115,7 +115,7 @@ export function DataTable<TData, TValue>({
 	const selectedRows = table
 		.getFilteredSelectedRowModel()
 		.rows.map((row) => row.original)
-	const clearSelection = () => setRowSelection({})
+	const clearSelection = useCallback(() => setRowSelection({}), [])
 
 	useEffect(() => {
 		onSelectionChange?.(selectedRows, clearSelection)
