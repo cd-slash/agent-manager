@@ -29,7 +29,8 @@ export function APITester() {
 			if (responseInputRef.current)
 				responseInputRef.current.value = JSON.stringify(data, null, 2)
 		} catch (error) {
-			if (responseInputRef.current) responseInputRef.current.value = String(error)
+			if (responseInputRef.current)
+				responseInputRef.current.value = String(error)
 		}
 	}
 

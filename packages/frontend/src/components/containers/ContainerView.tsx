@@ -117,9 +117,7 @@ export function ContainerView({
 			try {
 				await agentGateway.deleteContainer(container.name, serverHostname)
 				await deleteContainerFromDb({
-					id: container.id as Parameters<
-						typeof deleteContainerFromDb
-					>[0]["id"],
+					id: container.id as Parameters<typeof deleteContainerFromDb>[0]["id"],
 				})
 				toast.success(
 					"Container deleted",

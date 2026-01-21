@@ -12,7 +12,6 @@ type TaskPhase =
 	| "remediation"
 	| "human_review"
 	| "merge"
-type RemediationTrigger = "ai_review" | "human_review"
 
 /**
  * Get valid transitions for a task based on its template
@@ -144,11 +143,13 @@ async function getPhasesForTask(
 		.collect()
 
 	if (taskPhases.length > 0) {
-		return taskPhases
-			// biome-ignore lint/suspicious/noExplicitAny: Generic sort callback
-			.sort((a: any, b: any) => a.order - b.order)
-			// biome-ignore lint/suspicious/noExplicitAny: Generic map callback
-			.map((p: any) => p.phase) as TaskPhase[]
+		return (
+			taskPhases
+				// biome-ignore lint/suspicious/noExplicitAny: Generic sort callback
+				.sort((a: any, b: any) => a.order - b.order)
+				// biome-ignore lint/suspicious/noExplicitAny: Generic map callback
+				.map((p: any) => p.phase) as TaskPhase[]
+		)
 	}
 
 	return DEFAULT_PHASE_ORDER

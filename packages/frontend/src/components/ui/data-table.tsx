@@ -114,7 +114,7 @@ export function DataTable<TData, TValue>({
 
 	const selectedRows = useMemo(
 		() => table.getFilteredSelectedRowModel().rows.map((row) => row.original),
-		// eslint-disable-next-line react-hooks/exhaustive-deps
+		// biome-ignore lint/correctness/useExhaustiveDependencies: rowSelection determines selected state
 		[rowSelection, data],
 	)
 	const clearSelection = useCallback(() => setRowSelection({}), [])

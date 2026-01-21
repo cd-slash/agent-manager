@@ -113,7 +113,7 @@ export interface AuthStatusPayload {
 	provider?: string
 }
 
-export type AuthFlowStartPayload = {}
+export type AuthFlowStartPayload = Record<string, never>
 
 export interface AuthFlowUrlPayload {
 	/** Flow identifier */
@@ -252,7 +252,7 @@ export interface ExecAbortedPayload {
 // Session Messages
 // =============================================================================
 
-export type SessionListPayload = {}
+export type SessionListPayload = Record<string, never>
 
 export interface SessionDataPayload {
 	/** Sessions list (for list response) */
