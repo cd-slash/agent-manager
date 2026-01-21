@@ -116,7 +116,7 @@ export function TaskDetailView({
   project,
   onUpdate,
 }: TaskDetailViewProps) {
-  const [activeTab, setActiveTab] = useState('requirements');
+  const [activeTab, setActiveTab] = useState('status');
   const [openFiles, setOpenFiles] = useState<Record<string, boolean>>({
     'src/utils/cart.js': true,
   });
@@ -226,30 +226,12 @@ export function TaskDetailView({
       <div className="flex-1 flex overflow-hidden">
         <div className="flex-1 overflow-y-auto min-w-0">
           <div className="px-page pt-section shrink-0">
-            {phases.length > 0 && (
-              <div className="mb-4 p-3 bg-surface border border-border rounded-lg">
-                <PhaseTimeline
-                  phases={phases as TaskPhaseDoc[]}
-                  currentPhase={task.currentPhase as TaskPhase | undefined}
-                  onPhaseClick={(phase) => {
-                    // Map phase to tab
-                    const phaseToTab: Record<TaskPhase, string> = {
-                      requirements: 'requirements',
-                      planning: 'planning',
-                      implementation: 'implementation',
-                      ai_review: 'ai-review',
-                      remediation: 'remediation',
-                      human_review: 'human-review',
-                      merge: 'merge',
-                    };
-                    setActiveTab(phaseToTab[phase] || 'requirements');
-                  }}
-                />
-              </div>
-            )}
-
             <Tabs value={activeTab} onValueChange={setActiveTab}>
               <TabsList className="w-full justify-start">
+                <TabsTrigger value="status" className="flex items-center">
+                  <Activity size={14} className="mr-1.5" />
+                  Status
+                </TabsTrigger>
                 <TabsTrigger value="requirements" className={getTabClassName('requirements')}>
                   <ClipboardList size={14} className="mr-1.5" />
                   Requirements
@@ -286,14 +268,70 @@ export function TaskDetailView({
                   <GitPullRequest size={14} className="mr-1.5" />
                   Diff
                 </TabsTrigger>
-                <TabsTrigger value="history" className="flex items-center">
-                  <History size={14} className="mr-1.5" />
-                  History
-                </TabsTrigger>
               </TabsList>
 
               <div className="py-6 flex gap-page items-start">
                 <div className="flex-1 min-w-0">
+                <TabsContent value="status" className="!mt-0">
+                  <div className="space-y-8">
+                    {phases.length > 0 && (
+                      <section>
+                        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center">
+                          <Activity size={16} className="mr-2" /> Task Progress
+                        </h3>
+                        <div className="bg-surface border border-border rounded-lg p-4">
+                          <PhaseTimeline
+                            phases={phases as TaskPhaseDoc[]}
+                            currentPhase={task.currentPhase as TaskPhase | undefined}
+                            onPhaseClick={(phase) => {
+                              const phaseToTab: Record<TaskPhase, string> = {
+                                requirements: 'requirements',
+                                planning: 'planning',
+                                implementation: 'implementation',
+                                ai_review: 'ai-review',
+                                remediation: 'remediation',
+                                human_review: 'human-review',
+                                merge: 'merge',
+                              };
+                              setActiveTab(phaseToTab[phase] || 'requirements');
+                            }}
+                          />
+                        </div>
+                      </section>
+                    )}
+
+                    <section>
+                      <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center">
+                        <History size={16} className="mr-2" /> Activity History
+                      </h3>
+                      <div className="bg-surface border border-border rounded-lg p-4">
+                        {(!task.history || task.history.length === 0) ? (
+                          <div className="text-sm text-muted-foreground">
+                            No activity recorded yet.
+                          </div>
+                        ) : (
+                          <div className="relative border-l border-border ml-3 space-y-6">
+                            {task.history?.map((event) => (
+                              <div key={event.id} className="relative pl-6">
+                                <div className="absolute -left-1.5 top-1.5 w-3 h-3 bg-surface-elevated border border-border rounded-full"></div>
+                                <div className="text-sm text-foreground font-medium">
+                                  {event.action}
+                                </div>
+                                <div className="text-xs text-muted-foreground mt-1 flex items-center space-x-2">
+                                  <User size={12} />
+                                  <span>{event.user}</span>
+                                  <span className="w-1 h-1 bg-muted rounded-full"></span>
+                                  <span>{event.time}</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </section>
+                  </div>
+                </TabsContent>
+
                 <TabsContent value="requirements" className="!mt-0">
                   <div className="space-y-8">
                     <section>
@@ -1082,25 +1120,6 @@ export function TaskDetailView({
                         </Button>
                       )}
                     </div>
-                  </div>
-                </TabsContent>
-
-                <TabsContent value="history" className="!mt-0">
-                  <div className="relative border-l border-border ml-3 space-y-6">
-                    {task.history?.map((event) => (
-                      <div key={event.id} className="relative pl-6">
-                        <div className="absolute -left-1.5 top-1.5 w-3 h-3 bg-surface-elevated border border-border rounded-full"></div>
-                        <div className="text-sm text-foreground font-medium">
-                          {event.action}
-                        </div>
-                        <div className="text-xs text-muted-foreground mt-1 flex items-center space-x-2">
-                          <User size={12} />
-                          <span>{event.user}</span>
-                          <span className="w-1 h-1 bg-muted rounded-full"></span>
-                          <span>{event.time}</span>
-                        </div>
-                      </div>
-                    ))}
                   </div>
                 </TabsContent>
                 </div>
