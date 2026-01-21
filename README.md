@@ -8,6 +8,8 @@ A real-time agent management platform for orchestrating AI coding agents running
 - **Agent Gateway**: WebSocket server that orchestrates container connections and streams CLI output
 - **Project Management**: Create and manage software projects with specifications and task breakdown
 - **Task Tracking**: Kanban-style task management with dependencies, acceptance criteria, and test tracking
+- **Task Phase System**: Formal lifecycle management with configurable AI agents per phase
+- **Remediation Cycles**: Automated issue fixing with AI review validation loops
 - **Real-time Streaming**: Stream Claude Code CLI output in real-time via WebSocket protocol
 - **Infrastructure Monitoring**: Server and container management with real-time metrics
 - **Pull Request Management**: Track PRs, code reviews, issues, and CI/CD status
@@ -271,6 +273,73 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed documentation on:
 - Real-time subscription patterns
 - Agent Gateway architecture
 - Container-to-Gateway communication
+
+## Task Phase System
+
+Tasks progress through a formal lifecycle with AI agents handling each phase:
+
+```
+┌─────────────┐    ┌──────────┐    ┌────────────────┐    ┌───────────┐
+│ Requirements│───▶│ Planning │───▶│ Implementation │───▶│ AI Review │
+└─────────────┘    └──────────┘    └────────────────┘    └───────────┘
+                                                               │
+                         ┌─────────────────────────────────────┤
+                         │                                     │
+                         ▼                                     ▼
+                  ┌─────────────┐                      ┌──────────────┐
+             ┌───▶│ Remediation │◀────────────────────│ Human Review │
+             │    └─────────────┘                      └──────────────┘
+             │           │                                    │
+             │           │ (validation)                       │
+             │           ▼                                    │
+             │    ┌───────────┐                               │
+             └────│ AI Review │                               │
+                  └───────────┘                               │
+                         │                                    │
+                         │ (approved)                         │
+                         ▼                                    ▼
+                  ┌──────────────┐                     ┌───────────┐
+                  │ Human Review │────────────────────▶│   Merge   │
+                  └──────────────┘     (approved)      └───────────┘
+```
+
+### Phase Descriptions
+
+| Phase | Agent | Description |
+|-------|-------|-------------|
+| **Requirements** | - | User defines task title, description, and initial specifications |
+| **Planning** | Planning Agent | Generates acceptance criteria, implementation prompt, and test cases |
+| **Implementation** | Implementation Agent | Writes code, creates feature branch, opens pull request |
+| **AI Review** | Review Agent | Reviews PR for quality, security, correctness. Approves or requests changes |
+| **Remediation** | Remediation Agent | Fixes issues identified by AI or Human review |
+| **Human Review** | Assistant Agent | Helps human reviewer test preview deployment and evaluate changes |
+| **Merge** | Merge Agent | Resolves conflicts and merges approved PR to main branch |
+
+### Remediation Cycles
+
+When AI Review or Human Review finds issues, the task enters a remediation loop:
+
+1. **AI Review triggers remediation** automatically when it finds issues
+2. **Human Review triggers remediation** when user clicks "Request Changes" with feedback
+3. **Remediation agent** fixes the issues in a fresh container
+4. **AI Review validates** the fixes before returning to Human Review
+5. **Cycle limit** (configurable, default: 3) prevents infinite loops
+
+Each remediation cycle is tracked with:
+- Trigger source (AI or Human review)
+- Human feedback text (when triggered by human)
+- Agent session output and cost
+- Duration and turn count
+
+### Phase Configuration
+
+Each phase can be configured globally or per-task:
+- **Provider/Model**: Choose AI model (e.g., Claude Sonnet, Opus)
+- **Permission Mode**: Control agent's file system access (plan, accept_edits, full_auto)
+- **Prompt Template**: Customize agent instructions with variables
+- **Max Budget**: Optional cost limit per phase
+
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for database schema details and [docs/AGENTS.md](docs/AGENTS.md) for agent workflow documentation.
 
 ## Agent System
 

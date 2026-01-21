@@ -2,6 +2,315 @@
 
 This document describes the AI agent integration architecture for the Agent Manager platform. The system orchestrates multiple Docker containers running Claude Code CLI, connected via a WebSocket gateway.
 
+## Task Phase Agents
+
+Each phase in the task lifecycle uses a specialized agent with its own configuration:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           AGENT ROLES BY PHASE                               │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  Phase              Agent Role            Default Model    Permission Mode  │
+│  ─────              ──────────            ─────────────    ───────────────  │
+│  Requirements       (none - manual)       -                -                │
+│  Planning           Planning Agent        Sonnet           plan             │
+│  Implementation     Implementation Agent  Sonnet           accept_edits     │
+│  AI Review          Review Agent          Sonnet           default          │
+│  Remediation        Remediation Agent     Sonnet           accept_edits     │
+│  Human Review       Assistant Agent       Sonnet           default          │
+│  Merge              Merge Agent           Sonnet           accept_edits     │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Planning Agent
+
+**Purpose**: Analyze task requirements and prepare for implementation
+
+**Inputs**:
+- Task title and description
+- Project context
+
+**Outputs**:
+- Acceptance criteria (checklist items)
+- Implementation prompt (detailed instructions for Implementation Agent)
+- Test cases (expected behaviors to verify)
+
+**Default Prompt Template**:
+```
+You are a planning agent. Analyze this task and prepare it for implementation.
+
+Task: {{task.title}}
+Description: {{task.description}}
+
+Your job is to:
+1. Create detailed acceptance criteria that define when this task is complete
+2. Write the implementation prompt that will be given to the implementation agent
+3. Define test cases that should pass when the implementation is complete
+
+Output structured JSON with:
+- acceptanceCriteria: array of criteria strings
+- implementationPrompt: the full prompt for the implementation agent
+- testCases: array of test definitions
+```
+
+### Implementation Agent
+
+**Purpose**: Write code to implement the planned feature
+
+**Inputs**:
+- Implementation prompt from Planning phase
+- Acceptance criteria
+- Repository state
+
+**Outputs**:
+- Code changes committed to feature branch
+- Pull request created
+
+**Default Prompt Template**:
+```
+You are an implementation agent. Complete this coding task.
+
+Task: {{task.title}}
+{{task.implementationPrompt}}
+
+Acceptance Criteria:
+{{#each task.acceptanceCriteria}}
+- {{this}}
+{{/each}}
+
+Requirements:
+1. Write clean, well-tested code following project conventions
+2. Create a feature branch: task-{{task.id}}
+3. Make atomic commits with clear messages
+4. Run tests to verify acceptance criteria are met
+5. Create a pull request when complete
+```
+
+### AI Review Agent
+
+**Purpose**: Review the PR for quality, security, and correctness
+
+**Inputs**:
+- Pull request details
+- Code diff
+- Acceptance criteria
+
+**Outputs**:
+- Review comments on PR
+- Approval or request for changes
+- Issues list with severity
+
+**Default Prompt Template**:
+```
+You are a code review agent. Review this pull request thoroughly.
+
+Task: {{task.title}}
+Pull Request: #{{pr.number}}
+Branch: {{pr.branch}} → {{pr.baseBranch}}
+
+Review the code for:
+1. Correctness - does it meet the acceptance criteria?
+2. Code quality - is it clean, readable, maintainable?
+3. Security - any vulnerabilities or unsafe patterns?
+4. Performance - any obvious performance issues?
+5. Test coverage - are the tests adequate?
+
+Approve or request changes based on your findings.
+```
+
+### Remediation Agent
+
+**Purpose**: Fix issues identified during AI or Human review
+
+**Inputs**:
+- Issues from AI review (when triggered by AI)
+- Human feedback text (when triggered by Human)
+- Current PR state
+
+**Outputs**:
+- Code fixes committed to feature branch
+- Updated PR
+
+**Default Prompt Template**:
+```
+You are a remediation agent. Fix the issues identified during code review.
+
+Task: {{task.title}}
+Remediation Cycle: {{remediation.cycleNumber}} of {{remediation.maxCycles}}
+Triggered By: {{remediation.triggeredBy}}
+
+{{#if remediation.feedback}}
+Human Feedback:
+{{remediation.feedback}}
+{{/if}}
+
+{{#if remediation.aiReviewIssues}}
+AI Review Issues:
+{{#each remediation.aiReviewIssues}}
+- {{this.file}}:{{this.line}} - {{this.issue}}
+{{/each}}
+{{/if}}
+
+Your job is to:
+1. Address each issue identified in the review
+2. Make the necessary code changes
+3. Ensure tests still pass after your changes
+4. Commit your fixes with clear messages
+```
+
+### Human Review Assistant Agent
+
+**Purpose**: Help human reviewer understand and test the changes
+
+**Inputs**:
+- PR details and history
+- AI review results
+- Preview deployment URL (when available)
+
+**Outputs**:
+- Answers to human's questions
+- Explanations of code changes
+- Testing suggestions
+
+**Default Prompt Template**:
+```
+You are a review assistant helping a human reviewer evaluate this PR.
+
+Task: {{task.title}}
+Pull Request: #{{pr.number}}
+Preview URL: {{deployment.previewUrl}}
+
+Help the human reviewer by:
+1. Explaining what the code does
+2. Highlighting any concerns from the AI review
+3. Suggesting things to test in the preview deployment
+4. Answering technical questions about the implementation
+
+Be helpful and concise. The human makes the final approval decision.
+```
+
+### Merge Agent
+
+**Purpose**: Merge the approved PR to main branch
+
+**Inputs**:
+- Approved PR
+- Main branch state
+
+**Outputs**:
+- Merged PR
+- Deleted feature branch
+
+**Default Prompt Template**:
+```
+You are a merge agent. Merge this approved pull request.
+
+Task: {{task.title}}
+Pull Request: #{{pr.number}}
+
+Steps:
+1. Verify all required reviews are approved
+2. Verify all CI checks are passing
+3. Check for merge conflicts with main
+4. If conflicts exist, resolve them preserving the intent of both changes
+5. Perform squash merge with a clear commit message
+6. Verify the merge was successful
+7. Delete the feature branch
+```
+
+## Remediation Cycle Flow
+
+The remediation system handles iterative fixes when reviews find issues:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         REMEDIATION CYCLE FLOW                               │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  Trigger Sources:                                                           │
+│  ────────────────                                                           │
+│                                                                              │
+│  ┌───────────┐                           ┌──────────────┐                   │
+│  │ AI Review │──── issues found ────────▶│              │                   │
+│  │           │     (automatic)           │              │                   │
+│  └───────────┘                           │              │                   │
+│                                          │ Remediation  │                   │
+│  ┌──────────────┐                        │    Agent     │                   │
+│  │ Human Review │── request changes ────▶│              │                   │
+│  │              │   (with feedback)      │              │                   │
+│  └──────────────┘                        └──────────────┘                   │
+│                                                  │                          │
+│                                                  │ fixes complete           │
+│                                                  ▼                          │
+│                                          ┌───────────┐                      │
+│                                          │ AI Review │◀──┐                  │
+│                                          │(validation)│   │                 │
+│                                          └───────────┘   │                  │
+│                                                │         │                  │
+│                               ┌────────────────┴─────────┴────────┐        │
+│                               │                                    │        │
+│                               ▼                                    ▼        │
+│                        ┌────────────┐                      ┌─────────────┐  │
+│                        │  Approved  │                      │More Issues  │  │
+│                        │     ↓      │                      │     ↓       │  │
+│                        │Human Review│                      │ Remediation │  │
+│                        └────────────┘                      │   (cycle+1) │  │
+│                                                            └─────────────┘  │
+│                                                                              │
+│  Cycle Limits:                                                              │
+│  ─────────────                                                              │
+│  • Default max cycles: 3                                                    │
+│  • Configurable per-task or globally                                        │
+│  • When limit reached: escalate to Human Review                            │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Remediation Cycle Record
+
+Each remediation cycle is tracked with:
+
+| Field | Description |
+|-------|-------------|
+| `cycleNumber` | Sequential number (1, 2, 3...) |
+| `triggeredBy` | "ai_review" or "human_review" |
+| `feedback` | Human's feedback text (when triggered by human) |
+| `status` | pending → in_progress → completed/failed |
+| `startedAt` / `completedAt` | Timestamps |
+| `model` | AI model used |
+| `totalCostUsd` | API cost for this cycle |
+| `numTurns` | Number of agent turns |
+| `result` | Agent's final output |
+| `error` | Error message if failed |
+
+### Container Isolation
+
+Each remediation cycle runs in a fresh container:
+
+```
+Cycle 1:
+  Container: eager-red-fox
+  └── Fixes AI review issues
+  └── Container destroyed after completion
+
+Cycle 2 (if needed):
+  Container: calm-blue-hawk
+  └── Fixes remaining issues
+  └── Container destroyed after completion
+
+Cycle 3 (if needed):
+  Container: swift-green-owl
+  └── Final attempt at fixes
+  └── If issues remain, escalate to human
+```
+
+This isolation prevents:
+- State contamination between cycles
+- Accumulated context confusion
+- Resource leaks from long-running agents
+
 ## Overview
 
 The Agent Manager uses a distributed architecture:
@@ -509,8 +818,10 @@ All components log to stdout for container aggregation:
 
 ## Future Enhancements
 
-1. **Multi-agent collaboration**: Multiple containers working on related tasks
+1. **Multi-agent collaboration**: Multiple containers working on related tasks in parallel
 2. **Container pools**: Pre-warmed containers for faster task assignment
-3. **Cost tracking**: Per-session and per-project API cost aggregation
-4. **Execution history**: Browse past sessions with full output replay
+3. **Cost aggregation dashboards**: Project-level and team-level cost reporting
+4. **Execution replay**: Browse past sessions with full output replay and diff viewing
 5. **Container scaling**: Auto-scale containers based on queue depth
+6. **Custom review criteria**: Define project-specific review checklists for AI Review
+7. **Remediation learning**: Track common issues to improve initial implementation prompts

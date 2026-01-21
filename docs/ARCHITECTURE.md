@@ -74,6 +74,16 @@ The schema normalizes the frontend's nested data structures into separate tables
                   │          │              │ taskDependencies│
                   │          │              └─────────────────┘
                   │          │
+                  │          ├─────────────▶┌─────────────────┐
+                  │          │              │   taskPhases    │
+                  │          │              │ (phase tracking)│
+                  │          │              └─────────────────┘
+                  │          │
+                  │          ├─────────────▶┌─────────────────────┐
+                  │          │              │ remediationCycles   │
+                  │          │              │ (fix cycle history) │
+                  │          │              └─────────────────────┘
+                  │          │
                   │          └─────────────▶┌─────────────────┐
                   │                         │  pullRequests   │
                   │                         └─────────────────┘
@@ -87,6 +97,11 @@ The schema normalizes the frontend's nested data structures into separate tables
                   └────────────────────────▶┌─────────────────┐
                                             │  chatMessages   │
                                             └─────────────────┘
+
+┌─────────────────┐
+│  phaseConfigs   │──────▶ tasks (optional, for per-task overrides)
+│ (agent config)  │
+└─────────────────┘
 
 ┌─────────────┐       ┌─────────────┐       ┌─────────────────┐
 │   servers   │──────▶│ containers  │       │  serverMetrics  │
@@ -136,6 +151,9 @@ The schema normalizes the frontend's nested data structures into separate tables
 | `agentMessages` | Streaming output from CLI sessions | Belongs to agentSession |
 | `containerBuilds` | Container build session tracking | Links to container by containerId |
 | `containerBuildPhases` | Individual build phase logs | Belongs to containerBuild |
+| `taskPhases` | Task lifecycle phase tracking | Belongs to task, tracks each phase execution |
+| `phaseConfigs` | Agent configuration per phase | Global defaults (taskId=null) or task overrides |
+| `remediationCycles` | Remediation fix cycle history | Belongs to task, tracks each fix attempt |
 
 ### Index Strategy
 
@@ -252,6 +270,257 @@ packages/agent-shared/     # Shared types
 - One file per domain entity for public APIs
 - Internal functions grouped by capability, not entity
 - `internal/` directory prefix makes functions inaccessible to clients
+
+## Task Phase System Architecture
+
+The Task Phase System provides formal lifecycle management for tasks, with configurable AI agents handling each phase.
+
+### Phase Lifecycle
+
+Tasks progress through seven phases, each with its own agent configuration:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           TASK PHASE LIFECYCLE                               │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  ┌─────────────┐    ┌──────────┐    ┌────────────────┐    ┌───────────┐    │
+│  │ Requirements│───▶│ Planning │───▶│ Implementation │───▶│ AI Review │    │
+│  │  (manual)   │    │ (agent)  │    │    (agent)     │    │  (agent)  │    │
+│  └─────────────┘    └──────────┘    └────────────────┘    └───────────┘    │
+│                                                                  │          │
+│                           ┌──────────────────────────────────────┤          │
+│                           │                                      │          │
+│                           ▼                                      ▼          │
+│                    ┌─────────────┐                      ┌──────────────┐   │
+│  ┌────────────────▶│ Remediation │◀─────────────────────│ Human Review │   │
+│  │                 │   (agent)   │   request changes    │   (agent)    │   │
+│  │                 └─────────────┘                      └──────────────┘   │
+│  │                        │                                    │           │
+│  │ validation loop        │ completed                          │ approved  │
+│  │                        ▼                                    │           │
+│  │                 ┌───────────┐                               │           │
+│  └─────────────────│ AI Review │                               │           │
+│                    └───────────┘                               │           │
+│                           │                                    │           │
+│                           │ approved                           │           │
+│                           ▼                                    ▼           │
+│                    ┌──────────────┐                     ┌───────────┐      │
+│                    │ Human Review │────────────────────▶│   Merge   │      │
+│                    └──────────────┘     approved        │  (agent)  │      │
+│                                                         └───────────┘      │
+│                                                                │           │
+│                                                                ▼           │
+│                                                         ┌───────────┐      │
+│                                                         │ Completed │      │
+│                                                         └───────────┘      │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Phase Table Schema
+
+```typescript
+taskPhases: defineTable({
+  taskId: v.id("tasks"),
+  phase: v.union(
+    v.literal("requirements"),
+    v.literal("planning"),
+    v.literal("implementation"),
+    v.literal("ai_review"),
+    v.literal("remediation"),
+    v.literal("human_review"),
+    v.literal("merge")
+  ),
+  status: v.union(
+    v.literal("pending"),
+    v.literal("in_progress"),
+    v.literal("completed"),
+    v.literal("failed"),
+    v.literal("skipped")
+  ),
+  startedAt: v.optional(v.number()),
+  completedAt: v.optional(v.number()),
+  // Agent configuration used for this execution
+  provider: v.optional(v.string()),
+  model: v.optional(v.string()),
+  prompt: v.optional(v.string()),
+  permissionMode: v.optional(v.string()),
+  // Results
+  result: v.optional(v.string()),
+  error: v.optional(v.string()),
+  // References
+  agentSessionId: v.optional(v.string()),
+  containerId: v.optional(v.string()),
+  // Cost tracking
+  totalCostUsd: v.optional(v.number()),
+  numTurns: v.optional(v.number()),
+  // Remediation tracking (for remediation phase only)
+  currentRemediationCycle: v.optional(v.number()),
+  remediationTriggeredBy: v.optional(v.union(
+    v.literal("ai_review"),
+    v.literal("human_review")
+  )),
+  order: v.number(),  // 0-6 for phase ordering
+})
+  .index("by_task", ["taskId"])
+  .index("by_task_and_phase", ["taskId", "phase"])
+```
+
+### Phase Configuration Schema
+
+```typescript
+phaseConfigs: defineTable({
+  taskId: v.optional(v.id("tasks")), // null = global default
+  phase: v.union(
+    v.literal("planning"),
+    v.literal("implementation"),
+    v.literal("ai_review"),
+    v.literal("remediation"),
+    v.literal("human_review"),
+    v.literal("merge")
+  ),
+  provider: v.string(),           // e.g., "anthropic"
+  model: v.string(),              // e.g., "claude-sonnet-4-20250514"
+  permissionMode: v.string(),     // "default", "plan", "accept_edits", "full_auto"
+  promptTemplate: v.string(),     // Prompt with {{variable}} placeholders
+  systemPrompt: v.optional(v.string()),
+  maxBudgetUsd: v.optional(v.number()),
+  maxRemediationCycles: v.optional(v.number()), // Only for remediation phase
+  enabled: v.boolean(),
+  createdAt: v.number(),
+  updatedAt: v.number(),
+})
+  .index("by_phase", ["phase"])
+  .index("by_task_and_phase", ["taskId", "phase"])
+```
+
+### Remediation Cycles Schema
+
+```typescript
+remediationCycles: defineTable({
+  taskId: v.id("tasks"),
+  cycleNumber: v.number(),        // 1, 2, 3, etc.
+  triggeredBy: v.union(
+    v.literal("ai_review"),
+    v.literal("human_review")
+  ),
+  feedback: v.optional(v.string()), // Human feedback when triggered by human_review
+  status: v.union(
+    v.literal("pending"),
+    v.literal("in_progress"),
+    v.literal("completed"),
+    v.literal("failed"),
+    v.literal("skipped")
+  ),
+  startedAt: v.optional(v.number()),
+  completedAt: v.optional(v.number()),
+  // Agent session details
+  provider: v.optional(v.string()),
+  model: v.optional(v.string()),
+  prompt: v.optional(v.string()),
+  permissionMode: v.optional(v.string()),
+  result: v.optional(v.string()),
+  error: v.optional(v.string()),
+  agentSessionId: v.optional(v.string()),
+  containerId: v.optional(v.string()),
+  totalCostUsd: v.optional(v.number()),
+  numTurns: v.optional(v.number()),
+  createdAt: v.number(),
+})
+  .index("by_task", ["taskId"])
+  .index("by_task_and_cycle", ["taskId", "cycleNumber"])
+```
+
+### Phase Transition Logic
+
+Phase transitions are managed by `internal/phaseTransitions.ts`:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         PHASE TRANSITION RULES                               │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  Valid Transitions:                                                          │
+│  ─────────────────                                                          │
+│  requirements    → planning                                                  │
+│  planning        → implementation                                            │
+│  implementation  → ai_review                                                 │
+│  ai_review       → remediation (issues found)                               │
+│                  → human_review (approved)                                   │
+│  remediation     → ai_review (always, for validation)                       │
+│  human_review    → remediation (changes requested)                          │
+│                  → merge (approved)                                          │
+│  merge           → completed                                                 │
+│                                                                              │
+│  Remediation Loop:                                                          │
+│  ─────────────────                                                          │
+│  1. AI Review finds issues  → triggerRemediationFromAIReview()              │
+│  2. Human requests changes  → triggerRemediationFromHumanReview(feedback)   │
+│  3. Remediation completes   → completeRemediationCycle() → AI Review        │
+│  4. AI Review validates     → approveAIReview() → Human Review              │
+│                             → (or back to remediation if more issues)       │
+│                                                                              │
+│  Max Cycles:                                                                │
+│  ───────────                                                                │
+│  When maxRemediationCycles reached, escalate to human_review               │
+│  to decide next steps (default limit: 3 cycles)                            │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Key Transition Functions
+
+| Function | Trigger | Effect |
+|----------|---------|--------|
+| `startPhase(taskId, phase)` | Manual or auto | Begin a phase, create container |
+| `completePhase(taskId, phase, result)` | Agent completion | Mark phase done, destroy container |
+| `failPhase(taskId, phase, error)` | Agent error | Mark phase failed |
+| `triggerRemediationFromAIReview(taskId)` | AI Review finds issues | Start remediation cycle |
+| `triggerRemediationFromHumanReview(taskId, feedback)` | Human requests changes | Start remediation with feedback |
+| `completeRemediationCycle(taskId, cycleNumber)` | Remediation agent done | Transition to AI Review for validation |
+| `approveAIReview(taskId)` | AI Review approves | Transition to Human Review |
+| `approveHumanReview(taskId)` | Human approves | Transition to Merge |
+
+### Configuration Resolution
+
+When starting a phase, the system resolves configuration in this order:
+
+```
+1. Task-specific override (phaseConfigs where taskId = task)
+      ↓ (if not found)
+2. Global default (phaseConfigs where taskId = null)
+      ↓ (if not found)
+3. Built-in default (hardcoded in phaseConfigs.ts)
+```
+
+This allows:
+- **Global defaults** for consistent behavior across all tasks
+- **Per-task overrides** for specific requirements
+- **Built-in fallbacks** ensure the system always works
+
+### Container Lifecycle Per Phase
+
+Each agent phase creates a fresh Docker container:
+
+```
+Phase Start:
+  1. Create container with unique name
+  2. Clone repository and checkout branch
+  3. Connect to gateway via WebSocket
+  4. Start agent session with phase prompt
+
+Phase Complete:
+  1. Record session results and costs
+  2. Update phase status
+  3. Destroy container
+  4. Trigger next phase transition
+```
+
+This isolation ensures:
+- Clean environment for each phase
+- No state contamination between phases
+- Independent cost tracking per phase
+- Parallel execution potential (future enhancement)
 
 ## Agent Gateway Architecture
 
