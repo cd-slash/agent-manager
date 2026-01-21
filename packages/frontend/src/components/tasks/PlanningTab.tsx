@@ -19,15 +19,28 @@ import { PhaseConfigPanel } from './PhaseConfigPanel';
 import type {
   TaskId,
   TaskPhaseDoc,
-  AcceptanceCriteriaDoc,
-  TestDoc,
 } from '@/types';
+
+// Flexible types that work with both legacy types (id) and Convex Doc types (_id)
+interface AcceptanceCriteriaItem {
+  _id?: string;
+  id?: string;
+  text: string;
+  done: boolean;
+}
+
+interface TestItem {
+  _id?: string;
+  id?: string;
+  name: string;
+  status: 'passed' | 'pending' | 'failed';
+}
 
 interface PlanningTabProps {
   taskId: TaskId;
   planningPhase: TaskPhaseDoc | null;
-  acceptanceCriteria: AcceptanceCriteriaDoc[];
-  tests: TestDoc[];
+  acceptanceCriteria: AcceptanceCriteriaItem[];
+  tests: TestItem[];
   implementationPrompt?: string;
 }
 
@@ -135,7 +148,7 @@ export function PlanningTab({
               ) : (
                 acceptanceCriteria.map((criteria) => (
                   <div
-                    key={criteria._id}
+                    key={criteria._id || criteria.id}
                     className="flex items-center justify-between p-3 border-b border-border last:border-0 hover:bg-surface-elevated/50"
                   >
                     <div className="flex items-center min-w-0 flex-1">
@@ -178,7 +191,7 @@ export function PlanningTab({
               ) : (
                 tests.map((test) => (
                   <div
-                    key={test._id}
+                    key={test._id || test.id}
                     className="flex items-center justify-between p-3 border-b border-border last:border-0 hover:bg-surface-elevated/50"
                   >
                     <div className="flex items-center min-w-0 flex-1">

@@ -5,23 +5,24 @@ type DatabaseWriter = GenericDatabaseWriter<GenericDataModel>;
 
 /**
  * Deletes all records from a table that match a given index query.
+ * Uses `any` internally since this is a generic helper for arbitrary tables.
  */
-async function deleteByIndex<TableName extends string>(
+async function deleteByIndex(
   db: DatabaseWriter,
-  table: TableName,
+  table: string,
   index: string,
   field: string,
-  value: Id<string>
+  value: string
 ): Promise<number> {
-  const records = await (db as DatabaseWriter)
+  const records = await (db as any)
     .query(table)
-    .withIndex(index, (q: { eq: (field: string, value: Id<string>) => unknown }) =>
-      q.eq(field, value)
-    )
+    .withIndex(index, (q: any) => q.eq(field, value))
     .collect();
 
   for (const record of records) {
-    await db.delete(record._id);
+    if (record._id) {
+      await (db as any).delete(record._id);
+    }
   }
 
   return records.length;
@@ -113,14 +114,16 @@ export async function deleteTaskCascade(
   await deleteTaskRelatedData(db, taskId);
 
   // Delete pull requests and their related data
-  const pullRequests = await db
+  const pullRequests = await (db as any)
     .query("pullRequests")
-    .withIndex("by_task", (q) => q.eq("taskId", taskId))
+    .withIndex("by_task", (q: any) => q.eq("taskId", taskId))
     .collect();
 
   for (const pr of pullRequests) {
-    await deletePRRelatedData(db, pr._id);
-    await db.delete(pr._id);
+    if (pr._id) {
+      await deletePRRelatedData(db, pr._id as Id<"pullRequests">);
+      await (db as any).delete(pr._id);
+    }
   }
 
   // Finally delete the task
@@ -135,15 +138,17 @@ export async function deleteProjectCascade(
   projectId: Id<"projects">
 ): Promise<void> {
   // Delete all related tasks first
-  const tasks = await db
+  const tasks = await (db as any)
     .query("tasks")
-    .withIndex("by_project", (q) => q.eq("projectId", projectId))
+    .withIndex("by_project", (q: any) => q.eq("projectId", projectId))
     .collect();
 
   for (const task of tasks) {
-    // Delete task-related data (without deleting PR related data as the task deletion handles it)
-    await deleteTaskRelatedData(db, task._id);
-    await db.delete(task._id);
+    if (task._id) {
+      // Delete task-related data (without deleting PR related data as the task deletion handles it)
+      await deleteTaskRelatedData(db, task._id as Id<"tasks">);
+      await (db as any).delete(task._id);
+    }
   }
 
   // Delete project-level chat messages
@@ -167,13 +172,15 @@ export async function deleteServerCascade(
   await deleteByIndex(db, "containers", "by_server", "serverId", serverId);
 
   // Delete metrics history
-  const metrics = await db
+  const metrics = await (db as any)
     .query("serverMetrics")
-    .withIndex("by_server_and_timestamp", (q) => q.eq("serverId", serverId))
+    .withIndex("by_server_and_timestamp", (q: any) => q.eq("serverId", serverId))
     .collect();
 
   for (const metric of metrics) {
-    await db.delete(metric._id);
+    if (metric._id) {
+      await (db as any).delete(metric._id);
+    }
   }
 
   // Finally delete the server

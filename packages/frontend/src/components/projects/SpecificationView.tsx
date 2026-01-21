@@ -31,9 +31,9 @@ function parseMarkdownSections(markdown: string): SpecificationSection[] {
       }
 
       currentSection = {
-        title: headerMatch[2],
+        title: headerMatch[2]!,
         content: '',
-        level: headerMatch[1].length,
+        level: headerMatch[1]!.length,
       };
       contentLines = [];
     } else if (currentSection) {
@@ -177,6 +177,7 @@ export function SpecificationView({ value, onChange }: SpecificationViewProps) {
 
   const handleSectionContentChange = (sectionIndex: number, newContent: string) => {
     const section = sections[sectionIndex];
+    if (!section) return;
     const headerPrefix = '#'.repeat(section.level);
     const oldSectionText = `${headerPrefix} ${section.title}\n${section.content}`;
     const newSectionText = `${headerPrefix} ${section.title}\n${newContent}`;

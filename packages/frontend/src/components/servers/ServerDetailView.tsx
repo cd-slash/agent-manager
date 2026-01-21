@@ -44,9 +44,9 @@ export function ServerDetailView({
 
   const hasChanges = sshUser !== (server.sshUser || 'ubuntu');
 
-  // Parse CPU and Memory values for progress bars
-  const cpuPercent = parseInt(server.cpu) || 0;
-  const memPercent = parseInt(server.mem) || 0;
+  // CPU and Memory values for progress bars
+  const cpuPercent = server.cpu || 0;
+  const memPercent = server.mem || 0;
 
   return (
     <div className="flex flex-col h-full bg-background animate-in fade-in duration-300">

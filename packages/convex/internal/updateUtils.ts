@@ -19,18 +19,16 @@ export function filterUndefined<T extends Record<string, unknown>>(
 /**
  * Patches a document with filtered updates and automatically sets updatedAt.
  * Filters out undefined values from the updates object before patching.
+ * Uses `any` internally since this works with arbitrary Convex tables.
  */
-export async function patchWithTimestamp<
-  DataModel extends GenericDataModel,
-  TableName extends keyof DataModel["tables"] & string,
->(
-  db: GenericDatabaseWriter<DataModel>,
-  id: DataModel["tables"][TableName]["document"]["_id"],
+export async function patchWithTimestamp(
+  db: GenericDatabaseWriter<GenericDataModel>,
+  id: string,
   updates: Record<string, unknown>
 ): Promise<void> {
   const filteredUpdates = filterUndefined(updates);
-  await db.patch(id, {
+  await (db as any).patch(id, {
     ...filteredUpdates,
     updatedAt: Date.now(),
-  } as Partial<DataModel["tables"][TableName]["document"]>);
+  });
 }

@@ -16,7 +16,7 @@ export interface FilterConfig {
   defaultValue?: string;
 }
 
-export interface GenericListViewProps<TData extends Record<string, unknown>> {
+export interface GenericListViewProps<TData> {
   /** Column definitions for the data table */
   columns: ColumnDef<TData>[];
   /** Data to display in the table */
@@ -55,7 +55,7 @@ export interface GenericListViewProps<TData extends Record<string, unknown>> {
   includeSelectionColumn?: boolean;
 }
 
-export function GenericListView<TData extends Record<string, unknown>>({
+export function GenericListView<TData>({
   columns,
   data,
   onRowClick,
@@ -108,7 +108,7 @@ export function GenericListView<TData extends Record<string, unknown>>({
       for (const filter of filters) {
         const filterValue = filterValues[filter.key];
         if (filterValue && filterValue !== 'all') {
-          if (item[filter.key] !== filterValue) return false;
+          if ((item as Record<string, unknown>)[filter.key] !== filterValue) return false;
         }
       }
 
