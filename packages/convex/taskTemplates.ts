@@ -44,6 +44,10 @@ export const BUILTIN_TEMPLATES: Array<{
   },
 ];
 
+// Default phase order - used when no template is specified
+// This is the Standard template's phases
+export const DEFAULT_PHASE_ORDER = BUILTIN_TEMPLATES[0]!.phases;
+
 // Get all templates
 export const list = query({
   args: {},
@@ -140,6 +144,14 @@ export const create = mutation({
       throw new Error("Template must have at least one phase");
     }
 
+    // Require essential phases
+    if (!phases.includes("requirements")) {
+      throw new Error("Template must include the requirements phase");
+    }
+    if (!phases.includes("merge")) {
+      throw new Error("Template must include the merge phase");
+    }
+
     // If this is being set as default, unset the current default
     if (isDefault) {
       const currentDefault = await ctx.db
@@ -200,8 +212,16 @@ export const update = mutation({
     }
 
     // Validate phases if provided
-    if (updates.phases && updates.phases.length === 0) {
-      throw new Error("Template must have at least one phase");
+    if (updates.phases) {
+      if (updates.phases.length === 0) {
+        throw new Error("Template must have at least one phase");
+      }
+      if (!updates.phases.includes("requirements")) {
+        throw new Error("Template must include the requirements phase");
+      }
+      if (!updates.phases.includes("merge")) {
+        throw new Error("Template must include the merge phase");
+      }
     }
 
     // If this is being set as default, unset the current default
@@ -383,70 +403,3 @@ export const hasPhase = query({
   },
 });
 
-// Get valid transitions for a template (derived from phase order)
-export const getValidTransitions = query({
-  args: { templateId: v.optional(v.id("taskTemplates")) },
-  handler: async (ctx, args) => {
-    let phases: TaskPhase[];
-
-    if (args.templateId) {
-      const template = await ctx.db.get(args.templateId);
-      if (template) {
-        phases = template.phases as TaskPhase[];
-      } else {
-        const defaultTemplate = await ctx.db
-          .query("taskTemplates")
-          .withIndex("by_default", (q) => q.eq("isDefault", true))
-          .first();
-        phases = defaultTemplate?.phases as TaskPhase[] ?? BUILTIN_TEMPLATES[0]!.phases;
-      }
-    } else {
-      const defaultTemplate = await ctx.db
-        .query("taskTemplates")
-        .withIndex("by_default", (q) => q.eq("isDefault", true))
-        .first();
-      phases = defaultTemplate?.phases as TaskPhase[] ?? BUILTIN_TEMPLATES[0]!.phases;
-    }
-
-    // Build transitions map - each phase can transition to the next phase
-    // Special handling for remediation loops
-    const transitions: Record<string, string[]> = {};
-
-    for (let i = 0; i < phases.length; i++) {
-      const phase = phases[i]!;
-      const nextPhase = phases[i + 1];
-
-      if (phase === "ai_review") {
-        // AI Review can go to remediation (if present) or next phase
-        const targets: string[] = [];
-        if (phases.includes("remediation")) {
-          targets.push("remediation");
-        }
-        if (nextPhase && nextPhase !== "remediation") {
-          targets.push(nextPhase);
-        } else if (nextPhase === "remediation" && phases[i + 2]) {
-          targets.push(phases[i + 2]!);
-        }
-        transitions[phase] = targets;
-      } else if (phase === "remediation") {
-        // Remediation always goes back to ai_review for validation
-        transitions[phase] = phases.includes("ai_review") ? ["ai_review"] : (nextPhase ? [nextPhase] : []);
-      } else if (phase === "human_review") {
-        // Human review can go to remediation (if present) or next phase
-        const targets: string[] = [];
-        if (phases.includes("remediation")) {
-          targets.push("remediation");
-        }
-        if (nextPhase) {
-          targets.push(nextPhase);
-        }
-        transitions[phase] = targets;
-      } else {
-        // Normal phase - just goes to next
-        transitions[phase] = nextPhase ? [nextPhase] : [];
-      }
-    }
-
-    return transitions;
-  },
-});

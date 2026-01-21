@@ -132,6 +132,10 @@ export function TaskTemplatesSettings() {
       toast.error('Requirements required', 'Template must include the requirements phase');
       return;
     }
+    if (!formData.phases.includes('merge')) {
+      toast.error('Merge required', 'Template must include the merge phase');
+      return;
+    }
 
     setIsSaving(true);
     try {
@@ -359,7 +363,7 @@ export function TaskTemplatesSettings() {
               <div className="bg-background border border-border rounded-lg p-3 space-y-2">
                 {ALL_PHASES.map((phase) => {
                   const isIncluded = formData.phases.includes(phase);
-                  const isRequired = phase === 'requirements';
+                  const isRequired = phase === 'requirements' || phase === 'merge';
                   const isDisabled = editingTemplate?.isBuiltin || isRequired;
 
                   return (

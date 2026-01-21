@@ -1,10 +1,7 @@
 import { query, mutation, internalMutation } from "./_generated/server";
 import { v } from "convex/values";
 import { taskPhaseValidator, phaseStatusValidator } from "./validators";
-import { BUILTIN_TEMPLATES } from "./taskTemplates";
-
-// Default phase order (used when no template is specified)
-const DEFAULT_PHASE_ORDER = BUILTIN_TEMPLATES[0]!.phases;
+import { DEFAULT_PHASE_ORDER } from "./taskTemplates";
 
 // Type for task phases
 type TaskPhase = "requirements" | "planning" | "implementation" | "ai_review" | "remediation" | "human_review" | "merge";

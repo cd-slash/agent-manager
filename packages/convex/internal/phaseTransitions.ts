@@ -2,10 +2,7 @@ import { internalMutation, internalQuery, mutation } from "../_generated/server"
 import { v } from "convex/values";
 import { taskPhaseValidator, remediationTriggerValidator } from "../validators";
 import type { Id } from "../_generated/dataModel";
-import { BUILTIN_TEMPLATES } from "../taskTemplates";
-
-// Default phase order (used when no template is available)
-const DEFAULT_PHASE_ORDER = BUILTIN_TEMPLATES[0]!.phases;
+import { DEFAULT_PHASE_ORDER } from "../taskTemplates";
 
 type TaskPhase = "requirements" | "planning" | "implementation" | "ai_review" | "remediation" | "human_review" | "merge";
 type RemediationTrigger = "ai_review" | "human_review";

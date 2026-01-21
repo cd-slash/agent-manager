@@ -129,6 +129,23 @@ export function TaskDetailView({
   // Fetch task phases from Convex
   const phases = useQuery(api.taskPhases.listByTask, { taskId }) ?? [];
 
+  // Set of phases that are applicable to this task (from the template)
+  const applicablePhases = new Set(phases.map((p) => p.phase));
+
+  // Helper to check if a phase is applicable to this task
+  const isPhaseApplicable = (phaseName: TaskPhase): boolean => {
+    return applicablePhases.has(phaseName);
+  };
+
+  // Helper to get tab styling based on phase applicability
+  const getTabClassName = (phaseName: TaskPhase): string => {
+    const baseClass = "flex items-center";
+    if (!isPhaseApplicable(phaseName)) {
+      return `${baseClass} opacity-40`;
+    }
+    return baseClass;
+  };
+
   // Helper to get phase by name
   const getPhaseByName = (phaseName: TaskPhase): TaskPhaseDoc | null => {
     return (phases.find((p) => p.phase === phaseName) as TaskPhaseDoc | undefined) ?? null;
@@ -233,15 +250,15 @@ export function TaskDetailView({
 
             <Tabs value={activeTab} onValueChange={setActiveTab}>
               <TabsList className="w-full justify-start">
-                <TabsTrigger value="requirements" className="flex items-center">
+                <TabsTrigger value="requirements" className={getTabClassName('requirements')}>
                   <ClipboardList size={14} className="mr-1.5" />
                   Requirements
                 </TabsTrigger>
-                <TabsTrigger value="planning" className="flex items-center">
+                <TabsTrigger value="planning" className={getTabClassName('planning')}>
                   <FileText size={14} className="mr-1.5" />
                   Planning
                 </TabsTrigger>
-                <TabsTrigger value="implementation" className="flex items-center">
+                <TabsTrigger value="implementation" className={getTabClassName('implementation')}>
                   <Terminal size={14} className="mr-1.5" />
                   Implementation
                 </TabsTrigger>
@@ -249,19 +266,19 @@ export function TaskDetailView({
                   <GitPullRequest size={14} className="mr-1.5" />
                   Pull Request
                 </TabsTrigger>
-                <TabsTrigger value="ai-review" className="flex items-center">
+                <TabsTrigger value="ai-review" className={getTabClassName('ai_review')}>
                   <Bot size={14} className="mr-1.5" />
                   AI Review
                 </TabsTrigger>
-                <TabsTrigger value="remediation" className="flex items-center">
+                <TabsTrigger value="remediation" className={getTabClassName('remediation')}>
                   <Wrench size={14} className="mr-1.5" />
                   Remediation
                 </TabsTrigger>
-                <TabsTrigger value="human-review" className="flex items-center">
+                <TabsTrigger value="human-review" className={getTabClassName('human_review')}>
                   <UserCheck size={14} className="mr-1.5" />
                   Human Review
                 </TabsTrigger>
-                <TabsTrigger value="merge" className="flex items-center">
+                <TabsTrigger value="merge" className={getTabClassName('merge')}>
                   <GitMerge size={14} className="mr-1.5" />
                   Merge
                 </TabsTrigger>

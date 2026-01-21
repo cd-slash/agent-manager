@@ -149,7 +149,9 @@ const DEFAULT_CONFIGS = {
   },
 } as const;
 
-type AgentPhase = "planning" | "implementation" | "ai_review" | "remediation" | "human_review" | "merge";
+// Phases that have agent configurations (excludes requirements which is human-defined)
+export const AGENT_PHASES = ["planning", "implementation", "ai_review", "remediation", "human_review", "merge"] as const;
+export type AgentPhase = (typeof AGENT_PHASES)[number];
 
 // Get all global default configs
 export const getAllDefaults = query({
@@ -265,10 +267,9 @@ export const getEffectiveConfig = query({
 export const getAllConfigsForTask = query({
   args: { taskId: v.id("tasks") },
   handler: async (ctx, args) => {
-    const phases = ["planning", "implementation", "ai_review", "remediation", "human_review", "merge"] as const;
     const configs: Record<string, unknown> = {};
 
-    for (const phase of phases) {
+    for (const phase of AGENT_PHASES) {
       // Check for task-specific override
       const taskConfig = await ctx.db
         .query("phaseConfigs")
@@ -433,10 +434,9 @@ export const deleteTaskOverride = mutation({
 export const initializeDefaults = internalMutation({
   args: {},
   handler: async (ctx) => {
-    const phases = ["planning", "implementation", "ai_review", "remediation", "human_review", "merge"] as const;
     const now = Date.now();
 
-    for (const phase of phases) {
+    for (const phase of AGENT_PHASES) {
       // Check if default already exists
       const existing = await ctx.db
         .query("phaseConfigs")
