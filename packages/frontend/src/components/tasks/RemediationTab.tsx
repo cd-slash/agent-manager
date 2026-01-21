@@ -81,7 +81,7 @@ function RemediationCycleCard({
 				className={`border rounded-lg overflow-hidden ${isCurrentCycle ? "border-primary" : "border-border"}`}
 			>
 				<CollapsibleTrigger asChild>
-					<button className="w-full flex items-center justify-between p-4 bg-surface hover:bg-surface-elevated/50 transition-colors">
+					<button type="button" className="w-full flex items-center justify-between p-4 bg-surface hover:bg-surface-elevated/50 transition-colors">
 						<div className="flex items-center gap-3">
 							{isOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
 							<span className="font-medium text-foreground">
@@ -115,9 +115,9 @@ function RemediationCycleCard({
 					<div className="p-4 border-t border-border space-y-4">
 						{cycle.feedback && (
 							<div>
-								<label className="text-xs text-muted-foreground uppercase font-semibold flex items-center gap-1.5 mb-2">
+								<span className="text-xs text-muted-foreground uppercase font-semibold flex items-center gap-1.5 mb-2">
 									<MessageSquare size={12} /> Human Feedback
-								</label>
+								</span>
 								<div className="bg-background border border-border rounded-lg p-3">
 									<p className="text-sm text-foreground">{cycle.feedback}</p>
 								</div>
@@ -126,33 +126,33 @@ function RemediationCycleCard({
 
 						<div className="grid grid-cols-2 md:grid-cols-4 gap-4">
 							<div>
-								<label className="text-xs text-muted-foreground uppercase font-semibold">
+								<span className="text-xs text-muted-foreground uppercase font-semibold">
 									Duration
-								</label>
+								</span>
 								<p className="text-sm text-foreground mt-1">
 									{formatDuration(cycle.startedAt, cycle.completedAt)}
 								</p>
 							</div>
 							<div>
-								<label className="text-xs text-muted-foreground uppercase font-semibold">
+								<span className="text-xs text-muted-foreground uppercase font-semibold">
 									Cost
-								</label>
+								</span>
 								<p className="text-sm text-foreground mt-1">
 									{formatCost(cycle.totalCostUsd)}
 								</p>
 							</div>
 							<div>
-								<label className="text-xs text-muted-foreground uppercase font-semibold">
+								<span className="text-xs text-muted-foreground uppercase font-semibold">
 									Turns
-								</label>
+								</span>
 								<p className="text-sm text-foreground mt-1">
 									{cycle.numTurns ?? "-"}
 								</p>
 							</div>
 							<div>
-								<label className="text-xs text-muted-foreground uppercase font-semibold">
+								<span className="text-xs text-muted-foreground uppercase font-semibold">
 									Model
-								</label>
+								</span>
 								<p className="text-sm text-foreground mt-1 truncate">
 									{cycle.model || "-"}
 								</p>
@@ -161,9 +161,9 @@ function RemediationCycleCard({
 
 						{cycle.error && (
 							<div>
-								<label className="text-xs text-destructive uppercase font-semibold mb-2 block">
+								<span className="text-xs text-destructive uppercase font-semibold mb-2 block">
 									Error
-								</label>
+								</span>
 								<div className="bg-destructive/5 border border-destructive/20 rounded-lg p-3">
 									<pre className="text-xs font-mono text-destructive whitespace-pre-wrap">
 										{cycle.error}
@@ -174,9 +174,9 @@ function RemediationCycleCard({
 
 						{cycle.result && (
 							<div>
-								<label className="text-xs text-muted-foreground uppercase font-semibold mb-2 block">
+								<span className="text-xs text-muted-foreground uppercase font-semibold mb-2 block">
 									Agent Output
-								</label>
+								</span>
 								<div className="bg-background border border-border rounded-lg p-3 max-h-48 overflow-y-auto">
 									<pre className="text-xs font-mono text-muted-foreground whitespace-pre-wrap">
 										{cycle.result}
@@ -251,33 +251,33 @@ export function RemediationTab({
 				<section>
 					<div className="grid grid-cols-2 md:grid-cols-4 gap-4">
 						<div className="bg-surface border border-border rounded-lg p-4">
-							<label className="text-xs text-muted-foreground uppercase font-semibold">
+							<span className="text-xs text-muted-foreground uppercase font-semibold">
 								Total Cycles
-							</label>
+							</span>
 							<p className="text-2xl font-bold text-foreground mt-1">
 								{summary.totalCycles}
 							</p>
 						</div>
 						<div className="bg-surface border border-border rounded-lg p-4">
-							<label className="text-xs text-muted-foreground uppercase font-semibold">
+							<span className="text-xs text-muted-foreground uppercase font-semibold">
 								Max Cycles
-							</label>
+							</span>
 							<p className="text-2xl font-bold text-foreground mt-1">
 								{summary.maxCycles}
 							</p>
 						</div>
 						<div className="bg-surface border border-border rounded-lg p-4">
-							<label className="text-xs text-muted-foreground uppercase font-semibold">
+							<span className="text-xs text-muted-foreground uppercase font-semibold">
 								Total Cost
-							</label>
+							</span>
 							<p className="text-2xl font-bold text-foreground mt-1">
 								{formatCost(summary.totalCostUsd)}
 							</p>
 						</div>
 						<div className="bg-surface border border-border rounded-lg p-4">
-							<label className="text-xs text-muted-foreground uppercase font-semibold">
+							<span className="text-xs text-muted-foreground uppercase font-semibold">
 								Cycles Left
-							</label>
+							</span>
 							<p
 								className={`text-2xl font-bold mt-1 ${summary.cyclesRemaining === 0 ? "text-destructive" : "text-foreground"}`}
 							>

@@ -9,9 +9,10 @@ interface TaskCardProps {
 
 export function TaskCard({ task, onClick }: TaskCardProps) {
 	return (
-		<div
+		<button
+			type="button"
 			onClick={() => onClick(task)}
-			className="bg-surface-elevated border border-border hover:border-primary/50 rounded-lg p-component shadow-sm hover:shadow-md transition-all duration-200 mb-component cursor-pointer group"
+			className="w-full text-left bg-surface-elevated border border-border hover:border-primary/50 rounded-lg p-component shadow-sm hover:shadow-md transition-all duration-200 mb-component cursor-pointer group"
 		>
 			<div className="flex justify-between items-start mb-item">
 				<Badge variant="outline" className="text-[10px] uppercase">
@@ -41,6 +42,6 @@ export function TaskCard({ task, onClick }: TaskCardProps) {
 					Details &rarr;
 				</span>
 			</div>
-		</div>
+		</button>
 	)
 }

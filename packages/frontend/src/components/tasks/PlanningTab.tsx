@@ -243,6 +243,7 @@ export function PlanningTab({
 					{implementationPrompt && (
 						<section>
 							<button
+								type="button"
 								onClick={() => setShowPrompt(!showPrompt)}
 								className="w-full text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center hover:text-foreground transition-colors"
 							>

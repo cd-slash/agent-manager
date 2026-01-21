@@ -100,6 +100,7 @@ export function PhaseTimeline({
 							<Tooltip>
 								<TooltipTrigger asChild>
 									<button
+										type="button"
 										onClick={() => onPhaseClick?.(phase)}
 										className={cn(
 											"flex items-center justify-center w-6 h-6 rounded-full border-2 transition-all",
@@ -153,6 +154,7 @@ export function PhaseTimeline({
 						<Tooltip>
 							<TooltipTrigger asChild>
 								<button
+									type="button"
 									onClick={() => onPhaseClick?.(phase)}
 									className={cn(
 										"flex flex-col items-center gap-1.5 px-2 py-1.5 rounded-lg transition-all min-w-[80px]",
