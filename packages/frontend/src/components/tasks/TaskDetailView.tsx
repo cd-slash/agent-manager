@@ -976,7 +976,10 @@ export function TaskDetailView({
 													</h4>
 													<div className="space-y-3">
 														<div className="bg-background rounded-lg border border-red-900/50 overflow-hidden">
-															<button type="button" className="w-full flex items-center justify-between p-3 bg-red-950/20 hover:bg-red-950/30 transition-colors border-b border-red-900/30">
+															<button
+																type="button"
+																className="w-full flex items-center justify-between p-3 bg-red-950/20 hover:bg-red-950/30 transition-colors border-b border-red-900/30"
+															>
 																<div className="flex items-center space-x-2 text-sm font-mono text-foreground">
 																	<ChevronDown size={16} />
 																	<span>src/utils/cart.js</span>
@@ -1059,7 +1062,10 @@ export function TaskDetailView({
 														</div>
 
 														<div className="bg-background rounded-lg border border-red-900/50 overflow-hidden">
-															<button type="button" className="w-full flex items-center justify-between p-3 bg-red-950/20 hover:bg-red-950/30 transition-colors">
+															<button
+																type="button"
+																className="w-full flex items-center justify-between p-3 bg-red-950/20 hover:bg-red-950/30 transition-colors"
+															>
 																<div className="flex items-center space-x-2 text-sm font-mono text-foreground">
 																	<ChevronRight size={16} />
 																	<span>src/components/Checkout.jsx</span>
