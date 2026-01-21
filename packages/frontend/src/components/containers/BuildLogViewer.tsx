@@ -74,6 +74,7 @@ export function BuildLogViewer({
 								<pre className="text-sm font-mono text-foreground/90 whitespace-pre-wrap break-all leading-relaxed">
 									{logs.split("\n").map((line, idx) => (
 										<div
+											// biome-ignore lint/suspicious/noArrayIndexKey: log lines from string split, immutable display
 											key={idx}
 											className={cn(
 												"py-0.5 px-2 -mx-2 rounded hover:bg-surface-elevated/30",

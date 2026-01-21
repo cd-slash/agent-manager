@@ -156,7 +156,6 @@ export function DataTable<TData, TValue>({
 									>
 										{header.isPlaceholder ? null : (
 											// biome-ignore lint/a11y/noStaticElementInteractions: sortable header with keyboard support
-											// biome-ignore lint/a11y/useSemanticElements: div needed for table header styling
 											<div
 												role={header.column.getCanSort() ? "button" : undefined}
 												className={cn(

@@ -1146,9 +1146,9 @@ export function TaskDetailView({
 
 									<TabsContent value="diff" className="!mt-0">
 										<div className="space-y-4">
-											{mockDiffs.map((file, idx) => (
+											{mockDiffs.map((file) => (
 												<div
-													key={idx}
+													key={file.filename}
 													className="bg-background rounded-lg border border-border overflow-hidden"
 												>
 													<button
@@ -1170,9 +1170,9 @@ export function TaskDetailView({
 													</button>
 													{openFiles[file.filename] && (
 														<div className="font-mono text-sm leading-6">
-															{file.lines.map((line, i) => (
+															{file.lines.map((line) => (
 																<div
-																	key={i}
+																	key={line.line}
 																	className={`flex ${
 																		line.type === "add"
 																			? "bg-green-500/10"

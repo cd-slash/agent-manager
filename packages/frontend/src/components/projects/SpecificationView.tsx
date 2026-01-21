@@ -95,7 +95,11 @@ function SectionPanel({
 			if (checkboxMatch) {
 				const isChecked = checkboxMatch[2] === "x"
 				return (
-					<div key={index} className="flex items-start gap-2 py-0.5">
+					<div
+						// biome-ignore lint/suspicious/noArrayIndexKey: markdown lines from string split, immutable display
+						key={index}
+						className="flex items-start gap-2 py-0.5"
+					>
 						<input
 							type="checkbox"
 							checked={isChecked}
@@ -115,7 +119,11 @@ function SectionPanel({
 			const bulletMatch = line.match(/^(\s*)-\s+(.+)$/)
 			if (bulletMatch) {
 				return (
-					<div key={index} className="flex items-start gap-2 py-0.5 pl-1">
+					<div
+						// biome-ignore lint/suspicious/noArrayIndexKey: markdown lines from string split, immutable display
+						key={index}
+						className="flex items-start gap-2 py-0.5 pl-1"
+					>
 						<span className="text-muted-foreground">•</span>
 						<span>{bulletMatch[2]}</span>
 					</div>
@@ -125,14 +133,24 @@ function SectionPanel({
 			// Regular text
 			if (line.trim()) {
 				return (
-					<p key={index} className="py-0.5">
+					<p
+						// biome-ignore lint/suspicious/noArrayIndexKey: markdown lines from string split, immutable display
+						key={index}
+						className="py-0.5"
+					>
 						{line}
 					</p>
 				)
 			}
 
 			// Empty line
-			return <div key={index} className="h-2" />
+			return (
+				<div
+					// biome-ignore lint/suspicious/noArrayIndexKey: markdown lines from string split, immutable display
+					key={index}
+					className="h-2"
+				/>
+			)
 		})
 	}
 
