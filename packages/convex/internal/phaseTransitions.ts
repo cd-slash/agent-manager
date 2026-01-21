@@ -18,6 +18,7 @@ type RemediationTrigger = "ai_review" | "human_review"
  * Get valid transitions for a task based on its template
  */
 async function getValidTransitionsForTask(
+	// biome-ignore lint/suspicious/noExplicitAny: Convex mutation context type
 	ctx: any,
 	taskId: Id<"tasks">,
 ): Promise<Record<TaskPhase, TaskPhase[]>> {
@@ -39,12 +40,15 @@ async function getValidTransitionsForTask(
 		// Try to get phases from taskPhases table (for existing tasks)
 		const taskPhases = await ctx.db
 			.query("taskPhases")
+			// biome-ignore lint/suspicious/noExplicitAny: Dynamic index query builder
 			.withIndex("by_task", (q: any) => q.eq("taskId", taskId))
 			.collect()
 
 		if (taskPhases.length > 0) {
 			phases = taskPhases
+				// biome-ignore lint/suspicious/noExplicitAny: Generic sort callback
 				.sort((a: any, b: any) => a.order - b.order)
+				// biome-ignore lint/suspicious/noExplicitAny: Generic map callback
 				.map((p: any) => p.phase) as TaskPhase[]
 		} else {
 			phases = DEFAULT_PHASE_ORDER
@@ -115,6 +119,7 @@ function deriveTransitionsFromPhases(
  * Get phases for a task
  */
 async function getPhasesForTask(
+	// biome-ignore lint/suspicious/noExplicitAny: Convex mutation context type
 	ctx: any,
 	taskId: Id<"tasks">,
 ): Promise<TaskPhase[]> {
@@ -133,12 +138,15 @@ async function getPhasesForTask(
 	// Fall back to task's actual phases
 	const taskPhases = await ctx.db
 		.query("taskPhases")
+		// biome-ignore lint/suspicious/noExplicitAny: Dynamic index query builder
 		.withIndex("by_task", (q: any) => q.eq("taskId", taskId))
 		.collect()
 
 	if (taskPhases.length > 0) {
 		return taskPhases
+			// biome-ignore lint/suspicious/noExplicitAny: Generic sort callback
 			.sort((a: any, b: any) => a.order - b.order)
+			// biome-ignore lint/suspicious/noExplicitAny: Generic map callback
 			.map((p: any) => p.phase) as TaskPhase[]
 	}
 
@@ -166,6 +174,7 @@ const DEFAULT_MAX_REMEDIATION_CYCLES = 3
  * Get the next phase in the sequence for a task
  */
 async function getNextPhaseForTask(
+	// biome-ignore lint/suspicious/noExplicitAny: Convex mutation context type
 	ctx: any,
 	taskId: Id<"tasks">,
 	currentPhase: TaskPhase,
@@ -182,6 +191,7 @@ async function getNextPhaseForTask(
  * Get target phase for a trigger based on task's template
  */
 async function getTriggerTargetPhase(
+	// biome-ignore lint/suspicious/noExplicitAny: Convex mutation context type
 	ctx: any,
 	taskId: Id<"tasks">,
 	trigger: TransitionTrigger,
@@ -609,12 +619,14 @@ export const linkPRAndTransition = internalMutation({
  * Helper to get max remediation cycles for a task
  */
 async function getMaxRemediationCycles(
+	// biome-ignore lint/suspicious/noExplicitAny: Convex mutation context type
 	ctx: any,
 	taskId: Id<"tasks">,
 ): Promise<number> {
 	// First check for task-specific config
 	const taskConfig = await ctx.db
 		.query("phaseConfigs")
+		// biome-ignore lint/suspicious/noExplicitAny: Dynamic index query builder
 		.withIndex("by_task_and_phase", (q: any) =>
 			q.eq("taskId", taskId).eq("phase", "remediation"),
 		)
@@ -627,6 +639,7 @@ async function getMaxRemediationCycles(
 	// Fall back to global default config
 	const globalConfig = await ctx.db
 		.query("phaseConfigs")
+		// biome-ignore lint/suspicious/noExplicitAny: Dynamic index query builder
 		.withIndex("by_task_and_phase", (q: any) =>
 			q.eq("taskId", undefined).eq("phase", "remediation"),
 		)
@@ -639,11 +652,13 @@ async function getMaxRemediationCycles(
  * Helper to get remediation cycle count
  */
 async function getRemediationCycleCount(
+	// biome-ignore lint/suspicious/noExplicitAny: Convex mutation context type
 	ctx: any,
 	taskId: Id<"tasks">,
 ): Promise<number> {
 	const cycles = await ctx.db
 		.query("remediationCycles")
+		// biome-ignore lint/suspicious/noExplicitAny: Dynamic index query builder
 		.withIndex("by_task", (q: any) => q.eq("taskId", taskId))
 		.collect()
 	return cycles.length

@@ -1,5 +1,6 @@
 import { httpRouter } from "convex/server"
 import { api, internal } from "./_generated/api"
+import type { Id } from "./_generated/dataModel"
 import { httpAction } from "./_generated/server"
 
 const http = httpRouter()
@@ -195,7 +196,7 @@ http.route({
 
 			// Record the metrics
 			await ctx.runMutation(internal.internal.metrics.recordServerMetrics, {
-				serverId: payload.serverId as any, // Cast to Id<"servers">
+				serverId: payload.serverId as Id<"servers">,
 				cpu: payload.cpu,
 				mem: payload.mem,
 				networkIn: payload.networkIn,
@@ -240,7 +241,7 @@ http.route({
 
 			// Update container status
 			await ctx.runMutation(internal.internal.metrics.updateContainerStatus, {
-				containerId: payload.containerId as any, // Cast to Id<"containers">
+				containerId: payload.containerId as Id<"containers">,
 				status: payload.status,
 			})
 

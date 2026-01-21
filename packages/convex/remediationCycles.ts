@@ -1,4 +1,5 @@
 import { v } from "convex/values"
+import type { Id } from "./_generated/dataModel"
 import { mutation, query } from "./_generated/server"
 
 // Remediation trigger type
@@ -353,10 +354,15 @@ export const isMaxCyclesReached = query({
 })
 
 // Internal helper to get max cycles (reusable in mutations)
-async function getMaxCyclesInternal(ctx: any, taskId: any): Promise<number> {
+async function getMaxCyclesInternal(
+	// biome-ignore lint/suspicious/noExplicitAny: Convex query context type
+	ctx: any,
+	taskId: Id<"tasks">,
+): Promise<number> {
 	// First check for task-specific config
 	const taskConfig = await ctx.db
 		.query("phaseConfigs")
+		// biome-ignore lint/suspicious/noExplicitAny: Dynamic index query builder
 		.withIndex("by_task_and_phase", (q: any) =>
 			q.eq("taskId", taskId).eq("phase", "remediation"),
 		)
@@ -369,6 +375,7 @@ async function getMaxCyclesInternal(ctx: any, taskId: any): Promise<number> {
 	// Fall back to global default config
 	const globalConfig = await ctx.db
 		.query("phaseConfigs")
+		// biome-ignore lint/suspicious/noExplicitAny: Dynamic index query builder
 		.withIndex("by_task_and_phase", (q: any) =>
 			q.eq("taskId", undefined).eq("phase", "remediation"),
 		)

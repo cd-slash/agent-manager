@@ -1,5 +1,6 @@
 import { v } from "convex/values"
 import { internal } from "../_generated/api"
+import type { Id } from "../_generated/dataModel"
 import {
 	internalAction,
 	internalMutation,
@@ -84,7 +85,7 @@ export const loadChatContext = internalQuery({
 	handler: async (ctx, args) => {
 		const limit = args.limit ?? 20
 		let messages: Array<{
-			_id: any
+			_id: Id<"chatMessages">
 			sender: "ai" | "user"
 			text: string
 			createdAt: number

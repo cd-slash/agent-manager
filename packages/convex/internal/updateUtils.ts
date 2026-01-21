@@ -27,6 +27,7 @@ export async function patchWithTimestamp(
 	updates: Record<string, unknown>,
 ): Promise<void> {
 	const filteredUpdates = filterUndefined(updates)
+	// biome-ignore lint/suspicious/noExplicitAny: Generic patch for arbitrary Convex tables
 	await (db as any).patch(id, {
 		...filteredUpdates,
 		updatedAt: Date.now(),

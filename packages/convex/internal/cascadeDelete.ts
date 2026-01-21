@@ -14,13 +14,16 @@ async function deleteByIndex(
 	field: string,
 	value: string,
 ): Promise<number> {
+	// biome-ignore lint/suspicious/noExplicitAny: Generic helper for arbitrary Convex tables
 	const records = await (db as any)
 		.query(table)
+		// biome-ignore lint/suspicious/noExplicitAny: Dynamic index query builder
 		.withIndex(index, (q: any) => q.eq(field, value))
 		.collect()
 
 	for (const record of records) {
 		if (record._id) {
+			// biome-ignore lint/suspicious/noExplicitAny: Generic delete for arbitrary tables
 			await (db as any).delete(record._id)
 		}
 	}
@@ -114,14 +117,17 @@ export async function deleteTaskCascade(
 	await deleteTaskRelatedData(db, taskId)
 
 	// Delete pull requests and their related data
+	// biome-ignore lint/suspicious/noExplicitAny: Generic helper for arbitrary Convex tables
 	const pullRequests = await (db as any)
 		.query("pullRequests")
+		// biome-ignore lint/suspicious/noExplicitAny: Dynamic index query builder
 		.withIndex("by_task", (q: any) => q.eq("taskId", taskId))
 		.collect()
 
 	for (const pr of pullRequests) {
 		if (pr._id) {
 			await deletePRRelatedData(db, pr._id as Id<"pullRequests">)
+			// biome-ignore lint/suspicious/noExplicitAny: Generic delete for arbitrary tables
 			await (db as any).delete(pr._id)
 		}
 	}
@@ -138,8 +144,10 @@ export async function deleteProjectCascade(
 	projectId: Id<"projects">,
 ): Promise<void> {
 	// Delete all related tasks first
+	// biome-ignore lint/suspicious/noExplicitAny: Generic helper for arbitrary Convex tables
 	const tasks = await (db as any)
 		.query("tasks")
+		// biome-ignore lint/suspicious/noExplicitAny: Dynamic index query builder
 		.withIndex("by_project", (q: any) => q.eq("projectId", projectId))
 		.collect()
 
@@ -147,6 +155,7 @@ export async function deleteProjectCascade(
 		if (task._id) {
 			// Delete task-related data (without deleting PR related data as the task deletion handles it)
 			await deleteTaskRelatedData(db, task._id as Id<"tasks">)
+			// biome-ignore lint/suspicious/noExplicitAny: Generic delete for arbitrary tables
 			await (db as any).delete(task._id)
 		}
 	}
@@ -172,8 +181,10 @@ export async function deleteServerCascade(
 	await deleteByIndex(db, "containers", "by_server", "serverId", serverId)
 
 	// Delete metrics history
+	// biome-ignore lint/suspicious/noExplicitAny: Generic helper for arbitrary Convex tables
 	const metrics = await (db as any)
 		.query("serverMetrics")
+		// biome-ignore lint/suspicious/noExplicitAny: Dynamic index query builder
 		.withIndex("by_server_and_timestamp", (q: any) =>
 			q.eq("serverId", serverId),
 		)
@@ -181,6 +192,7 @@ export async function deleteServerCascade(
 
 	for (const metric of metrics) {
 		if (metric._id) {
+			// biome-ignore lint/suspicious/noExplicitAny: Generic delete for arbitrary tables
 			await (db as any).delete(metric._id)
 		}
 	}
