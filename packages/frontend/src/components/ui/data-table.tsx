@@ -21,7 +21,7 @@ import {
 	ChevronsRight,
 	ChevronUp,
 } from "lucide-react"
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
@@ -112,16 +112,18 @@ export function DataTable<TData, TValue>({
 		...(getRowId && { getRowId }),
 	})
 
-	const selectedRows = useMemo(
-		() => table.getFilteredSelectedRowModel().rows.map((row) => row.original),
-		// biome-ignore lint/correctness/useExhaustiveDependencies: rowSelection determines selected state
-		[rowSelection, data],
-	)
 	const clearSelection = useCallback(() => setRowSelection({}), [])
 
+	// Call onSelectionChange only when rowSelection changes
 	useEffect(() => {
-		onSelectionChange?.(selectedRows, clearSelection)
-	}, [clearSelection, onSelectionChange, selectedRows])
+		if (!onSelectionChange) return
+		const selected = table
+			.getFilteredSelectedRowModel()
+			.rows.map((row) => row.original)
+		onSelectionChange(selected, clearSelection)
+		// Only trigger when rowSelection state changes, not on every render
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [rowSelection])
 
 	return (
 		<div
