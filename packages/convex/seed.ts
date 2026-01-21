@@ -1,4 +1,5 @@
 import { mutation } from "./_generated/server";
+import { BUILTIN_TEMPLATES } from "./taskTemplates";
 
 // Seed example acceptance criteria and tests for existing tasks
 export const seedTaskData = mutation({
@@ -87,6 +88,42 @@ export const clearTaskData = mutation({
 
     return {
       message: `Cleared ${criteria.length} acceptance criteria and ${tests.length} tests`
+    };
+  },
+});
+
+// Seed built-in task templates
+export const seedTemplates = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const now = Date.now();
+    const created: string[] = [];
+
+    for (const template of BUILTIN_TEMPLATES) {
+      // Check if template already exists
+      const existing = await ctx.db
+        .query("taskTemplates")
+        .withIndex("by_name", (q) => q.eq("name", template.name))
+        .first();
+
+      if (!existing) {
+        await ctx.db.insert("taskTemplates", {
+          name: template.name,
+          description: template.description,
+          phases: template.phases,
+          isDefault: template.isDefault,
+          isBuiltin: true,
+          createdAt: now,
+          updatedAt: now,
+        });
+        created.push(template.name);
+      }
+    }
+
+    return {
+      message: created.length > 0
+        ? `Created templates: ${created.join(", ")}`
+        : "All templates already exist"
     };
   },
 });

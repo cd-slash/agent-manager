@@ -35,6 +35,7 @@ import type * as servers from "../servers.js";
 import type * as settings from "../settings.js";
 import type * as tailscale from "../tailscale.js";
 import type * as taskPhases from "../taskPhases.js";
+import type * as taskTemplates from "../taskTemplates.js";
 import type * as tasks from "../tasks.js";
 import type * as tests from "../tests.js";
 import type * as validators from "../validators.js";
@@ -74,6 +75,7 @@ declare const fullApi: ApiFromModules<{
   settings: typeof settings;
   tailscale: typeof tailscale;
   taskPhases: typeof taskPhases;
+  taskTemplates: typeof taskTemplates;
   tasks: typeof tasks;
   tests: typeof tests;
   validators: typeof validators;

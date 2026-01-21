@@ -1,5 +1,7 @@
-import { useState, useEffect } from 'react';
-import { Plus, ChevronDown, ChevronRight, Settings2 } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { useQuery } from 'convex/react';
+import { api } from '@agent-manager/convex/api';
+import { Plus, ChevronDown, ChevronRight, Settings2, FileStack } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -24,8 +26,8 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
-import type { Project, TaskPhase } from '@/types';
-import { AGENT_PHASES, PHASE_DISPLAY_NAMES } from '@/types';
+import type { Project, TaskPhase, TaskTemplateDoc } from '@/types';
+import { PHASE_DISPLAY_NAMES } from '@/types';
 
 // Available models
 const MODELS = [
@@ -46,7 +48,7 @@ interface QuickTaskModalProps {
   isOpen: boolean;
   onClose: () => void;
   projects: Project[];
-  onCreate: (projectId: string, title: string) => void;
+  onCreate: (projectId: string, title: string, templateId?: string) => void;
 }
 
 export function QuickTaskModal({
@@ -58,13 +60,31 @@ export function QuickTaskModal({
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [projectId, setProjectId] = useState<string>('');
+  const [templateId, setTemplateId] = useState<string>('');
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [phaseOverrides, setPhaseOverrides] = useState<PhaseOverrides>({});
+
+  // Fetch available templates
+  const templates = useQuery(api.taskTemplates.list) ?? [];
+  const defaultTemplate = templates.find(t => t.isDefault);
+
+  // Get phases for the selected template
+  const selectedTemplate = useMemo(() => {
+    if (!templateId) return defaultTemplate;
+    return templates.find(t => String(t._id) === templateId);
+  }, [templateId, templates, defaultTemplate]);
+
+  // Agent phases (excludes requirements which has no agent)
+  const templateAgentPhases = useMemo(() => {
+    if (!selectedTemplate) return [];
+    return selectedTemplate.phases.filter(p => p !== 'requirements') as TaskPhase[];
+  }, [selectedTemplate]);
 
   useEffect(() => {
     if (isOpen) {
       setTitle('');
       setDescription('');
+      setTemplateId('');
       setShowAdvanced(false);
       setPhaseOverrides({});
       const firstProject = projects[0];
@@ -92,7 +112,7 @@ export function QuickTaskModal({
     e.preventDefault();
     if (!title.trim() || !projectId) return;
     // TODO: Pass phaseOverrides and description to onCreate when backend supports it
-    onCreate(projectId, title);
+    onCreate(projectId, title, templateId || undefined);
     onClose();
   };
 
@@ -139,6 +159,34 @@ export function QuickTaskModal({
               rows={3}
             />
           </div>
+          <div className="space-y-2">
+            <Label className="flex items-center gap-1.5">
+              <FileStack size={14} />
+              Task Template
+            </Label>
+            <Select value={templateId} onValueChange={setTemplateId}>
+              <SelectTrigger>
+                <SelectValue placeholder={defaultTemplate ? `${defaultTemplate.name} (Default)` : 'Select a template'} />
+              </SelectTrigger>
+              <SelectContent>
+                {templates.map((template) => (
+                  <SelectItem key={String(template._id)} value={String(template._id)}>
+                    <div className="flex items-center gap-2">
+                      <span>{template.name}</span>
+                      {template.isDefault && (
+                        <span className="text-xs text-muted-foreground">(Default)</span>
+                      )}
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {selectedTemplate && (
+              <p className="text-xs text-muted-foreground">
+                {selectedTemplate.description}
+              </p>
+            )}
+          </div>
 
           <Collapsible open={showAdvanced} onOpenChange={setShowAdvanced}>
             <CollapsibleTrigger asChild>
@@ -161,38 +209,44 @@ export function QuickTaskModal({
                 <p className="text-xs text-muted-foreground">
                   Override the default model for specific phases. These settings will only apply to this task.
                 </p>
-                {AGENT_PHASES.map((phase) => (
-                  <div
-                    key={phase}
-                    className="flex items-center justify-between py-2 border-b border-border last:border-0"
-                  >
-                    <div className="flex items-center gap-2">
-                      <Switch
-                        checked={phaseOverrides[phase]?.enabled ?? true}
-                        onCheckedChange={(checked) => handlePhaseToggle(phase, checked)}
-                      />
-                      <span className="text-sm font-medium">
-                        {PHASE_DISPLAY_NAMES[phase]}
-                      </span>
-                    </div>
-                    <Select
-                      value={phaseOverrides[phase]?.model || ''}
-                      onValueChange={(value) => handlePhaseModelChange(phase, value)}
+                {templateAgentPhases.length === 0 ? (
+                  <p className="text-sm text-muted-foreground italic">
+                    Select a template to see configurable phases.
+                  </p>
+                ) : (
+                  templateAgentPhases.map((phase) => (
+                    <div
+                      key={phase}
+                      className="flex items-center justify-between py-2 border-b border-border last:border-0"
                     >
-                      <SelectTrigger className="w-40 h-8">
-                        <SelectValue placeholder="Default" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="">Default</SelectItem>
-                        {MODELS.map((m) => (
-                          <SelectItem key={m.value} value={m.value}>
-                            {m.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                ))}
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          checked={phaseOverrides[phase]?.enabled ?? true}
+                          onCheckedChange={(checked) => handlePhaseToggle(phase, checked)}
+                        />
+                        <span className="text-sm font-medium">
+                          {PHASE_DISPLAY_NAMES[phase]}
+                        </span>
+                      </div>
+                      <Select
+                        value={phaseOverrides[phase]?.model || ''}
+                        onValueChange={(value) => handlePhaseModelChange(phase, value)}
+                      >
+                        <SelectTrigger className="w-40 h-8">
+                          <SelectValue placeholder="Default" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="">Default</SelectItem>
+                          {MODELS.map((m) => (
+                            <SelectItem key={m.value} value={m.value}>
+                              {m.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  ))
+                )}
               </div>
             </CollapsibleContent>
           </Collapsible>

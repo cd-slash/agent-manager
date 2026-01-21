@@ -2,32 +2,139 @@ import { internalMutation, internalQuery, mutation } from "../_generated/server"
 import { v } from "convex/values";
 import { taskPhaseValidator, remediationTriggerValidator } from "../validators";
 import type { Id } from "../_generated/dataModel";
+import { BUILTIN_TEMPLATES } from "../taskTemplates";
 
-// Phase order for transitions
-const PHASE_ORDER = [
-  "requirements",
-  "planning",
-  "implementation",
-  "ai_review",
-  "remediation",
-  "human_review",
-  "merge",
-] as const;
+// Default phase order (used when no template is available)
+const DEFAULT_PHASE_ORDER = BUILTIN_TEMPLATES[0]!.phases;
 
-type TaskPhase = (typeof PHASE_ORDER)[number];
+type TaskPhase = "requirements" | "planning" | "implementation" | "ai_review" | "remediation" | "human_review" | "merge";
 type RemediationTrigger = "ai_review" | "human_review";
 
-// Valid transitions from each phase
-// Note: Remediation is special - it always loops back to ai_review for validation
-const VALID_TRANSITIONS: Record<TaskPhase, TaskPhase[]> = {
-  requirements: ["planning"],
-  planning: ["implementation"],
-  implementation: ["ai_review"],
-  ai_review: ["remediation", "human_review"], // remediation if changes needed, human_review if approved
-  remediation: ["ai_review"], // Always loops back to AI review for validation
-  human_review: ["remediation", "merge"], // remediation if changes needed, merge if approved
-  merge: [], // Terminal state
-};
+/**
+ * Get valid transitions for a task based on its template
+ */
+async function getValidTransitionsForTask(
+  ctx: any,
+  taskId: Id<"tasks">
+): Promise<Record<TaskPhase, TaskPhase[]>> {
+  const task = await ctx.db.get(taskId);
+  if (!task) {
+    throw new Error("Task not found");
+  }
+
+  // Get phases from template
+  let phases: TaskPhase[];
+  if (task.templateId) {
+    const template = await ctx.db.get(task.templateId);
+    if (template) {
+      phases = template.phases as TaskPhase[];
+    } else {
+      phases = DEFAULT_PHASE_ORDER;
+    }
+  } else {
+    // Try to get phases from taskPhases table (for existing tasks)
+    const taskPhases = await ctx.db
+      .query("taskPhases")
+      .withIndex("by_task", (q: any) => q.eq("taskId", taskId))
+      .collect();
+
+    if (taskPhases.length > 0) {
+      phases = taskPhases
+        .sort((a: any, b: any) => a.order - b.order)
+        .map((p: any) => p.phase) as TaskPhase[];
+    } else {
+      phases = DEFAULT_PHASE_ORDER;
+    }
+  }
+
+  return deriveTransitionsFromPhases(phases);
+}
+
+/**
+ * Derive valid transitions from a phase list
+ */
+function deriveTransitionsFromPhases(phases: TaskPhase[]): Record<TaskPhase, TaskPhase[]> {
+  const transitions: Record<string, TaskPhase[]> = {};
+  const hasRemediation = phases.includes("remediation");
+  const hasAIReview = phases.includes("ai_review");
+
+  for (let i = 0; i < phases.length; i++) {
+    const phase = phases[i]!;
+    const nextPhase = phases[i + 1] as TaskPhase | undefined;
+
+    if (phase === "ai_review") {
+      // AI Review can go to remediation (if present) or skip to next non-remediation phase
+      const targets: TaskPhase[] = [];
+      if (hasRemediation) {
+        targets.push("remediation");
+      }
+      // Find the next phase after ai_review (skipping remediation since that's a branch)
+      for (let j = i + 1; j < phases.length; j++) {
+        if (phases[j] !== "remediation") {
+          targets.push(phases[j] as TaskPhase);
+          break;
+        }
+      }
+      transitions[phase] = targets;
+    } else if (phase === "remediation") {
+      // Remediation always goes back to ai_review for validation (if ai_review exists)
+      // Otherwise goes to the next phase
+      if (hasAIReview) {
+        transitions[phase] = ["ai_review"];
+      } else if (nextPhase) {
+        transitions[phase] = [nextPhase];
+      } else {
+        transitions[phase] = [];
+      }
+    } else if (phase === "human_review") {
+      // Human review can go to remediation (if present) or next phase
+      const targets: TaskPhase[] = [];
+      if (hasRemediation) {
+        targets.push("remediation");
+      }
+      if (nextPhase) {
+        targets.push(nextPhase);
+      }
+      transitions[phase] = targets;
+    } else {
+      // Normal phase - just goes to next
+      transitions[phase] = nextPhase ? [nextPhase] : [];
+    }
+  }
+
+  return transitions as Record<TaskPhase, TaskPhase[]>;
+}
+
+/**
+ * Get phases for a task
+ */
+async function getPhasesForTask(ctx: any, taskId: Id<"tasks">): Promise<TaskPhase[]> {
+  const task = await ctx.db.get(taskId);
+  if (!task) {
+    return DEFAULT_PHASE_ORDER;
+  }
+
+  if (task.templateId) {
+    const template = await ctx.db.get(task.templateId);
+    if (template) {
+      return template.phases as TaskPhase[];
+    }
+  }
+
+  // Fall back to task's actual phases
+  const taskPhases = await ctx.db
+    .query("taskPhases")
+    .withIndex("by_task", (q: any) => q.eq("taskId", taskId))
+    .collect();
+
+  if (taskPhases.length > 0) {
+    return taskPhases
+      .sort((a: any, b: any) => a.order - b.order)
+      .map((p: any) => p.phase) as TaskPhase[];
+  }
+
+  return DEFAULT_PHASE_ORDER;
+}
 
 // Triggers that can cause auto-transitions
 export type TransitionTrigger =
@@ -43,33 +150,77 @@ export type TransitionTrigger =
   | "user_advance"
   | "user_skip";
 
-// Mapping of triggers to target phases
-const TRIGGER_TARGET_PHASES: Record<TransitionTrigger, TaskPhase | null> = {
-  pr_created: "ai_review",
-  pr_merged: null, // Mark task as completed
-  agent_complete: null, // Move to next phase
-  review_approved: null, // Move to next phase
-  review_rejected: "remediation", // Go to remediation
-  remediation_complete: "ai_review", // Always goes back to AI review
-  remediation_requested: "remediation", // Go to remediation
-  ai_review_approved: "human_review", // AI approved, go to human review
-  human_review_approved: "merge", // Human approved, go to merge
-  user_advance: null, // Move to next phase
-  user_skip: null, // Skip current phase
-};
-
 // Default max remediation cycles
 const DEFAULT_MAX_REMEDIATION_CYCLES = 3;
 
 /**
- * Get the next phase in the sequence
+ * Get the next phase in the sequence for a task
  */
-function getNextPhase(currentPhase: TaskPhase): TaskPhase | null {
-  const currentIndex = PHASE_ORDER.indexOf(currentPhase);
-  if (currentIndex === -1 || currentIndex >= PHASE_ORDER.length - 1) {
+async function getNextPhaseForTask(
+  ctx: any,
+  taskId: Id<"tasks">,
+  currentPhase: TaskPhase
+): Promise<TaskPhase | null> {
+  const phases = await getPhasesForTask(ctx, taskId);
+  const currentIndex = phases.indexOf(currentPhase);
+  if (currentIndex === -1 || currentIndex >= phases.length - 1) {
     return null;
   }
-  return PHASE_ORDER[currentIndex + 1] ?? null;
+  return phases[currentIndex + 1] ?? null;
+}
+
+/**
+ * Get target phase for a trigger based on task's template
+ */
+async function getTriggerTargetPhase(
+  ctx: any,
+  taskId: Id<"tasks">,
+  trigger: TransitionTrigger,
+  currentPhase: TaskPhase
+): Promise<TaskPhase | null> {
+  const phases = await getPhasesForTask(ctx, taskId);
+  const hasRemediation = phases.includes("remediation");
+  const hasAIReview = phases.includes("ai_review");
+  const hasHumanReview = phases.includes("human_review");
+
+  switch (trigger) {
+    case "pr_created":
+      // After PR created, go to ai_review if present, otherwise next phase
+      if (hasAIReview) return "ai_review";
+      return getNextPhaseForTask(ctx, taskId, currentPhase);
+
+    case "pr_merged":
+      return null; // Mark task as completed
+
+    case "review_rejected":
+    case "remediation_requested":
+      // Go to remediation if present, otherwise stay
+      return hasRemediation ? "remediation" : null;
+
+    case "remediation_complete":
+      // After remediation, go to ai_review for validation if present
+      return hasAIReview ? "ai_review" : getNextPhaseForTask(ctx, taskId, "remediation");
+
+    case "ai_review_approved":
+      // After AI approval, go to human_review if present, otherwise next phase
+      if (hasHumanReview) return "human_review";
+      return getNextPhaseForTask(ctx, taskId, "ai_review");
+
+    case "human_review_approved":
+      // After human approval, go to merge if present, otherwise next phase
+      if (phases.includes("merge")) return "merge";
+      return getNextPhaseForTask(ctx, taskId, "human_review");
+
+    case "agent_complete":
+    case "review_approved":
+    case "user_advance":
+    case "user_skip":
+      // Move to next phase
+      return getNextPhaseForTask(ctx, taskId, currentPhase);
+
+    default:
+      return null;
+  }
 }
 
 /**
@@ -117,16 +268,18 @@ export const validateTransition = internalQuery({
       };
     }
 
-    // Check valid transition
-    const validTargets = VALID_TRANSITIONS[fromPhase as TaskPhase];
-    if (!validTargets?.includes(toPhase as TaskPhase)) {
+    // Get valid transitions for this task based on its template
+    const validTransitions = await getValidTransitionsForTask(ctx, taskId);
+    const validTargets = validTransitions[fromPhase as TaskPhase] || [];
+
+    if (!validTargets.includes(toPhase as TaskPhase)) {
       return {
         valid: false,
         reason: `Cannot transition from ${fromPhase} to ${toPhase}`,
       };
     }
 
-    // Check to phase is pending
+    // Check to phase exists in the task's phases
     const toPhaseRecord = await ctx.db
       .query("taskPhases")
       .withIndex("by_task_and_phase", (q) =>
@@ -169,13 +322,13 @@ export const autoTransition = internalMutation({
 
     const currentPhase = task.currentPhase as TaskPhase;
 
-    // Determine target phase based on trigger
-    let targetPhase: TaskPhase | null = null;
-    const triggerPhase = TRIGGER_TARGET_PHASES[trigger as TransitionTrigger];
-
-    if (triggerPhase !== undefined) {
-      targetPhase = triggerPhase ?? getNextPhase(currentPhase);
-    }
+    // Determine target phase based on trigger and task's template
+    const targetPhase = await getTriggerTargetPhase(
+      ctx,
+      taskId,
+      trigger as TransitionTrigger,
+      currentPhase
+    );
 
     // Handle special cases
     if (trigger === "pr_merged") {
@@ -274,8 +427,9 @@ export const getTransitionInfo = internalQuery({
     }
 
     const currentPhase = task.currentPhase as TaskPhase;
-    const nextPhase = getNextPhase(currentPhase);
-    const validTargets = VALID_TRANSITIONS[currentPhase];
+    const nextPhase = await getNextPhaseForTask(ctx, args.taskId, currentPhase);
+    const validTransitions = await getValidTransitionsForTask(ctx, args.taskId);
+    const validTargets = validTransitions[currentPhase] || [];
 
     // Get phase records
     const phases = await ctx.db
@@ -284,6 +438,13 @@ export const getTransitionInfo = internalQuery({
       .collect();
 
     const currentPhaseRecord = phases.find((p) => p.phase === currentPhase);
+
+    // Get template info
+    let templateName: string | undefined;
+    if (task.templateId) {
+      const template = await ctx.db.get(task.templateId);
+      templateName = template?.name;
+    }
 
     return {
       currentPhase,
@@ -294,6 +455,7 @@ export const getTransitionInfo = internalQuery({
         currentPhaseRecord?.status === "completed" ||
         currentPhaseRecord?.status === "skipped",
       phases: phases.sort((a, b) => a.order - b.order),
+      templateName,
     };
   },
 });
@@ -315,7 +477,7 @@ export const advanceToNextPhase = internalMutation({
     }
 
     const currentPhase = task.currentPhase as TaskPhase;
-    const nextPhase = getNextPhase(currentPhase);
+    const nextPhase = await getNextPhaseForTask(ctx, taskId, currentPhase);
 
     if (!nextPhase) {
       throw new Error("No next phase available");

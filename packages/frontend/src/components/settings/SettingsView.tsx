@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Key, Cpu, Network, Sliders, Lock, Bell, RefreshCw, Check, Copy, Container, Eye, EyeOff, Bot } from 'lucide-react';
+import { Key, Cpu, Network, Sliders, Lock, Bell, RefreshCw, Check, Copy, Container, Eye, EyeOff, Bot, FileStack } from 'lucide-react';
 import { PhaseDefaultsSettings } from './PhaseDefaultsSettings';
+import { TaskTemplatesSettings } from './TaskTemplatesSettings';
 import { useToast } from '@/components/ToastProvider';
 import { useQuery, useMutation, useAction } from 'convex/react';
 import { api } from '@agent-manager/convex/api';
@@ -143,6 +144,10 @@ export function SettingsView() {
                 <TabsTrigger value="phases" className="flex items-center">
                   <Bot size={14} className="mr-1.5" />
                   Phase Defaults
+                </TabsTrigger>
+                <TabsTrigger value="templates" className="flex items-center">
+                  <FileStack size={14} className="mr-1.5" />
+                  Templates
                 </TabsTrigger>
                 <TabsTrigger value="network" className="flex items-center">
                   <Network size={14} className="mr-1.5" />
@@ -366,6 +371,12 @@ export function SettingsView() {
                 <TabsContent value="phases" className="!mt-0">
                   <div className="space-y-8">
                     <PhaseDefaultsSettings />
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="templates" className="!mt-0">
+                  <div className="space-y-8">
+                    <TaskTemplatesSettings />
                   </div>
                 </TabsContent>
 

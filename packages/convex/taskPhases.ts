@@ -1,17 +1,13 @@
 import { query, mutation, internalMutation } from "./_generated/server";
 import { v } from "convex/values";
 import { taskPhaseValidator, phaseStatusValidator } from "./validators";
+import { BUILTIN_TEMPLATES } from "./taskTemplates";
 
-// Phase order for initialization
-const PHASE_ORDER = [
-  "requirements",
-  "planning",
-  "implementation",
-  "ai_review",
-  "remediation",
-  "human_review",
-  "merge",
-] as const;
+// Default phase order (used when no template is specified)
+const DEFAULT_PHASE_ORDER = BUILTIN_TEMPLATES[0]!.phases;
+
+// Type for task phases
+type TaskPhase = "requirements" | "planning" | "implementation" | "ai_review" | "remediation" | "human_review" | "merge";
 
 // Get all phases for a task
 export const listByTask = query({
@@ -58,14 +54,42 @@ export const getCurrentPhase = query({
   },
 });
 
-// Initialize all phases for a new task
+// Initialize phases for a new task based on template
 export const initializePhases = internalMutation({
-  args: { taskId: v.id("tasks") },
+  args: {
+    taskId: v.id("tasks"),
+    templateId: v.optional(v.id("taskTemplates")),
+  },
   handler: async (ctx, args) => {
-    const phaseIds = [];
+    // Get phases from template or use default
+    let phases: TaskPhase[];
 
-    for (let i = 0; i < PHASE_ORDER.length; i++) {
-      const phase = PHASE_ORDER[i]!;
+    if (args.templateId) {
+      const template = await ctx.db.get(args.templateId);
+      if (template) {
+        phases = template.phases as TaskPhase[];
+      } else {
+        // Template not found, use default
+        const defaultTemplate = await ctx.db
+          .query("taskTemplates")
+          .withIndex("by_default", (q) => q.eq("isDefault", true))
+          .first();
+        phases = defaultTemplate?.phases as TaskPhase[] ?? DEFAULT_PHASE_ORDER;
+      }
+    } else {
+      // No template specified, use default
+      const defaultTemplate = await ctx.db
+        .query("taskTemplates")
+        .withIndex("by_default", (q) => q.eq("isDefault", true))
+        .first();
+      phases = defaultTemplate?.phases as TaskPhase[] ?? DEFAULT_PHASE_ORDER;
+    }
+
+    const phaseIds = [];
+    const firstPhase = phases[0];
+
+    for (let i = 0; i < phases.length; i++) {
+      const phase = phases[i]!;
       const phaseId = await ctx.db.insert("taskPhases", {
         taskId: args.taskId,
         phase,
@@ -75,14 +99,15 @@ export const initializePhases = internalMutation({
       phaseIds.push(phaseId);
     }
 
-    // Update task with current phase
+    // Update task with current phase and template
     await ctx.db.patch(args.taskId, {
-      currentPhase: "requirements",
+      currentPhase: firstPhase,
+      templateId: args.templateId,
       phaseUpdatedAt: Date.now(),
       updatedAt: Date.now(),
     });
 
-    return phaseIds;
+    return { phaseIds, phases };
   },
 });
 

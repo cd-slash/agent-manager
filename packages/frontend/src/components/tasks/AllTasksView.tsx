@@ -7,6 +7,7 @@ import {
   Edit2,
   GitPullRequest,
   Link as LinkIcon,
+  Plus,
   Trash2,
 } from 'lucide-react';
 import type { ColumnDef } from '@tanstack/react-table';
@@ -15,6 +16,7 @@ import {
   type FilterConfig,
 } from '@/components/layouts/GenericListView';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import {
   TableSelectionActions,
   SelectionActionButton,
@@ -24,6 +26,7 @@ import type { Project, Task } from '@/types';
 interface AllTasksViewProps {
   projects: Project[];
   onTaskClick: (task: Task, projectId: string) => void;
+  onNewTask?: () => void;
 }
 
 type TaskWithProject = Task & {
@@ -44,7 +47,7 @@ const getStatusVariant = (status: string) => {
   }
 };
 
-export function AllTasksView({ projects, onTaskClick }: AllTasksViewProps) {
+export function AllTasksView({ projects, onTaskClick, onNewTask }: AllTasksViewProps) {
   const deleteTask = useMutation(api.tasks.deleteTask);
   const toast = useToast();
 
@@ -201,6 +204,15 @@ export function AllTasksView({ projects, onTaskClick }: AllTasksViewProps) {
     </TableSelectionActions>
   );
 
+  const headerActions = onNewTask ? (
+    <div className="flex items-center gap-2 h-9">
+      <Button variant="outline" onClick={onNewTask} className="h-9">
+        <Plus size={16} className="mr-2" />
+        New
+      </Button>
+    </div>
+  ) : undefined;
+
   return (
     <GenericListView
       columns={columns}
@@ -213,6 +225,7 @@ export function AllTasksView({ projects, onTaskClick }: AllTasksViewProps) {
       searchFields={['title']}
       filters={filters}
       selectionActions={selectionActions}
+      headerActions={headerActions}
       emptyMessage={
         allTasks.length === 0
           ? 'No tasks found. Create a project to get started!'

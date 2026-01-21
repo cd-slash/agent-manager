@@ -3,13 +3,14 @@ import { useMutation } from 'convex/react';
 import { api } from '@agent-manager/convex/api';
 import type { Id } from '@agent-manager/convex/dataModel';
 import { useToast } from '@/components/ToastProvider';
-import { Edit2, GitPullRequest, Link as LinkIcon, Trash2 } from 'lucide-react';
+import { Edit2, GitPullRequest, Link as LinkIcon, Plus, Trash2 } from 'lucide-react';
 import type { ColumnDef } from '@tanstack/react-table';
 import {
   GenericListView,
   type FilterConfig,
 } from '@/components/layouts/GenericListView';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/ui/status-badge';
 import {
   TableSelectionActions,
@@ -20,9 +21,10 @@ import type { Task } from '@/types';
 interface TaskListViewProps {
   tasks: Task[];
   onTaskClick: (task: Task) => void;
+  onNewTask?: () => void;
 }
 
-export function TaskListView({ tasks, onTaskClick }: TaskListViewProps) {
+export function TaskListView({ tasks, onTaskClick, onNewTask }: TaskListViewProps) {
   const deleteTask = useMutation(api.tasks.deleteTask);
   const toast = useToast();
 
@@ -150,6 +152,15 @@ export function TaskListView({ tasks, onTaskClick }: TaskListViewProps) {
     </TableSelectionActions>
   );
 
+  const headerActions = onNewTask ? (
+    <div className="flex items-center gap-2 h-9">
+      <Button variant="outline" onClick={onNewTask} className="h-9">
+        <Plus size={16} className="mr-2" />
+        New
+      </Button>
+    </div>
+  ) : undefined;
+
   return (
     <GenericListView
       columns={columns}
@@ -162,6 +173,7 @@ export function TaskListView({ tasks, onTaskClick }: TaskListViewProps) {
       searchFields={['title']}
       filters={filters}
       selectionActions={selectionActions}
+      headerActions={headerActions}
       emptyMessage="No tasks found. Add one to get started!"
       getRowId={(row) => row.id.toString()}
     />

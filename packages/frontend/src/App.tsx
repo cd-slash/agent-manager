@@ -188,7 +188,7 @@ function App() {
     }
   };
 
-  const handleAddTask = async (projectId: string, taskTitle: string) => {
+  const handleAddTask = async (projectId: string, taskTitle: string, templateId?: string) => {
     if (!taskTitle.trim()) return;
 
     await createTask({
@@ -198,11 +198,12 @@ function App() {
       category: 'backlog',
       tag: 'manual',
       complexity: 'Low',
+      templateId: templateId as Id<"taskTemplates"> | undefined,
     });
   };
 
-  const handleQuickTaskCreate = (projectId: string, title: string) => {
-    handleAddTask(projectId, title);
+  const handleQuickTaskCreate = (projectId: string, title: string, templateId?: string) => {
+    handleAddTask(projectId, title, templateId);
   };
 
   // Derived state helpers
@@ -287,6 +288,7 @@ function App() {
             setSelectedProjectId(projectId as Id<"projects">);
             setSelectedTaskId(task.id as Id<"tasks">);
           }}
+          onNewTask={() => setIsQuickTaskModalOpen(true)}
         />
       );
     }
@@ -307,6 +309,7 @@ function App() {
             project={selectedProject!}
             onTaskClick={(task) => setSelectedTaskId(task.id as Id<"tasks">)}
             onUpdateProject={handleProjectUpdate}
+            onNewTask={() => setIsQuickTaskModalOpen(true)}
           />
         );
       }

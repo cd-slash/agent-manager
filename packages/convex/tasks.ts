@@ -164,6 +164,7 @@ export const create = mutation({
     category: categoryValidator,
     tag: v.string(),
     complexity: v.string(),
+    templateId: v.optional(v.id("taskTemplates")),
   },
   handler: async (ctx, args) => {
     const now = Date.now();
@@ -188,13 +189,15 @@ export const create = mutation({
       order: maxOrder + 1,
       currentPhase: "requirements",
       phaseUpdatedAt: now,
+      templateId: args.templateId,
       createdAt: now,
       updatedAt: now,
     });
 
-    // Initialize all phases for this task
+    // Initialize phases for this task based on template
     await ctx.scheduler.runAfter(0, internal.taskPhases.initializePhases, {
       taskId,
+      templateId: args.templateId,
     });
 
     return taskId;

@@ -30,9 +30,23 @@ export default defineSchema({
     .index("by_archived", ["archived"])
     .index("by_name", ["name"]),
 
+  // Task templates - define custom phase flows for different task types
+  taskTemplates: defineTable({
+    name: v.string(), // e.g., "Standard", "Quick Fix", "Auto Merge"
+    description: v.string(),
+    phases: v.array(taskPhaseValidator), // Ordered list of phases to use
+    isDefault: v.boolean(), // If true, this is the default template for new tasks
+    isBuiltin: v.boolean(), // If true, this is a system-provided template
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_name", ["name"])
+    .index("by_default", ["isDefault"]),
+
   // Tasks table - tasks with status, PR info
   tasks: defineTable({
     projectId: v.id("projects"),
+    templateId: v.optional(v.id("taskTemplates")), // Which template this task uses
     title: v.string(),
     description: v.string(),
     prompt: v.optional(v.string()),
@@ -56,7 +70,8 @@ export default defineSchema({
   })
     .index("by_project", ["projectId"])
     .index("by_project_and_category", ["projectId", "category"])
-    .index("by_current_phase", ["currentPhase"]),
+    .index("by_current_phase", ["currentPhase"])
+    .index("by_template", ["templateId"]),
 
   // Task dependencies - many-to-many relationship
   taskDependencies: defineTable({

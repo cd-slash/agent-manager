@@ -37,6 +37,8 @@ export type TaskDoc = Doc<"tasks"> & {
   currentPhase?: TaskPhase;
   phaseUpdatedAt?: number;
   activeContainerId?: string;
+  // Template
+  templateId?: Id<"taskTemplates">;
   // Planning outputs
   implementationPrompt?: string;
   createdAt: number;
@@ -241,6 +243,17 @@ export type PhaseConfigDoc = Doc<"phaseConfigs"> & {
   updatedAt: number;
 };
 
+// Task template document type
+export type TaskTemplateDoc = Doc<"taskTemplates"> & {
+  name: string;
+  description: string;
+  phases: TaskPhase[];
+  isDefault: boolean;
+  isBuiltin: boolean;
+  createdAt: number;
+  updatedAt: number;
+};
+
 // Legacy interfaces for backward compatibility during migration
 // These can be removed once all components are updated to use Convex types
 
@@ -291,6 +304,8 @@ export interface Task {
   phaseUpdatedAt?: number;
   activeContainerId?: string;
   implementationPrompt?: string;
+  // Template
+  templateId?: string;
 }
 
 export interface Project {
@@ -388,6 +403,7 @@ export type AgentJobId = Id<"agentJobs">;
 export type TaskPhaseId = Id<"taskPhases">;
 export type PhaseConfigId = Id<"phaseConfigs">;
 export type RemediationCycleId = Id<"remediationCycles">;
+export type TaskTemplateId = Id<"taskTemplates">;
 
 // Phase constants for UI
 export const PHASE_ORDER: TaskPhase[] = [

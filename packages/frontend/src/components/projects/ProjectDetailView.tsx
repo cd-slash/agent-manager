@@ -44,12 +44,14 @@ interface ProjectDetailViewProps {
   project: Project;
   onTaskClick: (task: Task) => void;
   onUpdateProject: (project: Project) => void;
+  onNewTask?: () => void;
 }
 
 export function ProjectDetailView({
   project,
   onTaskClick,
   onUpdateProject,
+  onNewTask,
 }: ProjectDetailViewProps) {
   const [activeTab, setActiveTab] = useState('tasks');
   const [planText, setPlanText] = useState(
@@ -136,6 +138,7 @@ export function ProjectDetailView({
                     <TaskListView
                       tasks={project.tasks}
                       onTaskClick={onTaskClick}
+                      onNewTask={onNewTask}
                     />
                   </TabsContent>
 
