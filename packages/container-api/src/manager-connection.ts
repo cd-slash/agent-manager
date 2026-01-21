@@ -342,7 +342,7 @@ export class ManagerConnection extends EventEmitter {
 		this.ws = null
 
 		// Reject all pending requests
-		for (const [id, pending] of this.pendingRequests) {
+		for (const [_id, pending] of this.pendingRequests) {
 			clearTimeout(pending.timeout)
 			pending.reject(new Error("Connection closed"))
 		}

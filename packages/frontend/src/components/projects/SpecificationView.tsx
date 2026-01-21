@@ -40,7 +40,7 @@ function parseMarkdownSections(markdown: string): SpecificationSection[] {
 			currentSection = {
 				title: headerMatch[2]!,
 				content: "",
-				level: headerMatch[1]!.length,
+				level: headerMatch[1]?.length,
 			}
 			contentLines = []
 		} else if (currentSection) {

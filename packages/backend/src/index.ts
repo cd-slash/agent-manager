@@ -1,5 +1,5 @@
+import path from "node:path"
 import { serve } from "bun"
-import path from "path"
 
 const isProduction = process.env.NODE_ENV === "production"
 const frontendDistPath = path.resolve(import.meta.dir, "../../frontend/dist")
@@ -8,13 +8,13 @@ const server = serve({
 	port: 3001,
 	routes: {
 		"/api/hello": {
-			async GET(req) {
+			async GET(_req) {
 				return Response.json({
 					message: "Hello, world!",
 					method: "GET",
 				})
 			},
-			async PUT(req) {
+			async PUT(_req) {
 				return Response.json({
 					message: "Hello, world!",
 					method: "PUT",

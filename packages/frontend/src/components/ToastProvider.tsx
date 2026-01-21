@@ -66,7 +66,6 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 				case "warning":
 					id = sonnerToast.warning(title, toastOptions)
 					break
-				case "info":
 				default:
 					id = sonnerToast.info(title, toastOptions)
 					break

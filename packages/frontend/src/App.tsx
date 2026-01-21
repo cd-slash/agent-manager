@@ -19,14 +19,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { TooltipProvider } from "@/components/ui/tooltip"
 
-import type {
-	ChatMessage,
-	Container,
-	HistoryEvent,
-	Project,
-	Server,
-	Task,
-} from "@/types"
+import type { Container, Project, Server, Task } from "@/types"
 
 // Helper to format timestamps to readable time strings
 const formatTime = (timestamp: number): string => {
@@ -58,7 +51,7 @@ function App() {
 
 	// Convex queries
 	const projectsData = useQuery(api.projects.list) ?? []
-	const tasksData =
+	const _tasksData =
 		useQuery(
 			api.tasks.listByProject,
 			selectedProjectId ? { projectId: selectedProjectId } : "skip",
@@ -85,9 +78,9 @@ function App() {
 	const updateProjectPlan = useMutation(api.projects.updatePlan)
 	const createTask = useMutation(api.tasks.create)
 	const updateTask = useMutation(api.tasks.update)
-	const updateTaskCategory = useMutation(api.tasks.updateCategory)
-	const sendProjectMessage = useMutation(api.chat.sendProjectMessage)
-	const sendTaskMessage = useMutation(api.chat.sendTaskMessage)
+	const _updateTaskCategory = useMutation(api.tasks.updateCategory)
+	const _sendProjectMessage = useMutation(api.chat.sendProjectMessage)
+	const _sendTaskMessage = useMutation(api.chat.sendTaskMessage)
 
 	// Transform Convex data to legacy format for compatibility with existing components
 	const projects: Project[] = useMemo(() => {

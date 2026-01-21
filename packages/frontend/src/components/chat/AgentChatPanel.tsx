@@ -25,7 +25,7 @@ export function AgentChatPanel({
 			textarea.style.height = "auto"
 			textarea.style.height = `${textarea.scrollHeight}px`
 		}
-	}, [chatInput])
+	}, [])
 
 	const handleSend = (e: React.FormEvent) => {
 		e.preventDefault()

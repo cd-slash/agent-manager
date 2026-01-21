@@ -157,7 +157,7 @@ export const generateChatResponse = internalAction({
 
 		try {
 			// Load chat context
-			const context = await ctx.runQuery(
+			const _context = await ctx.runQuery(
 				internal.internal.aiResponses.loadChatContext,
 				{
 					projectId: args.projectId,

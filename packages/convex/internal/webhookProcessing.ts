@@ -1,6 +1,6 @@
 import { v } from "convex/values"
 import { api, internal } from "../_generated/api"
-import { internalAction, internalMutation } from "../_generated/server"
+import { internalAction } from "../_generated/server"
 
 // Process GitHub webhook
 export const processGithubWebhook = internalAction({

@@ -79,7 +79,6 @@ function PhaseIcon({
 			return <Loader2 size={iconSize} className="text-blue-500 animate-spin" />
 		case "skipped":
 			return <SkipForward size={iconSize} className="text-muted-foreground" />
-		case "pending":
 		default:
 			return (
 				<Clock
@@ -113,7 +112,7 @@ export function BuildTimeline({
 					const isActive =
 						phase.phase === currentPhase && phase.status === "in_progress"
 					const isSelected = phase.phase === selectedPhase
-					const isLast = index === sortedPhases.length - 1
+					const _isLast = index === sortedPhases.length - 1
 					const duration = formatDuration(phase.startedAt, phase.completedAt)
 
 					return (

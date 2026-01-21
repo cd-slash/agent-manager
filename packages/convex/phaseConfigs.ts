@@ -1,6 +1,6 @@
 import { v } from "convex/values"
 import { internalMutation, mutation, query } from "./_generated/server"
-import { permissionModeValidator, taskPhaseValidator } from "./validators"
+import { taskPhaseValidator } from "./validators"
 
 // Default prompt templates for each phase
 const DEFAULT_PROMPTS = {

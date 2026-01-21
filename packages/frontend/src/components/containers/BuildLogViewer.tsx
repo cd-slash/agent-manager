@@ -24,7 +24,7 @@ export function BuildLogViewer({
 		if (autoScroll && bottomRef.current) {
 			bottomRef.current.scrollIntoView({ behavior: "smooth" })
 		}
-	}, [logs, autoScroll])
+	}, [autoScroll])
 
 	const hasContent = logs || error
 

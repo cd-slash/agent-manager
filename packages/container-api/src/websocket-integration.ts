@@ -167,18 +167,21 @@ export class WebSocketIntegration {
 		})
 
 		// Forward process events
-		this.processManager.on("process:started", (data: { processId: number }) => {
-			this.pushProcessStatus()
-		})
-
 		this.processManager.on(
-			"process:completed",
-			(data: { processId: number }) => {
+			"process:started",
+			(_data: { processId: number }) => {
 				this.pushProcessStatus()
 			},
 		)
 
-		this.processManager.on("process:error", (data: { processId: number }) => {
+		this.processManager.on(
+			"process:completed",
+			(_data: { processId: number }) => {
+				this.pushProcessStatus()
+			},
+		)
+
+		this.processManager.on("process:error", (_data: { processId: number }) => {
 			this.pushProcessStatus()
 		})
 	}
@@ -226,7 +229,7 @@ export class WebSocketIntegration {
 						// Forward stream data with tracked process ID
 						const streamData: ExecStreamPayload = {
 							processId: currentProcessId,
-							streamType: event.data!.type as ExecStreamPayload["streamType"],
+							streamType: event.data?.type as ExecStreamPayload["streamType"],
 							data: event.data!,
 						}
 						this.connection.send("exec:stream", streamData, correlationId)

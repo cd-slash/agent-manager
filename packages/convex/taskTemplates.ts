@@ -79,7 +79,7 @@ export const BUILTIN_TEMPLATES: Array<{
 
 // Default phase order - used when no template is specified
 // This is the Standard template's phases
-export const DEFAULT_PHASE_ORDER = BUILTIN_TEMPLATES[0]!.phases
+export const DEFAULT_PHASE_ORDER = BUILTIN_TEMPLATES[0]?.phases
 
 // Get all templates
 export const list = query({
@@ -147,7 +147,7 @@ export const getPhases = query({
 		}
 
 		// Fall back to built-in standard template
-		return BUILTIN_TEMPLATES[0]!.phases
+		return BUILTIN_TEMPLATES[0]?.phases
 	},
 })
 
@@ -425,7 +425,7 @@ export const hasPhase = query({
 					.first()
 				phases =
 					(defaultTemplate?.phases as TaskPhase[]) ??
-					BUILTIN_TEMPLATES[0]!.phases
+					BUILTIN_TEMPLATES[0]?.phases
 			}
 		} else {
 			// Use default template
@@ -434,7 +434,7 @@ export const hasPhase = query({
 				.withIndex("by_default", (q) => q.eq("isDefault", true))
 				.first()
 			phases =
-				(defaultTemplate?.phases as TaskPhase[]) ?? BUILTIN_TEMPLATES[0]!.phases
+				(defaultTemplate?.phases as TaskPhase[]) ?? BUILTIN_TEMPLATES[0]?.phases
 		}
 
 		return phases.includes(args.phase as TaskPhase)

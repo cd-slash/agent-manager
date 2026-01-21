@@ -590,7 +590,7 @@ async function buildContainerApiBinary(): Promise<void> {
 /**
  * Ensure the container-api binary is up to date
  */
-async function ensureBinaryUpToDate(): Promise<void> {
+async function _ensureBinaryUpToDate(): Promise<void> {
 	if (await shouldRebuildBinary()) {
 		await buildContainerApiBinary()
 	}

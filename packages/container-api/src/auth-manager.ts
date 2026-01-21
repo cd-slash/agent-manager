@@ -48,10 +48,6 @@ export class AuthManager extends EventEmitter {
 	private lastCheckTime = 0
 	private readonly CACHE_TTL_MS = 5000 // 5 second cache
 
-	constructor() {
-		super()
-	}
-
 	/**
 	 * Initialize the auth manager (no-op, kept for API compatibility)
 	 */
@@ -155,7 +151,7 @@ export class AuthManager extends EventEmitter {
 
 		// State to resolve URL promise
 		let urlResolve: ((url: string) => void) | null = null
-		let urlReject: ((err: Error) => void) | null = null
+		let _urlReject: ((err: Error) => void) | null = null
 		let foundUrl = ""
 
 		// Use Bun.spawn with terminal option for proper PTY handling
@@ -163,7 +159,7 @@ export class AuthManager extends EventEmitter {
 			terminal: {
 				cols: 120,
 				rows: 40,
-				data(terminal, data) {
+				data(_terminal, data) {
 					const chunk = data.toString()
 					outputState.allOutput += chunk
 
@@ -222,7 +218,7 @@ export class AuthManager extends EventEmitter {
 		// Wait for URL with timeout
 		const url = await new Promise<string>((resolve, reject) => {
 			urlResolve = resolve
-			urlReject = reject
+			_urlReject = reject
 
 			// If URL was already found during setup
 			if (foundUrl) {
@@ -311,7 +307,7 @@ export class AuthManager extends EventEmitter {
 			await Bun.sleep(500)
 
 			// Send the code followed by Enter (use \r for terminal)
-			proc.terminal.write(codeOnly + "\r")
+			proc.terminal.write(`${codeOnly}\r`)
 
 			if (outputState) {
 				outputState.codeWasSent = true

@@ -1,6 +1,5 @@
 import { v } from "convex/values"
 import { mutation, query } from "./_generated/server"
-import { phaseStatusValidator } from "./validators"
 
 // Remediation trigger type
 const remediationTriggerValidator = v.union(

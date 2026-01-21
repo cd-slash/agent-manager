@@ -28,10 +28,6 @@ export class ProcessManager extends EventEmitter {
 	private processes: Map<number, RunningProcess> = new Map()
 	private nextProcessId = 1
 
-	constructor() {
-		super()
-	}
-
 	/**
 	 * Get active processes
 	 */
@@ -134,7 +130,7 @@ export class ProcessManager extends EventEmitter {
 
 					yield { type: "data", data }
 					this.emit("process:output", { processId, data })
-				} catch (parseError) {
+				} catch (_parseError) {
 					// Log but don't fail on parse errors
 					console.warn(`[process] Failed to parse line: ${line}`)
 				}

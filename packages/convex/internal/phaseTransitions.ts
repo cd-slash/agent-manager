@@ -2,7 +2,7 @@ import { v } from "convex/values"
 import type { Id } from "../_generated/dataModel"
 import { internalMutation, internalQuery, mutation } from "../_generated/server"
 import { DEFAULT_PHASE_ORDER } from "../taskTemplates"
-import { remediationTriggerValidator, taskPhaseValidator } from "../validators"
+import { taskPhaseValidator } from "../validators"
 
 type TaskPhase =
 	| "requirements"

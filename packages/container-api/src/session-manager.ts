@@ -18,10 +18,6 @@ const CLAUDE_PROJECTS_DIR = path.join(
 )
 
 export class SessionManager extends EventEmitter {
-	constructor() {
-		super()
-	}
-
 	/**
 	 * List all sessions across all projects
 	 */

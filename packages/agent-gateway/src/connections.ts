@@ -9,7 +9,6 @@ import type {
 	ConnectPayload,
 	MessageType,
 	StatusHealthPayload,
-	WebSocketMessage,
 } from "@agent-manager/agent-shared"
 import { createMessage, serializeMessage } from "@agent-manager/agent-shared"
 import type { ServerWebSocket } from "bun"

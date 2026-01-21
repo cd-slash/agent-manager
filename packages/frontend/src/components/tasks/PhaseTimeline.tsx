@@ -37,7 +37,6 @@ function getPhaseStatusIcon(status: PhaseStatus, size: number = 14) {
 			return <AlertCircle size={size} />
 		case "skipped":
 			return <SkipForward size={size} />
-		case "pending":
 		default:
 			return <Circle size={size} />
 	}
@@ -53,7 +52,6 @@ function getPhaseStatusColor(status: PhaseStatus): string {
 			return "bg-destructive text-destructive-foreground border-destructive"
 		case "skipped":
 			return "bg-muted text-muted-foreground border-muted"
-		case "pending":
 		default:
 			return "bg-background text-muted-foreground border-border"
 	}

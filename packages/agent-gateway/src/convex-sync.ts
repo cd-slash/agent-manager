@@ -73,10 +73,10 @@ export class ConvexSync {
 	 */
 	async recordStreamEvent(
 		correlationId: string,
-		containerId: string,
+		_containerId: string,
 		payload: ExecStreamPayload,
-		taskId?: string,
-		projectId?: string,
+		_taskId?: string,
+		_projectId?: string,
 	): Promise<void> {
 		try {
 			// Update session status to running on first stream event
@@ -109,10 +109,10 @@ export class ConvexSync {
 	 */
 	async recordExecComplete(
 		correlationId: string,
-		containerId: string,
+		_containerId: string,
 		payload: ExecCompletePayload,
-		taskId?: string,
-		projectId?: string,
+		_taskId?: string,
+		_projectId?: string,
 	): Promise<void> {
 		try {
 			const status =

@@ -23,12 +23,7 @@ import {
 	CollapsibleContent,
 	CollapsibleTrigger,
 } from "@/components/ui/collapsible"
-import type {
-	RemediationCycleDoc,
-	RemediationTrigger,
-	TaskId,
-	TaskPhaseDoc,
-} from "@/types"
+import type { RemediationCycleDoc, TaskId, TaskPhaseDoc } from "@/types"
 import { REMEDIATION_TRIGGER_NAMES } from "@/types"
 import { PhaseConfigPanel } from "./PhaseConfigPanel"
 import { PhaseStatusHeader } from "./PhaseStatusHeader"

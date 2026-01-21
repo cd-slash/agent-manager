@@ -16,8 +16,7 @@ import "./index.css"
 // Bun doesn't expose env vars to client bundle, so we use the URL directly
 // In production, this would be configured via build-time replacement
 const convexUrl =
-	(typeof import.meta.env !== "undefined" && import.meta.env.VITE_CONVEX_URL) ||
-	"https://brazen-skunk-217.convex.cloud"
+	import.meta.env?.VITE_CONVEX_URL || "https://brazen-skunk-217.convex.cloud"
 const convex = new ConvexReactClient(convexUrl)
 
 const elem = document.getElementById("root")!

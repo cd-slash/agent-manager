@@ -12,7 +12,7 @@ const BUILD_PHASES = [
 	{ phase: "ready", order: 6 },
 ] as const
 
-const phaseStatusValidator = v.union(
+const _phaseStatusValidator = v.union(
 	v.literal("pending"),
 	v.literal("in_progress"),
 	v.literal("completed"),

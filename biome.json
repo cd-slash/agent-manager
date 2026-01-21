@@ -48,5 +48,13 @@
 			"quoteStyle": "double",
 			"semicolons": "asNeeded"
 		}
+	},
+	"css": {
+		"parser": {
+			"cssModules": true
+		},
+		"linter": {
+			"enabled": false
+		}
 	}
 }

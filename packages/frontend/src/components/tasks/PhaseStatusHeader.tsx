@@ -11,12 +11,7 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
-import {
-	PHASE_DISPLAY_NAMES,
-	type PhaseStatus,
-	type TaskPhase,
-	type TaskPhaseDoc,
-} from "@/types"
+import type { PhaseStatus, TaskPhase, TaskPhaseDoc } from "@/types"
 
 interface PhaseStatusHeaderProps {
 	phase: TaskPhase
@@ -35,8 +30,6 @@ function getStatusBadgeVariant(
 			return "secondary"
 		case "failed":
 			return "destructive"
-		case "skipped":
-		case "pending":
 		default:
 			return "outline"
 	}
@@ -52,7 +45,6 @@ function getStatusIcon(status: PhaseStatus) {
 			return <AlertCircle size={12} className="mr-1" />
 		case "skipped":
 			return <SkipForward size={12} className="mr-1" />
-		case "pending":
 		default:
 			return <Circle size={12} className="mr-1" />
 	}
@@ -90,7 +82,7 @@ export function PhaseStatusHeader({
 }: PhaseStatusHeaderProps) {
 	const status = phaseRecord?.status || "pending"
 	const isActive = status === "in_progress"
-	const isComplete = status === "completed" || status === "skipped"
+	const _isComplete = status === "completed" || status === "skipped"
 
 	return (
 		<section className={cn("mb-6", className)}>

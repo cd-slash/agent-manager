@@ -97,7 +97,7 @@ export function ProjectDetailView({
 						text: "I've updated the plan based on your request. I also suggest breaking this down into 3 new tasks.",
 						sender: "ai",
 					})
-				} catch (error) {
+				} catch (_error) {
 					toast.error("AI response failed", "Could not process your message")
 				}
 			}, 1000)

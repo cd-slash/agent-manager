@@ -119,7 +119,7 @@ export function DataTable<TData, TValue>({
 
 	useEffect(() => {
 		onSelectionChange?.(selectedRows, clearSelection)
-	}, [rowSelection])
+	}, [clearSelection, onSelectionChange, selectedRows])
 
 	return (
 		<div

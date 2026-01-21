@@ -223,7 +223,7 @@ export function TaskListView({
 				},
 			},
 		],
-		[deletingTasks],
+		[deletingTasks, handleDeleteTask],
 	)
 
 	const selectedCount = selectedTasks.length

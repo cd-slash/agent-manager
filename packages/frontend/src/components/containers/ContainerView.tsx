@@ -384,7 +384,12 @@ export function ContainerView({
 				},
 			},
 		],
-		[],
+		[
+			deletingContainers.has,
+			handleDeleteContainer,
+			handleStopContainer,
+			stoppingContainers.has,
+		],
 	)
 
 	const handleSelectionChange = (

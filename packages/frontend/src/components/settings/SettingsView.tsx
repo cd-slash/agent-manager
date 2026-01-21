@@ -60,11 +60,8 @@ export function SettingsView() {
 
 	// Derive webhook URL from Convex URL
 	const convexUrl =
-		(typeof import.meta.env !== "undefined" &&
-			import.meta.env.VITE_CONVEX_URL) ||
-		"https://brazen-skunk-217.convex.cloud"
-	const webhookUrl =
-		convexUrl.replace(".convex.cloud", ".convex.site") + "/webhooks/tailscale"
+		import.meta.env?.VITE_CONVEX_URL || "https://brazen-skunk-217.convex.cloud"
+	const webhookUrl = `${convexUrl.replace(".convex.cloud", ".convex.site")}/webhooks/tailscale`
 
 	const handleCopyWebhookUrl = async () => {
 		await navigator.clipboard.writeText(webhookUrl)

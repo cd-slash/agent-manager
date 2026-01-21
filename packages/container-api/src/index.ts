@@ -227,7 +227,7 @@ const app = new Elysia()
 	.post("/messages/:processId/abort", ({ params, set }) => {
 		const processId = parseInt(params.processId, 10)
 
-		if (isNaN(processId)) {
+		if (Number.isNaN(processId)) {
 			set.status = 400
 			return { error: "Invalid process ID" }
 		}
