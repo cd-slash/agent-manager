@@ -11,7 +11,6 @@ import {
 	EyeOff,
 	FileStack,
 	Key,
-	Link2,
 	Lock,
 	Network,
 	RefreshCw,
@@ -48,10 +47,6 @@ function GatewayConfigSection() {
 	// Convex hooks
 	const gatewayConfig = useQuery(api.settings.getGatewayConfig)
 	const setGatewayConfig = useMutation(api.settings.setGatewayConfig)
-	const managementStatus = useQuery(api.aiProviders.getManagementContainerStatus)
-	const requestManagementContainer = useMutation(
-		api.aiProviders.requestManagementContainer,
-	)
 
 	// Load initial values once
 	useEffect(() => {
@@ -123,24 +118,6 @@ function GatewayConfigSection() {
 		return () => clearTimeout(timer)
 	}, [defaultRepo, initialized, gatewayConfig?.defaultRepo, setGatewayConfig, toast])
 
-	const handleRequestContainer = async () => {
-		try {
-			const result = await requestManagementContainer()
-			if (result.status === "exists") {
-				toast.success("Already Running", result.message)
-			} else if (result.status === "pending") {
-				toast.info("In Progress", result.message)
-			} else {
-				toast.success("Requested", result.message)
-			}
-		} catch (error) {
-			toast.error(
-				"Request Failed",
-				error instanceof Error ? error.message : "Could not request container",
-			)
-		}
-	}
-
 	return (
 		<section>
 			<h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center">
@@ -148,9 +125,8 @@ function GatewayConfigSection() {
 			</h3>
 			<div className="bg-surface border border-border rounded-lg p-4">
 				<p className="text-sm text-muted-foreground mb-4">
-					Configure the agent gateway for container management and OAuth
-					authentication. The gateway handles communication with agent
-					containers.
+					Configure the agent gateway for container management. The gateway
+					handles communication with agent containers.
 				</p>
 				<div className="space-y-4 max-w-3xl">
 					<div className="space-y-2">
@@ -211,52 +187,6 @@ function GatewayConfigSection() {
 						/>
 						<p className="text-xs text-muted-foreground">
 							Default repository for agent containers
-						</p>
-					</div>
-
-					{/* Management Container Status */}
-					<div className="pt-2 border-t border-border">
-						<div className="flex items-center justify-between">
-							<div className="flex items-center gap-2">
-								<Link2 size={14} className="text-muted-foreground" />
-								<span className="text-sm font-medium">
-									Management Container
-								</span>
-								{managementStatus?.running && (
-									<span className="text-[10px] px-1.5 py-0.5 bg-success/20 rounded text-success flex items-center gap-1">
-										<Check size={10} />
-										Running
-									</span>
-								)}
-								{managementStatus?.exists && !managementStatus.running && (
-									<span className="text-[10px] px-1.5 py-0.5 bg-warning/20 rounded text-warning">
-										Stopped
-									</span>
-								)}
-								{!managementStatus?.exists && (
-									<span className="text-[10px] px-1.5 py-0.5 bg-muted rounded text-muted-foreground">
-										Not Found
-									</span>
-								)}
-							</div>
-							{!managementStatus?.running && (
-								<Button
-									variant="outline"
-									size="sm"
-									onClick={handleRequestContainer}
-								>
-									Request Container
-								</Button>
-							)}
-						</div>
-						{managementStatus?.container && (
-							<div className="mt-2 text-xs text-muted-foreground">
-								<div>Container: {managementStatus.container.name}</div>
-								<div>Hostname: {managementStatus.container.hostname}</div>
-							</div>
-						)}
-						<p className="text-xs text-muted-foreground mt-2">
-							Status updates automatically via Convex
 						</p>
 					</div>
 				</div>

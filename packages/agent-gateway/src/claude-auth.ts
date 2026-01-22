@@ -158,34 +158,6 @@ export class ClaudeAuth extends EventEmitter {
 	}
 
 	/**
-	 * Request a management container via Convex command queue
-	 * The gateway's command processor will handle the actual creation
-	 */
-	private async requestManagementContainer(): Promise<{
-		status: "exists" | "requested" | "pending"
-		containerId?: string
-		error?: string
-	}> {
-		if (!this.convexClient) {
-			return { status: "pending", error: "Convex client not initialized" }
-		}
-
-		try {
-			const result = await this.convexClient.mutation(
-				api.aiProviders.requestManagementContainer,
-				{},
-			)
-			return {
-				status: result.status,
-				containerId: result.containerId,
-			}
-		} catch (error) {
-			const msg = error instanceof Error ? error.message : String(error)
-			return { status: "pending", error: msg }
-		}
-	}
-
-	/**
 	 * Find an available container from the containerPool
 	 */
 	private async findAvailableContainer(): Promise<ContainerPoolEntry | null> {
@@ -199,6 +171,39 @@ export class ClaudeAuth extends EventEmitter {
 			return (containers?.[0] as ContainerPoolEntry | undefined) ?? null
 		} catch (error) {
 			console.error("[claude-auth] Failed to query containerPool:", error)
+			return null
+		}
+	}
+
+	/**
+	 * Create a new container for OAuth via the serverCommands queue
+	 * Returns the command ID that can be used to track progress
+	 */
+	private async createContainerForOAuth(): Promise<string | null> {
+		if (!this.convexClient) return null
+
+		try {
+			// Get gateway config for default server
+			const gatewayConfig = await this.convexClient.query(
+				api.settings.getGatewayConfig,
+				{},
+			)
+
+			const server = gatewayConfig?.defaultServer || "localhost"
+
+			// Create a container command - no repo needed for OAuth
+			const commandId = await this.convexClient.mutation(
+				api.serverCommands.createContainer,
+				{
+					server,
+					priority: "high",
+					// No repo - container just needs to run Claude CLI for OAuth
+				},
+			)
+
+			return commandId as unknown as string
+		} catch (error) {
+			console.error("[claude-auth] Failed to create container command:", error)
 			return null
 		}
 	}
@@ -303,48 +308,36 @@ export class ClaudeAuth extends EventEmitter {
 		let container = await this.findAvailableContainer()
 
 		if (!container) {
-			console.log("[claude-auth] No available containers in pool, requesting management container...")
+			console.log("[claude-auth] No available containers in pool, creating one...")
 
-			// Request a management container via Convex mutation
-			try {
-				const result = await this.requestManagementContainer()
-				if (result.error) {
-					console.error(`[claude-auth] Failed to request container: ${result.error}`)
-					await this.updateConvexFlowFailure(flow._id, result.error)
-					return
-				}
+			// Create a new container
+			const commandId = await this.createContainerForOAuth()
+			if (!commandId) {
+				console.error("[claude-auth] Failed to create container command")
+				await this.updateConvexFlowFailure(flow._id, "Failed to create container for OAuth")
+				return
+			}
 
-				if (result.status === "exists" && result.containerId) {
-					console.log(`[claude-auth] Management container already exists: ${result.containerId}`)
-				} else {
-					console.log(`[claude-auth] Container creation requested (status: ${result.status})`)
-				}
+			console.log(`[claude-auth] Container creation requested: ${commandId}`)
 
-				// Wait for a container to appear in the pool (poll for up to 120 seconds)
-				// Container creation via SSH and Convex registration takes time
-				console.log("[claude-auth] Waiting for container to register in pool...")
-				for (let i = 0; i < 120; i++) {
-					await new Promise(resolve => setTimeout(resolve, 1000))
-					container = await this.findAvailableContainer()
-					if (container) {
-						console.log(`[claude-auth] Container available: ${container.containerId}`)
-						break
-					}
-					// Log progress every 10 seconds
-					if (i > 0 && i % 10 === 0) {
-						console.log(`[claude-auth] Still waiting for container... (${i}s)`)
-					}
+			// Wait for a container to appear in the pool (up to 120 seconds)
+			console.log("[claude-auth] Waiting for container to register in pool...")
+			for (let i = 0; i < 120; i++) {
+				await new Promise(resolve => setTimeout(resolve, 1000))
+				container = await this.findAvailableContainer()
+				if (container) {
+					console.log(`[claude-auth] Container available: ${container.containerId}`)
+					break
 				}
+				// Log progress every 10 seconds
+				if (i > 0 && i % 10 === 0) {
+					console.log(`[claude-auth] Still waiting for container... (${i}s)`)
+				}
+			}
 
-				if (!container) {
-					console.error("[claude-auth] Container did not register within timeout")
-					await this.updateConvexFlowFailure(flow._id, "Container did not register in time")
-					return
-				}
-			} catch (error) {
-				const msg = error instanceof Error ? error.message : String(error)
-				console.error(`[claude-auth] Failed to request container: ${msg}`)
-				await this.updateConvexFlowFailure(flow._id, `Failed to create container: ${msg}`)
+			if (!container) {
+				console.error("[claude-auth] Container did not register within timeout")
+				await this.updateConvexFlowFailure(flow._id, "Container did not register in time")
 				return
 			}
 		}
