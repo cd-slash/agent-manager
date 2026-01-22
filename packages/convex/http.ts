@@ -84,38 +84,49 @@ http.route({
 })
 
 // Tailscale webhook endpoint
+// Tailscale sends webhooks as a JSON array of events, each with:
+// - timestamp, version, type, tailnet, message, data (optional)
 http.route({
 	path: "/webhooks/tailscale",
 	method: "POST",
 	handler: httpAction(async (ctx, request) => {
 		try {
 			const payload = await request.json()
-			// Tailscale uses "event" field for event type (e.g., "nodeCreated", "nodeApproved")
-			const eventType =
-				(payload as { event?: string; type?: string }).event ??
-				(payload as { type?: string }).type ??
-				"unknown"
 
-			// Store the webhook event
-			const eventId = await ctx.runMutation(api.webhooks.store, {
-				source: "tailscale",
-				eventType,
-				payload,
-			})
+			// Tailscale sends an array of events at the root level
+			const events = Array.isArray(payload) ? payload : [payload]
+			const eventIds: string[] = []
 
-			// Schedule async processing
-			await ctx.scheduler.runAfter(
-				0,
-				internal.internal.webhookProcessing.processTailscaleWebhook,
+			for (const event of events) {
+				const eventType = (event as { type?: string }).type ?? "unknown"
+				const eventData = (event as { data?: unknown }).data
+
+				// Store each webhook event with its data nested in the payload
+				const eventId = await ctx.runMutation(api.webhooks.store, {
+					source: "tailscale",
+					eventType,
+					payload: event,
+				})
+
+				// Schedule async processing for each event
+				await ctx.scheduler.runAfter(
+					0,
+					internal.internal.webhookProcessing.processTailscaleWebhook,
+					{
+						eventId,
+					},
+				)
+
+				eventIds.push(eventId)
+			}
+
+			return new Response(
+				JSON.stringify({ success: true, eventIds, count: eventIds.length }),
 				{
-					eventId,
+					status: 200,
+					headers: { "Content-Type": "application/json" },
 				},
 			)
-
-			return new Response(JSON.stringify({ success: true, eventId }), {
-				status: 200,
-				headers: { "Content-Type": "application/json" },
-			})
 		} catch (error) {
 			const message = error instanceof Error ? error.message : "Unknown error"
 			return new Response(JSON.stringify({ error: message }), {

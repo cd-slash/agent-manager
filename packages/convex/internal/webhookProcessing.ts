@@ -174,6 +174,13 @@ export const processAgentCallback = internalAction({
 })
 
 // Process Tailscale webhook
+// Tailscale webhook event structure:
+// - timestamp: RFC 3339 timestamp
+// - version: payload version number
+// - type: event type (nodeCreated, nodeDeleted, etc.)
+// - tailnet: tailnet name
+// - message: human-readable description
+// - data: event-specific data with fields like nodeID, deviceName, actor, url
 export const processTailscaleWebhook = internalAction({
 	args: { eventId: v.id("webhookEvents") },
 	handler: async (ctx, args) => {
@@ -183,73 +190,81 @@ export const processTailscaleWebhook = internalAction({
 			const event = await ctx.runQuery(api.webhooks.get, { id: args.eventId })
 			if (!event) throw new Error("Webhook event not found")
 
+			// Tailscale webhook payload structure
 			const payload = event.payload as {
+				timestamp?: string
+				version?: number
 				type?: string
+				tailnet?: string
+				message?: string
 				data?: {
-					nodeId?: string
-					hostname?: string
-					name?: string
-					addresses?: string[]
-					tags?: string[]
+					nodeID?: string
+					deviceName?: string
+					managedBy?: string
+					actor?: string
+					url?: string
 				}
 			}
 
-			// Extract device info from payload
-			const deviceData = payload.data
-
-			// Determine device type based on tags
-			const tags = deviceData?.tags || []
-			const isServer = tags.includes("tag:code-agent-host")
-			const isContainer = tags.includes("tag:code-agent")
+			const eventData = payload.data
+			const nodeID = eventData?.nodeID
+			const deviceName = eventData?.deviceName
 
 			// Handle different Tailscale event types
 			switch (event.eventType) {
 				case "nodeCreated":
 				case "nodeApproved":
-				case "nodeUpdated":
-					if (deviceData?.nodeId && (isServer || isContainer)) {
-						const ip = deviceData.addresses?.[0] || ""
-						await ctx.runMutation(internal.internal.tailscale.syncDevice, {
-							nodeId: deviceData.nodeId,
-							hostname: deviceData.hostname || "",
-							name: deviceData.name || deviceData.hostname || "",
-							ip,
-							tags,
-							deviceType: isServer ? "server" : "container",
-						})
+					if (nodeID && deviceName) {
+						// Log the event - device sync requires fetching full device details via API
+						// to get tags, addresses, etc. which aren't included in webhook events
 						console.log(
-							`Synced Tailscale device: ${deviceData.nodeId} as ${isServer ? "server" : "container"}`,
+							`Tailscale ${event.eventType}: ${deviceName} (${nodeID})`,
+						)
+						// Schedule a device sync to fetch full details from Tailscale API
+						await ctx.scheduler.runAfter(
+							0,
+							internal.internal.tailscale.syncDeviceFromApi,
+							{ nodeID },
 						)
 					} else {
 						console.log(
-							`Ignoring Tailscale device without relevant tags: ${deviceData?.nodeId}`,
+							`Tailscale ${event.eventType} missing nodeID or deviceName`,
 						)
 					}
 					break
 
 				case "nodeDeleted":
-					if (deviceData?.nodeId) {
+					if (nodeID) {
 						// Try to remove from both servers and containers
 						await ctx.runMutation(internal.internal.tailscale.removeDevice, {
-							nodeId: deviceData.nodeId,
+							nodeId: nodeID,
 							deviceType: "server",
 						})
 						await ctx.runMutation(internal.internal.tailscale.removeDevice, {
-							nodeId: deviceData.nodeId,
+							nodeId: nodeID,
 							deviceType: "container",
 						})
-						console.log(`Removed Tailscale device: ${deviceData.nodeId}`)
+						console.log(`Removed Tailscale device: ${nodeID} (${deviceName})`)
 					}
 					break
 
-				case "nodeKeyExpiring":
+				case "nodeKeyExpiringInOneDay":
+				case "nodeKeyExpired":
 					console.log(
-						`Warning: Tailscale node key expiring for device: ${deviceData?.nodeId}`,
+						`Warning: Tailscale node key ${event.eventType === "nodeKeyExpired" ? "expired" : "expiring"} for device: ${deviceName} (${nodeID})`,
 					)
 					break
 
+				case "test":
+					// Test webhook event sent when configuring webhooks
+					console.log(`Tailscale test webhook received for tailnet: ${payload.tailnet}`)
+					break
+
 				default:
-					console.log(`Unhandled Tailscale event type: ${event.eventType}`)
+					console.log(
+						`Unhandled Tailscale event type: ${event.eventType}`,
+						JSON.stringify(payload, null, 2),
+					)
 			}
 
 			await ctx.runMutation(api.webhooks.markProcessed, { id: args.eventId })
@@ -257,7 +272,12 @@ export const processTailscaleWebhook = internalAction({
 			await ctx.runMutation(internal.internal.history.recordEvent, {
 				action: `Processed Tailscale webhook: ${event.eventType}`,
 				user: "system",
-				metadata: { eventId: args.eventId, eventType: event.eventType },
+				metadata: {
+					eventId: args.eventId,
+					eventType: event.eventType,
+					nodeID,
+					deviceName,
+				},
 			})
 		} catch (error) {
 			const message = error instanceof Error ? error.message : "Unknown error"

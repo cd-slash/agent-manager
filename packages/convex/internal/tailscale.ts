@@ -200,6 +200,77 @@ export const getTailscaleContainers = internalQuery({
 	},
 })
 
+// Sync a single device from Tailscale API by nodeID (triggered by webhooks)
+export const syncDeviceFromApi = internalAction({
+	args: { nodeID: v.string() },
+	handler: async (ctx, args) => {
+		// Get credentials
+		const credentials = await ctx.runQuery(
+			internal.internal.tailscale.getCredentials,
+		)
+
+		if (!credentials?.tailnetId || !credentials?.apiKey) {
+			console.log("Tailscale credentials not configured, skipping device sync")
+			return { skipped: true, reason: "no_credentials" }
+		}
+
+		// Fetch device from Tailscale API
+		const response = await fetch(
+			`https://api.tailscale.com/api/v2/device/${args.nodeID}`,
+			{
+				headers: {
+					Authorization: `Bearer ${credentials.apiKey}`,
+				},
+			},
+		)
+
+		if (!response.ok) {
+			if (response.status === 404) {
+				console.log(`Device ${args.nodeID} not found in Tailscale API`)
+				return { skipped: true, reason: "not_found" }
+			}
+			const errorText = await response.text()
+			throw new Error(`Tailscale API error: ${response.status} - ${errorText}`)
+		}
+
+		const device = (await response.json()) as TailscaleDevice
+
+		// Determine device type based on tags
+		const tags = device.tags || []
+		const isServer = tags.includes("tag:code-agent-host")
+		const isContainer = tags.includes("tag:code-agent")
+
+		if (!isServer && !isContainer) {
+			console.log(
+				`Device ${device.id} (${device.name}) has no relevant tags, skipping`,
+			)
+			return { skipped: true, reason: "no_relevant_tags", deviceName: device.name }
+		}
+
+		// Sync the device
+		const ip = device.addresses?.[0] || ""
+		const result = await ctx.runMutation(internal.internal.tailscale.syncDevice, {
+			nodeId: device.id,
+			hostname: device.hostname,
+			name: device.name || device.hostname,
+			ip,
+			tags,
+			deviceType: isServer ? "server" : "container",
+		})
+
+		console.log(
+			`Synced device ${device.id} (${device.name}) as ${isServer ? "server" : "container"}`,
+		)
+
+		return {
+			synced: true,
+			deviceType: isServer ? "server" : "container",
+			deviceName: device.name,
+			...result,
+		}
+	},
+})
+
 // Perform full sync from Tailscale API
 export const performFullSync = internalAction({
 	args: {},
