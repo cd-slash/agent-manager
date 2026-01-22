@@ -161,21 +161,6 @@ export const containerCommandTypeValidator = v.union(
 	v.literal("completeOAuthFlow"),
 )
 
-// Combined type for backwards compatibility (deprecated - use specific validators)
-export const gatewayCommandTypeValidator = v.union(
-	// Server commands
-	v.literal("createContainer"),
-	v.literal("stopContainer"),
-	v.literal("deleteContainer"),
-	// Container commands
-	v.literal("startExecution"),
-	v.literal("abortExecution"),
-	v.literal("pushAuthToken"),
-	v.literal("startPhaseExecution"),
-	v.literal("startOAuthFlow"),
-	v.literal("completeOAuthFlow"),
-)
-
 // Gateway command status
 export const gatewayCommandStatusValidator = v.union(
 	v.literal("pending"), // Waiting for gateway to pick up

@@ -9,7 +9,6 @@ import {
 	containerPoolStatusValidator,
 	containerTypeValidator,
 	gatewayCommandStatusValidator,
-	gatewayCommandTypeValidator,
 	phaseStatusValidator,
 	prDetectedViaValidator,
 	remediationTriggerValidator,
@@ -673,36 +672,6 @@ export default defineSchema({
 		.index("by_correlation_id", ["correlationId"])
 		.index("by_task", ["taskId"]),
 
-	// Legacy gateway commands table - DEPRECATED, kept for migration
-	// TODO: Remove after migration to serverCommands + containerCommands
-	gatewayCommands: defineTable({
-		type: gatewayCommandTypeValidator,
-		status: gatewayCommandStatusValidator,
-		priority: commandPriorityValidator,
-		payload: v.any(),
-		result: v.optional(v.any()),
-		error: v.optional(v.string()),
-		correlationId: v.optional(v.string()),
-		taskId: v.optional(v.string()),
-		projectId: v.optional(v.string()),
-		assignedContainerId: v.optional(v.string()),
-		retryCount: v.number(),
-		maxRetries: v.number(),
-		lastError: v.optional(v.string()),
-		queuePosition: v.optional(v.number()),
-		createdAt: v.number(),
-		updatedAt: v.number(),
-		queuedAt: v.optional(v.number()),
-		processedAt: v.optional(v.number()),
-		completedAt: v.optional(v.number()),
-	})
-		.index("by_status", ["status"])
-		.index("by_type_and_status", ["type", "status"])
-		.index("by_correlation_id", ["correlationId"])
-		.index("by_priority_and_status", ["priority", "status"])
-		.index("by_assigned_container", ["assignedContainerId"])
-		.index("by_task", ["taskId"]),
-
 	// Container pool - tracks container availability for execution commands
 	// Gateway maintains this based on container connections and execution state
 	containerPool: defineTable({
@@ -731,39 +700,4 @@ export default defineSchema({
 		.index("by_status", ["status"])
 		.index("by_status_and_activity", ["status", "lastActivityAt"]),
 
-	// Execution queue - dedicated queue for execution commands
-	// Provides more granular control over execution scheduling
-	executionQueue: defineTable({
-		commandId: v.id("gatewayCommands"), // Reference to the command
-		taskId: v.optional(v.string()),
-		projectId: v.optional(v.string()),
-
-		// Queue management
-		priority: commandPriorityValidator,
-		queuedAt: v.number(),
-		estimatedWaitMs: v.optional(v.number()), // Estimated wait time
-
-		// Assignment
-		assignedContainerId: v.optional(v.string()),
-		assignedAt: v.optional(v.number()),
-
-		// Status
-		status: v.union(
-			v.literal("waiting"), // Waiting for container
-			v.literal("assigned"), // Container assigned, about to start
-			v.literal("executing"), // Currently executing
-			v.literal("completed"), // Done
-			v.literal("failed"), // Failed
-			v.literal("cancelled"), // Cancelled
-		),
-
-		// Metrics
-		startedAt: v.optional(v.number()),
-		completedAt: v.optional(v.number()),
-	})
-		.index("by_status", ["status"])
-		.index("by_priority_and_queued", ["priority", "queuedAt"])
-		.index("by_command", ["commandId"])
-		.index("by_assigned_container", ["assignedContainerId"])
-		.index("by_task", ["taskId"]),
 })

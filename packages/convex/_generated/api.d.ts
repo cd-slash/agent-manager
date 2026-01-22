@@ -18,7 +18,6 @@ import type * as containerCommands from "../containerCommands.js";
 import type * as containerPool from "../containerPool.js";
 import type * as containers from "../containers.js";
 import type * as crons from "../crons.js";
-import type * as gatewayCommands from "../gatewayCommands.js";
 import type * as http from "../http.js";
 import type * as internal_aiResponses from "../internal/aiResponses.js";
 import type * as internal_cascadeDelete from "../internal/cascadeDelete.js";
@@ -63,7 +62,6 @@ declare const fullApi: ApiFromModules<{
   containerPool: typeof containerPool;
   containers: typeof containers;
   crons: typeof crons;
-  gatewayCommands: typeof gatewayCommands;
   http: typeof http;
   "internal/aiResponses": typeof internal_aiResponses;
   "internal/cascadeDelete": typeof internal_cascadeDelete;

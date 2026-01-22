@@ -17,8 +17,9 @@ import {
 	Server,
 	Sliders,
 } from "lucide-react"
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { useToast } from "@/components/ToastProvider"
+import { useDebouncedSave } from "@/hooks/useDebouncedSave"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -41,12 +42,62 @@ function GatewayConfigSection() {
 	const [gatewayUrl, setGatewayUrl] = useState("")
 	const [defaultServer, setDefaultServer] = useState("")
 	const [defaultRepo, setDefaultRepo] = useState("")
-	const [savingField, setSavingField] = useState<string | null>(null)
 	const [initialized, setInitialized] = useState(false)
 
 	// Convex hooks
 	const gatewayConfig = useQuery(api.settings.getGatewayConfig)
 	const setGatewayConfig = useMutation(api.settings.setGatewayConfig)
+
+	// Error handler
+	const handleError = useCallback(
+		(field: string) => (error: unknown) => {
+			toast.error(
+				"Failed to save",
+				error instanceof Error ? error.message : `Failed to save ${field}`,
+			)
+		},
+		[toast],
+	)
+
+	// Auto-save hooks
+	const { isSaving: savingUrl } = useDebouncedSave({
+		value: gatewayUrl || undefined,
+		savedValue: gatewayConfig?.url,
+		onSave: useCallback(
+			async (val) => {
+				await setGatewayConfig({ url: val })
+			},
+			[setGatewayConfig],
+		),
+		onError: handleError("gateway URL"),
+		enabled: initialized,
+	})
+
+	const { isSaving: savingServer } = useDebouncedSave({
+		value: defaultServer || undefined,
+		savedValue: gatewayConfig?.defaultServer,
+		onSave: useCallback(
+			async (val) => {
+				await setGatewayConfig({ defaultServer: val })
+			},
+			[setGatewayConfig],
+		),
+		onError: handleError("default server"),
+		enabled: initialized,
+	})
+
+	const { isSaving: savingRepo } = useDebouncedSave({
+		value: defaultRepo || undefined,
+		savedValue: gatewayConfig?.defaultRepo,
+		onSave: useCallback(
+			async (val) => {
+				await setGatewayConfig({ defaultRepo: val })
+			},
+			[setGatewayConfig],
+		),
+		onError: handleError("default repo"),
+		enabled: initialized,
+	})
 
 	// Load initial values once
 	useEffect(() => {
@@ -57,66 +108,6 @@ function GatewayConfigSection() {
 			setInitialized(true)
 		}
 	}, [gatewayConfig, initialized])
-
-	// Auto-save gateway URL
-	useEffect(() => {
-		if (!initialized) return
-		const timer = setTimeout(async () => {
-			if (gatewayUrl === (gatewayConfig?.url || "")) return
-			setSavingField("url")
-			try {
-				await setGatewayConfig({ url: gatewayUrl || undefined })
-			} catch (error) {
-				toast.error(
-					"Failed to save",
-					error instanceof Error ? error.message : "Failed to save gateway URL",
-				)
-			} finally {
-				setSavingField(null)
-			}
-		}, 500)
-		return () => clearTimeout(timer)
-	}, [gatewayUrl, initialized, gatewayConfig?.url, setGatewayConfig, toast])
-
-	// Auto-save default server
-	useEffect(() => {
-		if (!initialized) return
-		const timer = setTimeout(async () => {
-			if (defaultServer === (gatewayConfig?.defaultServer || "")) return
-			setSavingField("server")
-			try {
-				await setGatewayConfig({ defaultServer: defaultServer || undefined })
-			} catch (error) {
-				toast.error(
-					"Failed to save",
-					error instanceof Error ? error.message : "Failed to save default server",
-				)
-			} finally {
-				setSavingField(null)
-			}
-		}, 500)
-		return () => clearTimeout(timer)
-	}, [defaultServer, initialized, gatewayConfig?.defaultServer, setGatewayConfig, toast])
-
-	// Auto-save default repo
-	useEffect(() => {
-		if (!initialized) return
-		const timer = setTimeout(async () => {
-			if (defaultRepo === (gatewayConfig?.defaultRepo || "")) return
-			setSavingField("repo")
-			try {
-				await setGatewayConfig({ defaultRepo: defaultRepo || undefined })
-			} catch (error) {
-				toast.error(
-					"Failed to save",
-					error instanceof Error ? error.message : "Failed to save default repo",
-				)
-			} finally {
-				setSavingField(null)
-			}
-		}, 500)
-		return () => clearTimeout(timer)
-	}, [defaultRepo, initialized, gatewayConfig?.defaultRepo, setGatewayConfig, toast])
 
 	return (
 		<section>
@@ -132,7 +123,7 @@ function GatewayConfigSection() {
 					<div className="space-y-2">
 						<div className="flex items-center justify-between">
 							<Label>Gateway URL</Label>
-							{savingField === "url" && (
+							{savingUrl && (
 								<span className="text-xs text-muted-foreground flex items-center gap-1">
 									<RefreshCw size={10} className="animate-spin" />
 									Saving...
@@ -152,7 +143,7 @@ function GatewayConfigSection() {
 					<div className="space-y-2">
 						<div className="flex items-center justify-between">
 							<Label>Default Server</Label>
-							{savingField === "server" && (
+							{savingServer && (
 								<span className="text-xs text-muted-foreground flex items-center gap-1">
 									<RefreshCw size={10} className="animate-spin" />
 									Saving...
@@ -172,7 +163,7 @@ function GatewayConfigSection() {
 					<div className="space-y-2">
 						<div className="flex items-center justify-between">
 							<Label>Default Repository</Label>
-							{savingField === "repo" && (
+							{savingRepo && (
 								<span className="text-xs text-muted-foreground flex items-center gap-1">
 									<RefreshCw size={10} className="animate-spin" />
 									Saving...

@@ -517,54 +517,6 @@ describe("agentMessages", () => {
 		})
 	})
 
-	describe("legacy queries", () => {
-		it("should support listBySession (legacy)", async () => {
-			const t = await createConvexTest(schema)
-
-			await t.mutation(api.agentMessages.create, {
-				sessionId: "session-123",
-				content: "Message 1",
-				sequenceNumber: 0,
-			})
-			await t.mutation(api.agentMessages.create, {
-				sessionId: "session-123",
-				content: "Message 2",
-				sequenceNumber: 1,
-			})
-
-			const messages = await t.query(api.agentMessages.listBySession, {
-				sessionId: "session-123",
-			})
-
-			expect(messages.length).toBe(2)
-		})
-
-		it("should support countBySession (legacy)", async () => {
-			const t = await createConvexTest(schema)
-
-			await t.mutation(api.agentMessages.createStructured, {
-				sessionId: "session-123",
-				messageType: "text",
-				text: "Hello",
-				sequenceNumber: 0,
-			})
-			await t.mutation(api.agentMessages.createStructured, {
-				sessionId: "session-123",
-				messageType: "tool_use",
-				toolName: "Bash",
-				sequenceNumber: 1,
-			})
-
-			const counts = await t.query(api.agentMessages.countBySession, {
-				sessionId: "session-123",
-			})
-
-			expect(counts.total).toBe(2)
-			expect(counts.byType.text).toBe(1)
-			expect(counts.byType.tool_use).toBe(1)
-		})
-	})
-
 	describe("deletion", () => {
 		it("should delete all messages for a session", async () => {
 			const t = await createConvexTest(schema)

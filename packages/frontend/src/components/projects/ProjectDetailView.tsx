@@ -83,24 +83,12 @@ export function ProjectDetailView({
 	const handleChatSend = async (text: string) => {
 		try {
 			// Send user message to Convex
+			// AI responses are handled by container commands via the containerCommands table
 			await sendMessage({
 				projectId,
 				text,
 				sender: "user",
 			})
-
-			// Simulate AI response (in production this would be handled by a Convex action)
-			setTimeout(async () => {
-				try {
-					await sendMessage({
-						projectId,
-						text: "I've updated the plan based on your request. I also suggest breaking this down into 3 new tasks.",
-						sender: "ai",
-					})
-				} catch (_error) {
-					toast.error("AI response failed", "Could not process your message")
-				}
-			}, 1000)
 		} catch (error) {
 			toast.error(
 				"Message failed",

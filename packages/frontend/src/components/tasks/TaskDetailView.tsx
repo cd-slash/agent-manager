@@ -219,20 +219,12 @@ export function TaskDetailView({
 
 	const handleSendMessage = async (text: string) => {
 		// Send user message to Convex
+		// AI responses are handled by container commands via the containerCommands table
 		await sendMessage({
 			taskId,
 			text,
 			sender: "user",
 		})
-
-		// Simulate AI response (in production this would be handled by a Convex action)
-		setTimeout(async () => {
-			await sendMessage({
-				taskId,
-				text: "I'm analyzing your request and will help you with the task. Is there anything specific you'd like me to focus on?",
-				sender: "ai",
-			})
-		}, 1000)
 	}
 
 	return (

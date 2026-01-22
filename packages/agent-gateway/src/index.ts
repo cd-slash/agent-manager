@@ -6,7 +6,7 @@
  * that require local server access (Docker, SSH).
  *
  * Key responsibilities:
- * - Subscribe to gatewayCommands for createContainer/stopContainer/deleteContainer
+ * - Subscribe to serverCommands for createContainer/stopContainer/deleteContainer
  * - Execute SSH/Docker commands on servers
  * - Handle OAuth flows via Convex subscriptions
  */
