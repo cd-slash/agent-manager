@@ -1,9 +1,14 @@
 /**
  * Agent Gateway
  *
- * Central WebSocket server that container API instances connect to.
- * Provides HTTP API for the frontend to interact with containers.
- * Syncs execution events to Convex for persistence and real-time updates.
+ * Processes server-side commands from Convex (container creation, SSH operations).
+ * Containers connect directly to Convex - this gateway handles only operations
+ * that require local server access (Docker, SSH).
+ *
+ * Key responsibilities:
+ * - Subscribe to gatewayCommands for createContainer/stopContainer/deleteContainer
+ * - Execute SSH/Docker commands on servers
+ * - Handle OAuth flows via Convex subscriptions
  */
 
 import type {
@@ -1016,7 +1021,7 @@ docker exec ${containerName} tailscale serve --bg --http 80 http://localhost:409
 }
 
 // Configuration from environment
-const PORT = Number(process.env.AGENT_GATEWAY_PORT) || 3100
+// Note: No HTTP/WebSocket server - containers connect directly to Convex
 const CONVEX_URL = process.env.CONVEX_URL || ""
 const SERVER_ID =
 	process.env.SERVER_ID || `gateway-${crypto.randomUUID().slice(0, 8)}`
@@ -1939,70 +1944,14 @@ docker rm "$CONTAINER_ID"
 	)
 }
 
-// Start the server
-const server = Bun.serve({
-	port: PORT,
-	fetch: handleHttpRequest,
-	websocket: {
-		open(ws: ServerWebSocket<ContainerContext>) {
-			console.log("[gateway] New WebSocket connection")
-			ws.data = { containerId: null, registered: false }
-			connections.addPendingSocket(ws)
-		},
-
-		message(ws: ServerWebSocket<ContainerContext>, message: string | Buffer) {
-			try {
-				const data = parseMessage(message.toString())
-				handleContainerMessage(ws, data)
-			} catch (error) {
-				console.error("[gateway] Failed to parse message:", error)
-			}
-		},
-
-		close(ws: ServerWebSocket<ContainerContext>) {
-			if (ws.data.containerId) {
-				console.log(`[gateway] Container disconnected: ${ws.data.containerId}`)
-				if (convexSync) {
-					convexSync.updateContainerConnection(ws.data.containerId, "", false)
-				}
-				connections.unregisterContainer(ws.data.containerId)
-			} else {
-				connections.removePendingSocket(ws)
-			}
-		},
-	},
-})
-
-// Periodic ping to all containers
-setInterval(() => {
-	connections.pingAll()
-}, PING_INTERVAL)
-
-// Periodic pruning of stale connections
-setInterval(() => {
-	const pruned = connections.pruneStaleConnections()
-	if (pruned.length > 0) {
-		console.log(`[gateway] Pruned ${pruned.length} stale connections`)
-		// Update Convex for pruned containers
-		if (convexSync) {
-			for (const containerId of pruned) {
-				convexSync.updateContainerConnection(containerId, "", false)
-			}
-		}
-	}
-}, PRUNE_INTERVAL)
-
 // Start Convex subscriptions for OAuth flows if claudeAuth is available
 if (claudeAuth) {
 	claudeAuth.startConvexSubscriptions()
 
-	// Listen for token acquisition to push to all containers
+	// Token updates are now handled via Convex secrets
+	// Containers subscribe directly to secrets for auth token changes
 	claudeAuth.on("auth:token-acquired", () => {
-		console.log("[gateway] Token acquired, pushing to all containers...")
-		const containers = connections.getAllContainers()
-		for (const container of containers) {
-			pushTokenToContainer(container.info.containerId)
-		}
+		console.log("[gateway] Token acquired and stored in Convex secrets")
 	})
 }
 
@@ -2013,8 +1962,6 @@ if (commandProcessor) {
 
 console.log(`[gateway] Agent Gateway started`)
 console.log(`[gateway]   Server ID: ${SERVER_ID}`)
-console.log(`[gateway]   WebSocket: ws://localhost:${PORT}`)
-console.log(`[gateway]   HTTP API:  http://localhost:${PORT}`)
 if (convexSync) {
 	console.log(`[gateway]   Convex:    enabled`)
 } else {
@@ -2027,4 +1974,11 @@ if (commandProcessor) {
 	console.log(`[gateway]   Commands:  Convex-driven command processing enabled`)
 }
 
-export { server }
+// Keep process running (no HTTP server, just Convex subscriptions)
+console.log(`[gateway] Gateway is running. Press Ctrl+C to stop.`)
+
+// Keep the event loop alive - Convex client handles reconnection
+// The process stays running due to active Convex subscriptions
+setInterval(() => {
+	// Heartbeat - Convex subscriptions keep the connection alive
+}, 60000)
