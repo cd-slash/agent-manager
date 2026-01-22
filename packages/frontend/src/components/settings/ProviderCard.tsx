@@ -40,6 +40,11 @@ export function ProviderCard({ provider }: ProviderCardProps) {
 	// OAuth state (now using Convex-driven flow)
 	const [authCode, setAuthCode] = useState("")
 
+	// Manual token state (alternative to OAuth flow)
+	const [manualToken, setManualToken] = useState("")
+	const [showManualToken, setShowManualToken] = useState(false)
+	const [isSavingToken, setIsSavingToken] = useState(false)
+
 	// Model state
 	const [models, setModels] = useState<AiModelConfig[]>(provider.models)
 
@@ -212,6 +217,28 @@ export function ProviderCard({ provider }: ProviderCardProps) {
 		}
 	}
 
+	const handleSaveManualToken = async () => {
+		if (!manualToken.trim()) return
+
+		setIsSavingToken(true)
+		try {
+			await setSecret({
+				key: "ANTHROPIC_AUTH_TOKEN",
+				value: manualToken.trim(),
+				description: "Anthropic OAuth token (manual entry)",
+			})
+			setManualToken("")
+			toast.success("Connected", "Anthropic token saved successfully")
+		} catch (error) {
+			toast.error(
+				"Failed to save token",
+				error instanceof Error ? error.message : "Unknown error",
+			)
+		} finally {
+			setIsSavingToken(false)
+		}
+	}
+
 	const isOAuth = provider.authType === "oauth"
 	const isConnected = authStatus?.hasAuth ?? false
 
@@ -380,14 +407,80 @@ export function ProviderCard({ provider }: ProviderCardProps) {
 									</Button>
 								</div>
 							) : (
-								<div className="space-y-2">
-									<Button onClick={handleStartOAuth} className="w-full">
-										<Link2 size={14} className="mr-2" />
-										Connect with Anthropic
-									</Button>
-									<p className="text-xs text-muted-foreground">
-										Sign in with your Anthropic Pro or Max account
-									</p>
+								<div className="space-y-4">
+									<div className="space-y-2">
+										<Button onClick={handleStartOAuth} className="w-full">
+											<Link2 size={14} className="mr-2" />
+											Connect with Anthropic
+										</Button>
+										<p className="text-xs text-muted-foreground">
+											Sign in with your Anthropic Pro or Max account
+										</p>
+									</div>
+
+									<div className="relative">
+										<div className="absolute inset-0 flex items-center">
+											<span className="w-full border-t border-border" />
+										</div>
+										<div className="relative flex justify-center text-xs uppercase">
+											<span className="bg-background px-2 text-muted-foreground">
+												Or enter token manually
+											</span>
+										</div>
+									</div>
+
+									<div className="space-y-2">
+										<div className="relative">
+											<Input
+												type={showManualToken ? "text" : "password"}
+												placeholder="Paste your OAuth token here"
+												value={manualToken}
+												onChange={(e) => setManualToken(e.target.value)}
+												className="pr-10 font-mono text-sm"
+												disabled={isSavingToken}
+											/>
+											<button
+												type="button"
+												onClick={() => setShowManualToken(!showManualToken)}
+												className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+											>
+												{showManualToken ? (
+													<EyeOff size={14} />
+												) : (
+													<Eye size={14} />
+												)}
+											</button>
+										</div>
+										<div className="flex items-center gap-2">
+											<Button
+												onClick={handleSaveManualToken}
+												disabled={!manualToken.trim() || isSavingToken}
+												className="flex-1"
+											>
+												{isSavingToken ? (
+													<>
+														<RefreshCw
+															size={14}
+															className="mr-2 animate-spin"
+														/>
+														Saving...
+													</>
+												) : (
+													<>
+														<Save size={14} className="mr-2" />
+														Save Token
+													</>
+												)}
+											</Button>
+										</div>
+										<p className="text-xs text-muted-foreground">
+											You can get your token by running{" "}
+											<code className="bg-muted px-1 py-0.5 rounded text-[11px]">
+												claude auth status
+											</code>{" "}
+											in a terminal
+										</p>
+									</div>
 								</div>
 							)}
 						</div>
