@@ -16,7 +16,7 @@ let cachedModules: Record<string, () => Promise<unknown>> | null = null
 async function loadModules(): Promise<Record<string, () => Promise<unknown>>> {
 	if (cachedModules) return cachedModules
 
-	const convexDir = resolve(import.meta.dir, "..")
+	const convexDir = resolve(import.meta.dir, "../convex")
 	const glob = new Glob("**/*.ts")
 	const modules: Record<string, () => Promise<unknown>> = {}
 

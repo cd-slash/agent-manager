@@ -43,20 +43,14 @@ function GatewayConfigSection() {
 	const [defaultServer, setDefaultServer] = useState("")
 	const [defaultRepo, setDefaultRepo] = useState("")
 	const [isSaving, setIsSaving] = useState(false)
-	const [isCheckingStatus, setIsCheckingStatus] = useState(false)
 
-	// Convex hooks
+	// Convex hooks - all reactive queries now, no actions
 	const gatewayConfig = useQuery(api.settings.getGatewayConfig)
 	const setGatewayConfig = useMutation(api.settings.setGatewayConfig)
-	const getManagementContainerStatus = useAction(
-		api.aiProviders.getManagementContainerStatus,
+	const managementStatus = useQuery(api.aiProviders.getManagementContainerStatus)
+	const requestManagementContainer = useMutation(
+		api.aiProviders.requestManagementContainer,
 	)
-
-	const [managementStatus, setManagementStatus] = useState<{
-		exists: boolean
-		running: boolean
-		container: { containerId: string; name: string; hostname: string } | null
-	} | null>(null)
 
 	// Load initial values
 	useEffect(() => {
@@ -67,28 +61,21 @@ function GatewayConfigSection() {
 		}
 	}, [gatewayConfig])
 
-	const handleCheckStatus = async () => {
-		setIsCheckingStatus(true)
+	const handleRequestContainer = async () => {
 		try {
-			const status = await getManagementContainerStatus()
-			setManagementStatus(status)
-			if (status.running) {
-				toast.success("Gateway Connected", "Management container is running")
-			} else if (status.exists) {
-				toast.warning(
-					"Container Stopped",
-					"Management container exists but is not running",
-				)
+			const result = await requestManagementContainer()
+			if (result.status === "exists") {
+				toast.success("Already Running", result.message)
+			} else if (result.status === "pending") {
+				toast.info("In Progress", result.message)
 			} else {
-				toast.info("No Container", "No management container found")
+				toast.success("Requested", result.message)
 			}
 		} catch (error) {
 			toast.error(
-				"Connection Failed",
-				error instanceof Error ? error.message : "Could not connect to gateway",
+				"Request Failed",
+				error instanceof Error ? error.message : "Could not request container",
 			)
-		} finally {
-			setIsCheckingStatus(false)
 		}
 	}
 
@@ -184,19 +171,21 @@ function GatewayConfigSection() {
 										Stopped
 									</span>
 								)}
-							</div>
-							<Button
-								variant="outline"
-								size="sm"
-								onClick={handleCheckStatus}
-								disabled={isCheckingStatus}
-							>
-								{isCheckingStatus ? (
-									<RefreshCw size={14} className="animate-spin" />
-								) : (
-									"Check Status"
+								{!managementStatus?.exists && (
+									<span className="text-[10px] px-1.5 py-0.5 bg-muted rounded text-muted-foreground">
+										Not Found
+									</span>
 								)}
-							</Button>
+							</div>
+							{!managementStatus?.running && (
+								<Button
+									variant="outline"
+									size="sm"
+									onClick={handleRequestContainer}
+								>
+									Request Container
+								</Button>
+							)}
 						</div>
 						{managementStatus?.container && (
 							<div className="mt-2 text-xs text-muted-foreground">
@@ -204,6 +193,9 @@ function GatewayConfigSection() {
 								<div>Hostname: {managementStatus.container.hostname}</div>
 							</div>
 						)}
+						<p className="text-xs text-muted-foreground mt-2">
+							Status updates automatically via Convex
+						</p>
 					</div>
 
 					<div className="pt-2">

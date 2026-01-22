@@ -10,8 +10,8 @@
  */
 
 import { describe, expect, it } from "bun:test"
-import { api } from "../_generated/api"
-import schema from "../schema"
+import { api } from "../convex/_generated/api"
+import schema from "../convex/schema"
 import { createConvexTest } from "./setup"
 
 describe("agentMessages", () => {

@@ -3,14 +3,11 @@ import { internal } from "./_generated/api"
 import { action, internalMutation, mutation, query } from "./_generated/server"
 import { aiProviderTypeValidator, authTypeValidator } from "./validators"
 
-// Default gateway URL (can be overridden via settings)
-const DEFAULT_GATEWAY_URL = "http://localhost:3100"
-
-// Type for gateway config result
-interface GatewayConfig {
-	url: string
-	defaultServer: string | null
-	defaultRepo: string | null
+// Type for container pool entry (from containerPool table)
+interface ContainerPoolEntry {
+	containerId: string
+	hostname: string
+	status: "idle" | "busy" | "reserved" | "offline"
 }
 
 // Type definitions
@@ -493,7 +490,7 @@ export const hasBeenSeeded = query({
 })
 
 // =============================================================================
-// Management Container Actions
+// Management Container Queries (Convex-driven, no HTTP calls)
 // =============================================================================
 
 interface ManagementContainerInfo {
@@ -503,131 +500,11 @@ interface ManagementContainerInfo {
 	status: "running" | "stopped" | "creating"
 }
 
-// Ensure a management container exists and is running
-// Creates one if it doesn't exist or is stopped
-export const ensureManagementContainer = action({
-	args: {},
-	handler: async (ctx): Promise<ManagementContainerInfo> => {
-		// Get gateway config
-		const config = (await ctx.runQuery(
-			internal.settings.getGatewayConfigInternal,
-			{},
-		)) as GatewayConfig | null
-		const gatewayUrl = config?.url ?? DEFAULT_GATEWAY_URL
-		const defaultServer = config?.defaultServer ?? "localhost"
-		const defaultRepo = config?.defaultRepo ?? "anthropics/claude-code-sandbox"
-
-		console.log(
-			`[aiProviders] Ensuring management container via gateway: ${gatewayUrl}`,
-		)
-
-		// Check if gateway has a connected management container
-		let response: Response
-		try {
-			response = await fetch(`${gatewayUrl}/containers`, {
-				method: "GET",
-				headers: { "Content-Type": "application/json" },
-			})
-		} catch {
-			throw new Error(
-				`Cannot connect to agent gateway at ${gatewayUrl}. ` +
-					`Make sure the gateway is running and accessible.`,
-			)
-		}
-
-		if (!response.ok) {
-			throw new Error(`Failed to list containers: ${response.statusText}`)
-		}
-
-		const containersResult = (await response.json()) as {
-			containers: Array<{
-				containerId: string
-				hostname: string
-				health?: { status: string }
-			}>
-		}
-
-		// Look for an existing management container (by hostname pattern)
-		const managementContainer = containersResult.containers.find(
-			(c) => c.hostname.includes("management") || c.hostname.includes("mgmt"),
-		)
-
-		if (managementContainer && managementContainer.health?.status === "ok") {
-			console.log(
-				`[aiProviders] Found existing management container: ${managementContainer.containerId}`,
-			)
-
-			// Update the container record in Convex
-			await ctx.runMutation(
-				internal.containers.upsertManagementContainerInternal,
-				{
-					containerId: managementContainer.containerId,
-					name: managementContainer.hostname,
-					hostname: managementContainer.hostname,
-					server: defaultServer,
-					status: "running",
-				},
-			)
-
-			return {
-				containerId: managementContainer.containerId,
-				name: managementContainer.hostname,
-				hostname: managementContainer.hostname,
-				status: "running",
-			}
-		}
-
-		// No running management container, create one
-		console.log("[aiProviders] Creating new management container...")
-
-		const createResponse = await fetch(`${gatewayUrl}/containers/create`, {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({
-				repo: defaultRepo,
-				branch: "main",
-				name: "agent-mgmt",
-				server: defaultServer,
-			}),
-		})
-
-		if (!createResponse.ok) {
-			const error = await createResponse.json().catch(() => ({}))
-			throw new Error(
-				(error as { error?: string }).error ||
-					`Failed to create management container: ${createResponse.statusText}`,
-			)
-		}
-
-		const createResult = (await createResponse.json()) as {
-			containerId: string
-			name: string
-			hostname: string
-		}
-
-		// Update the container record in Convex
-		await ctx.runMutation(
-			internal.containers.upsertManagementContainerInternal,
-			{
-				containerId: createResult.containerId,
-				name: createResult.name,
-				hostname: createResult.hostname,
-				server: defaultServer,
-				status: "running",
-			},
-		)
-
-		return {
-			containerId: createResult.containerId,
-			name: createResult.name,
-			hostname: createResult.hostname,
-			status: "running",
-		}
-	},
-})
-
-// Get management container status
-export const getManagementContainerStatus = action({
+/**
+ * Get management container status by checking Convex tables
+ * This is a pure query - no HTTP calls to external services
+ */
+export const getManagementContainerStatus = query({
 	args: {},
 	handler: async (
 		ctx,
@@ -636,52 +513,129 @@ export const getManagementContainerStatus = action({
 		running: boolean
 		container: ManagementContainerInfo | null
 	}> => {
-		const config = (await ctx.runQuery(
-			internal.settings.getGatewayConfigInternal,
-			{},
-		)) as GatewayConfig | null
-		const gatewayUrl = config?.url ?? DEFAULT_GATEWAY_URL
-
-		try {
-			const response = await fetch(`${gatewayUrl}/containers`, {
-				method: "GET",
-				headers: { "Content-Type": "application/json" },
-			})
-
-			if (!response.ok) {
-				return { exists: false, running: false, container: null }
-			}
-
-			const containersResult = (await response.json()) as {
-				containers: Array<{
-					containerId: string
-					hostname: string
-					health?: { status: string }
-				}>
-			}
-
-			const managementContainer = containersResult.containers.find(
-				(c) => c.hostname.includes("management") || c.hostname.includes("mgmt"),
+		// Check the containers table for a management container
+		const managementContainer = await ctx.db
+			.query("containers")
+			.withIndex("by_container_type", (q) =>
+				q.eq("containerType", "management"),
 			)
+			.first()
 
-			if (!managementContainer) {
-				return { exists: false, running: false, container: null }
-			}
-
-			const isRunning = managementContainer.health?.status === "ok"
-
-			return {
-				exists: true,
-				running: isRunning,
-				container: {
-					containerId: managementContainer.containerId,
-					name: managementContainer.hostname,
-					hostname: managementContainer.hostname,
-					status: isRunning ? "running" : "stopped",
-				},
-			}
-		} catch {
+		if (!managementContainer) {
 			return { exists: false, running: false, container: null }
+		}
+
+		// Also check the containerPool for live status
+		const poolEntry = await ctx.db
+			.query("containerPool")
+			.withIndex("by_container_id", (q) =>
+				q.eq("containerId", managementContainer.containerId),
+			)
+			.first()
+
+		// Container is running if it's in the pool with idle/busy/reserved status
+		// or if its container record shows running
+		const isRunning =
+			(poolEntry &&
+				(poolEntry.status === "idle" ||
+					poolEntry.status === "busy" ||
+					poolEntry.status === "reserved")) ||
+			managementContainer.status === "running"
+
+		return {
+			exists: true,
+			running: isRunning,
+			container: {
+				containerId: managementContainer.containerId,
+				name: managementContainer.name,
+				hostname:
+					managementContainer.tailscaleHostname || managementContainer.name,
+				status: isRunning ? "running" : "stopped",
+			},
+		}
+	},
+})
+
+/**
+ * Request creation of a management container via the command queue
+ * This creates a gatewayCommand that the gateway will pick up and execute
+ */
+export const requestManagementContainer = mutation({
+	args: {},
+	handler: async (ctx) => {
+		const now = Date.now()
+
+		// Check if we already have a management container
+		const existing = await ctx.db
+			.query("containers")
+			.withIndex("by_container_type", (q) =>
+				q.eq("containerType", "management"),
+			)
+			.first()
+
+		if (existing && existing.status === "running") {
+			return {
+				status: "exists" as const,
+				containerId: existing.containerId,
+				message: "Management container already exists and is running",
+			}
+		}
+
+		// Check if there's already a pending create command for management container
+		// Look for createContainer commands with management in the payload name
+		const pendingCommands = await ctx.db
+			.query("gatewayCommands")
+			.withIndex("by_type_and_status", (q) =>
+				q.eq("type", "createContainer").eq("status", "pending"),
+			)
+			.collect()
+
+		const pendingManagementCmd = pendingCommands.find((cmd) => {
+			const payload = cmd.payload as { name?: string } | undefined
+			return payload?.name === "agent-mgmt"
+		})
+
+		if (pendingManagementCmd) {
+			return {
+				status: "pending" as const,
+				commandId: pendingManagementCmd._id,
+				message: "Management container creation already in progress",
+			}
+		}
+
+		// Get gateway config for defaults
+		const gatewayConfig = await ctx.db
+			.query("settings")
+			.withIndex("by_key", (q) => q.eq("key", "agentGateway"))
+			.first()
+
+		const config = (gatewayConfig?.value as {
+			defaultServer?: string
+			defaultRepo?: string
+		}) || {}
+
+		// Create a command to create the management container
+		const commandId = await ctx.db.insert("gatewayCommands", {
+			type: "createContainer",
+			status: "pending",
+			priority: "high", // High priority for management container
+			payload: {
+				name: "agent-mgmt",
+				repo: config.defaultRepo || "anthropics/claude-code-sandbox",
+				branch: "main",
+				server: config.defaultServer || "localhost",
+				containerType: "management", // Gateway should create as management type
+			},
+			retryCount: 0,
+			maxRetries: 3,
+			createdAt: now,
+			updatedAt: now,
+		})
+
+		return {
+			status: "requested" as const,
+			commandId,
+			message: "Management container creation requested",
 		}
 	},
 })
