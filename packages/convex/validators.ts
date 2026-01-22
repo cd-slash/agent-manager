@@ -155,6 +155,9 @@ export const gatewayCommandTypeValidator = v.union(
 	v.literal("pushAuthToken"),
 	// Task orchestration
 	v.literal("startPhaseExecution"),
+	// OAuth flow commands
+	v.literal("startOAuthFlow"),
+	v.literal("completeOAuthFlow"),
 )
 
 // Gateway command status
