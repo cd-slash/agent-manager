@@ -1,7 +1,7 @@
 import { v } from "convex/values"
-import { mutation, query } from "./_generated/server"
+import { internalMutation, mutation, query } from "./_generated/server"
 import { patchWithTimestamp } from "./internal/updateUtils"
-import { containerStatusValidator } from "./validators"
+import { containerStatusValidator, containerTypeValidator } from "./validators"
 
 // List all containers
 export const list = query({
@@ -310,6 +310,7 @@ export const createFromAgent = mutation({
 		wgPort: v.optional(v.number()),
 		taskId: v.optional(v.id("tasks")),
 		projectId: v.optional(v.id("projects")),
+		containerType: v.optional(containerTypeValidator),
 	},
 	handler: async (ctx, args) => {
 		const now = Date.now()
@@ -327,6 +328,7 @@ export const createFromAgent = mutation({
 				serverHostname: args.server,
 				tailscaleHostname: args.hostname,
 				status: "running",
+				containerType: args.containerType,
 				updatedAt: now,
 			})
 			return existing._id
@@ -341,6 +343,199 @@ export const createFromAgent = mutation({
 			port: args.network === "macvlan" ? "80" : String(args.wgPort || 4096),
 			serverHostname: args.server,
 			tailscaleHostname: args.hostname,
+			containerType: args.containerType ?? "agent",
+			createdAt: now,
+			updatedAt: now,
+		})
+
+		return id
+	},
+})
+
+// =============================================================================
+// Management Container Functions
+// =============================================================================
+
+// Get the management container (if it exists and is running)
+export const getManagementContainer = query({
+	args: {},
+	handler: async (ctx) => {
+		const container = await ctx.db
+			.query("containers")
+			.withIndex("by_container_type", (q) =>
+				q.eq("containerType", "management"),
+			)
+			.first()
+
+		if (!container) return null
+
+		const server = container.serverId
+			? await ctx.db.get(container.serverId)
+			: null
+		return { ...container, serverName: server?.name ?? null }
+	},
+})
+
+// Check if a management container exists and is running
+export const hasRunningManagementContainer = query({
+	args: {},
+	handler: async (ctx) => {
+		const container = await ctx.db
+			.query("containers")
+			.withIndex("by_container_type", (q) =>
+				q.eq("containerType", "management"),
+			)
+			.first()
+
+		return container?.status === "running"
+	},
+})
+
+// Create or update the management container record
+export const upsertManagementContainer = mutation({
+	args: {
+		containerId: v.string(),
+		name: v.string(),
+		hostname: v.string(),
+		server: v.string(),
+		status: v.optional(containerStatusValidator),
+	},
+	handler: async (ctx, args) => {
+		const now = Date.now()
+
+		// Check if a management container already exists
+		const existing = await ctx.db
+			.query("containers")
+			.withIndex("by_container_type", (q) =>
+				q.eq("containerType", "management"),
+			)
+			.first()
+
+		if (existing) {
+			// Update the existing management container
+			await ctx.db.patch(existing._id, {
+				containerId: args.containerId,
+				name: args.name,
+				tailscaleHostname: args.hostname,
+				serverHostname: args.server,
+				status: args.status ?? "running",
+				updatedAt: now,
+			})
+			return existing._id
+		}
+
+		// Create new management container
+		const id = await ctx.db.insert("containers", {
+			containerId: args.containerId,
+			name: args.name,
+			image: "agent:management",
+			status: args.status ?? "running",
+			port: "80",
+			serverHostname: args.server,
+			tailscaleHostname: args.hostname,
+			containerType: "management",
+			createdAt: now,
+			updatedAt: now,
+		})
+
+		return id
+	},
+})
+
+// List containers by type
+export const listByType = query({
+	args: { containerType: containerTypeValidator },
+	handler: async (ctx, args) => {
+		const containers = await ctx.db
+			.query("containers")
+			.withIndex("by_container_type", (q) =>
+				q.eq("containerType", args.containerType),
+			)
+			.collect()
+
+		// Enrich with server info
+		const enriched = await Promise.all(
+			containers.map(async (container) => {
+				const server = container.serverId
+					? await ctx.db.get(container.serverId)
+					: null
+				return { ...container, serverName: server?.name ?? null }
+			}),
+		)
+		return enriched
+	},
+})
+
+// List only agent containers (excluding management)
+export const listAgentContainers = query({
+	args: {},
+	handler: async (ctx) => {
+		const containers = await ctx.db.query("containers").collect()
+		// Filter to only agent containers (containerType === "agent" or undefined)
+		const agentContainers = containers.filter(
+			(c) => !c.containerType || c.containerType === "agent",
+		)
+
+		// Enrich with server info
+		const enriched = await Promise.all(
+			agentContainers.map(async (container) => {
+				const server = container.serverId
+					? await ctx.db.get(container.serverId)
+					: null
+				return { ...container, serverName: server?.name ?? null }
+			}),
+		)
+		return enriched
+	},
+})
+
+// =============================================================================
+// Internal Mutations (for use by actions)
+// =============================================================================
+
+// Internal mutation to upsert management container (called from actions)
+export const upsertManagementContainerInternal = internalMutation({
+	args: {
+		containerId: v.string(),
+		name: v.string(),
+		hostname: v.string(),
+		server: v.string(),
+		status: v.optional(containerStatusValidator),
+	},
+	handler: async (ctx, args) => {
+		const now = Date.now()
+
+		// Check if a management container already exists
+		const existing = await ctx.db
+			.query("containers")
+			.withIndex("by_container_type", (q) =>
+				q.eq("containerType", "management"),
+			)
+			.first()
+
+		if (existing) {
+			// Update the existing management container
+			await ctx.db.patch(existing._id, {
+				containerId: args.containerId,
+				name: args.name,
+				tailscaleHostname: args.hostname,
+				serverHostname: args.server,
+				status: args.status ?? "running",
+				updatedAt: now,
+			})
+			return existing._id
+		}
+
+		// Create new management container
+		const id = await ctx.db.insert("containers", {
+			containerId: args.containerId,
+			name: args.name,
+			image: "agent:management",
+			status: args.status ?? "running",
+			port: "80",
+			serverHostname: args.server,
+			tailscaleHostname: args.hostname,
+			containerType: "management",
 			createdAt: now,
 			updatedAt: now,
 		})

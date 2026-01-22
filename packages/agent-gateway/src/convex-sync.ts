@@ -2,6 +2,19 @@
  * Convex Sync
  *
  * Syncs gateway events to Convex for persistence and frontend real-time updates.
+ *
+ * ## Structured Streaming
+ *
+ * Streaming events are parsed into structured fields:
+ * - text: Plain text content
+ * - tool_use: Tool invocation with name and input
+ * - tool_result: Tool execution result
+ * - thinking: Claude's thinking output
+ * - error: Error messages
+ * - system: System messages
+ * - result: Final execution result
+ *
+ * Messages are stored with sequence numbers for proper ordering.
  */
 
 import type {
@@ -13,8 +26,27 @@ import type {
 } from "@agent-manager/agent-shared"
 import { ConvexHttpClient } from "convex/browser"
 
+// Track sequence numbers per session for message ordering
+const sessionSequences = new Map<string, number>()
+
 export class ConvexSync {
 	private client: ConvexHttpClient
+
+	// Batch buffer for high-throughput streaming
+	private batchBuffer: Map<
+		string,
+		{
+			messages: Array<{
+				sessionId: string
+				streamType?: string
+				content: unknown
+				sequenceNumber?: number
+			}>
+			timeout: ReturnType<typeof setTimeout> | null
+		}
+	> = new Map()
+	private readonly BATCH_SIZE = 10
+	private readonly BATCH_TIMEOUT_MS = 100
 
 	constructor(convexUrl: string) {
 		this.client = new ConvexHttpClient(convexUrl)
@@ -37,6 +69,20 @@ export class ConvexSync {
 				agentStatus: connected ? "online" : "offline",
 				lastSeenAt: Date.now(),
 			})
+
+			// Also update container pool status
+			if (connected) {
+				// @ts-expect-error - API types will be generated
+				await this.client.mutation("containerPool:register", {
+					containerId,
+					hostname,
+				})
+			} else {
+				// @ts-expect-error - API types will be generated
+				await this.client.mutation("containerPool:unregister", {
+					containerId,
+				})
+			}
 		} catch (error) {
 			console.error("[convex] Failed to update container connection:", error)
 		}
@@ -53,6 +99,9 @@ export class ConvexSync {
 		projectId?: string,
 	): Promise<void> {
 		try {
+			// Reset sequence for this session
+			sessionSequences.set(correlationId, 0)
+
 			// @ts-expect-error - API types will be generated
 			await this.client.mutation("agentSessions:create", {
 				sessionId: correlationId,
@@ -63,13 +112,20 @@ export class ConvexSync {
 				status: "starting",
 				startedAt: Date.now(),
 			})
+
+			// Update container pool to busy
+			// @ts-expect-error - API types will be generated
+			await this.client.mutation("containerPool:acquire", {
+				containerId,
+				sessionId: correlationId,
+			})
 		} catch (error) {
 			console.error("[convex] Failed to record exec start:", error)
 		}
 	}
 
 	/**
-	 * Record streaming event
+	 * Record streaming event with structured content
 	 */
 	async recordStreamEvent(
 		correlationId: string,
@@ -86,21 +142,100 @@ export class ConvexSync {
 				status: "running",
 			})
 
-			// Record the message
+			// Get next sequence number
+			const seq = sessionSequences.get(correlationId) ?? 0
+			sessionSequences.set(correlationId, seq + 1)
+
+			// Record the message with structured content
+			// The agentMessages.create mutation will parse the content
 			// @ts-expect-error - API types will be generated
 			await this.client.mutation("agentMessages:create", {
 				sessionId: correlationId,
-				messageType:
-					payload.streamType === "assistant"
-						? "assistant"
-						: payload.streamType === "result"
-							? "result"
-							: "system",
-				content: JSON.stringify(payload.data),
-				timestamp: Date.now(),
+				streamType: payload.streamType,
+				content: payload.data, // Pass raw data, not stringified
+				sequenceNumber: seq,
 			})
 		} catch (error) {
 			console.error("[convex] Failed to record stream event:", error)
+		}
+	}
+
+	/**
+	 * Record streaming event with batching for high-throughput
+	 * Collects messages and sends them in batches for efficiency
+	 */
+	async recordStreamEventBatched(
+		correlationId: string,
+		_containerId: string,
+		payload: ExecStreamPayload,
+		_taskId?: string,
+		_projectId?: string,
+	): Promise<void> {
+		// Get or create batch buffer for this session
+		let buffer = this.batchBuffer.get(correlationId)
+		if (!buffer) {
+			buffer = { messages: [], timeout: null }
+			this.batchBuffer.set(correlationId, buffer)
+		}
+
+		// Get next sequence number
+		const seq = sessionSequences.get(correlationId) ?? 0
+		sessionSequences.set(correlationId, seq + 1)
+
+		// Add message to buffer
+		buffer.messages.push({
+			sessionId: correlationId,
+			streamType: payload.streamType,
+			content: payload.data,
+			sequenceNumber: seq,
+		})
+
+		// If buffer is full, flush immediately
+		if (buffer.messages.length >= this.BATCH_SIZE) {
+			await this.flushBatch(correlationId)
+			return
+		}
+
+		// Set up timeout to flush if not full
+		if (!buffer.timeout) {
+			buffer.timeout = setTimeout(async () => {
+				await this.flushBatch(correlationId)
+			}, this.BATCH_TIMEOUT_MS)
+		}
+	}
+
+	/**
+	 * Flush batched messages for a session
+	 */
+	private async flushBatch(correlationId: string): Promise<void> {
+		const buffer = this.batchBuffer.get(correlationId)
+		if (!buffer || buffer.messages.length === 0) return
+
+		// Clear timeout
+		if (buffer.timeout) {
+			clearTimeout(buffer.timeout)
+			buffer.timeout = null
+		}
+
+		// Get messages and clear buffer
+		const messages = [...buffer.messages]
+		buffer.messages = []
+
+		try {
+			// Update session status to running
+			// @ts-expect-error - API types will be generated
+			await this.client.mutation("agentSessions:updateStatus", {
+				sessionId: correlationId,
+				status: "running",
+			})
+
+			// Send batch
+			// @ts-expect-error - API types will be generated
+			await this.client.mutation("agentMessages:createBatch", {
+				messages,
+			})
+		} catch (error) {
+			console.error("[convex] Failed to flush message batch:", error)
 		}
 	}
 
@@ -109,18 +244,34 @@ export class ConvexSync {
 	 */
 	async recordExecComplete(
 		correlationId: string,
-		_containerId: string,
+		containerId: string,
 		payload: ExecCompletePayload,
 		_taskId?: string,
 		_projectId?: string,
 	): Promise<void> {
 		try {
+			// Flush any remaining batched messages
+			await this.flushBatch(correlationId)
+
 			const status =
 				payload.result === "success"
 					? "completed"
 					: payload.result === "aborted"
 						? "cancelled"
 						: "failed"
+
+			// Record final result as a message
+			const seq = sessionSequences.get(correlationId) ?? 0
+			// @ts-expect-error - API types will be generated
+			await this.client.mutation("agentMessages:createStructured", {
+				sessionId: correlationId,
+				messageType: "result",
+				text:
+					typeof payload.resultText === "string"
+						? payload.resultText
+						: JSON.stringify(payload),
+				sequenceNumber: seq,
+			})
 
 			// @ts-expect-error - API types will be generated
 			await this.client.mutation("agentSessions:updateStatus", {
@@ -130,7 +281,19 @@ export class ConvexSync {
 				totalCostUsd: payload.totalCostUsd,
 				numTurns: payload.numTurns,
 				error: payload.error,
+				result: payload.resultText,
 			})
+
+			// Release container
+			// @ts-expect-error - API types will be generated
+			await this.client.mutation("containerPool:release", {
+				containerId,
+				sessionId: correlationId,
+			})
+
+			// Clean up sequence tracking
+			sessionSequences.delete(correlationId)
+			this.batchBuffer.delete(correlationId)
 		} catch (error) {
 			console.error("[convex] Failed to record exec complete:", error)
 		}
@@ -276,6 +439,20 @@ export class ConvexSync {
 			})
 		} catch (error) {
 			console.error(`[convex] Failed to skip phase ${phase}:`, error)
+		}
+	}
+
+	/**
+	 * Update container pool health check
+	 */
+	async updateContainerHealth(containerId: string): Promise<void> {
+		try {
+			// @ts-expect-error - API types will be generated
+			await this.client.mutation("containerPool:updateHealthCheck", {
+				containerId,
+			})
+		} catch (error) {
+			console.error("[convex] Failed to update container health:", error)
 		}
 	}
 }

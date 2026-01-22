@@ -24,7 +24,7 @@ import {
 	TooltipContent,
 	TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { agentGateway } from "@/lib/agent-gateway"
+import { useDeleteContainer, useStopContainer } from "@/hooks/useGatewayCommand"
 import type { Container } from "@/types"
 import { BuildLogViewer } from "./BuildLogViewer"
 import { type BuildPhase, BuildTimeline } from "./BuildTimeline"
@@ -47,6 +47,10 @@ export function ContainerDetailView({
 	const updateContainerStatus = useMutation(api.containers.updateStatus)
 	const deleteContainerFromDb = useMutation(api.containers.deleteContainer)
 
+	// Use Convex-driven gateway commands
+	const stopContainerCmd = useStopContainer()
+	const deleteContainerCmd = useDeleteContainer()
+
 	const isRunning = container.status === "running"
 	const canDelete = !isRunning
 	const serverHostname =
@@ -55,7 +59,7 @@ export function ContainerDetailView({
 	const handleStopContainer = async () => {
 		setIsStoppingContainer(true)
 		try {
-			await agentGateway.stopContainer(container.name, serverHostname)
+			await stopContainerCmd.execute(container.name, serverHostname)
 			await updateContainerStatus({
 				id: container.id as Parameters<typeof updateContainerStatus>[0]["id"],
 				status: "stopped",
@@ -77,8 +81,8 @@ export function ContainerDetailView({
 	const handleDeleteContainer = async () => {
 		setIsDeletingContainer(true)
 		try {
-			// First delete from Docker
-			await agentGateway.deleteContainer(container.name, serverHostname)
+			// First delete from Docker via Convex command
+			await deleteContainerCmd.execute(container.name, serverHostname)
 			// Then delete from database
 			await deleteContainerFromDb({
 				id: container.id as Parameters<typeof deleteContainerFromDb>[0]["id"],

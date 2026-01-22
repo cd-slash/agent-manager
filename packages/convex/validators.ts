@@ -1,5 +1,16 @@
 import { v } from "convex/values"
 
+// AI Provider type
+export const aiProviderTypeValidator = v.union(
+	v.literal("anthropic"),
+	v.literal("openai"),
+	v.literal("google"),
+	v.literal("custom"),
+)
+
+// Authentication type for AI providers
+export const authTypeValidator = v.union(v.literal("api_key"), v.literal("oauth"))
+
 // Task category status
 export const categoryValidator = v.union(
 	v.literal("backlog"),
@@ -22,6 +33,12 @@ export const containerStatusValidator = v.union(
 	v.literal("restarting"),
 	v.literal("paused"),
 	v.literal("exited"),
+)
+
+// Container type - distinguishes agent containers from management containers
+export const containerTypeValidator = v.union(
+	v.literal("agent"), // Standard containers for running agent tasks
+	v.literal("management"), // Reserved for auth and management operations
 )
 
 // Pull request status
@@ -124,4 +141,54 @@ export const prDetectedViaValidator = v.union(
 	v.literal("webhook"),
 	v.literal("agent"),
 	v.literal("manual"),
+)
+
+// Gateway command types - operations the gateway can perform
+export const gatewayCommandTypeValidator = v.union(
+	// Server commands (SSH/Docker operations)
+	v.literal("createContainer"),
+	v.literal("stopContainer"),
+	v.literal("deleteContainer"),
+	// Container commands (WebSocket to connected containers)
+	v.literal("startExecution"),
+	v.literal("abortExecution"),
+	v.literal("pushAuthToken"),
+	// Task orchestration
+	v.literal("startPhaseExecution"),
+)
+
+// Gateway command status
+export const gatewayCommandStatusValidator = v.union(
+	v.literal("pending"), // Waiting for gateway to pick up
+	v.literal("queued"), // Waiting for available container
+	v.literal("processing"), // Gateway is working on it
+	v.literal("completed"), // Success
+	v.literal("failed"), // Error occurred
+)
+
+// Gateway command priority (higher = more urgent)
+export const commandPriorityValidator = v.union(
+	v.literal("low"), // Background tasks, can wait
+	v.literal("normal"), // Default priority
+	v.literal("high"), // User-initiated, should run soon
+	v.literal("critical"), // Urgent, preempt if possible
+)
+
+// Container pool status
+export const containerPoolStatusValidator = v.union(
+	v.literal("idle"), // Available for new work
+	v.literal("busy"), // Currently executing a command
+	v.literal("reserved"), // Reserved for a specific task
+	v.literal("offline"), // Not connected to gateway
+)
+
+// Agent message content type (for structured streaming)
+export const agentMessageTypeValidator = v.union(
+	v.literal("text"), // Plain text output
+	v.literal("tool_use"), // Tool invocation
+	v.literal("tool_result"), // Tool result
+	v.literal("thinking"), // Claude's thinking
+	v.literal("error"), // Error message
+	v.literal("system"), // System message
+	v.literal("result"), // Final result
 )

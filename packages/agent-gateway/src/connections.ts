@@ -256,6 +256,25 @@ export class ConnectionManager {
 	}
 
 	/**
+	 * Check if a specific container is available for work
+	 * A container is available if it's healthy and has capacity for more processes
+	 */
+	isContainerAvailable(containerId: string): boolean {
+		const container = this.containers.get(containerId)
+		if (!container) return false
+
+		// Check health status
+		if (!container.health) return false
+		if (container.health.status === "error") return false
+
+		// Check capacity (if maxConcurrent is defined)
+		const activeProcs = container.health.activeProcesses ?? 0
+		const maxConcurrent = container.info.maxConcurrent ?? 1
+
+		return activeProcs < maxConcurrent
+	}
+
+	/**
 	 * Find a container that can execute a task
 	 */
 	findAvailableContainer(): ConnectedContainer | null {
@@ -265,13 +284,53 @@ export class ConnectionManager {
 			return null
 		}
 
-		// Sort by active processes (fewest first)
-		healthy.sort((a, b) => {
+		// Filter to only available containers (with capacity)
+		const available = healthy.filter((c) => {
+			const activeProcs = c.health?.activeProcesses ?? 0
+			const maxConcurrent = c.info.maxConcurrent ?? 1
+			return activeProcs < maxConcurrent
+		})
+
+		if (available.length === 0) {
+			return null
+		}
+
+		// Sort by active processes (fewest first) - LRU-like behavior
+		available.sort((a, b) => {
 			const aProcs = a.health?.activeProcesses ?? 0
 			const bProcs = b.health?.activeProcesses ?? 0
 			return aProcs - bProcs
 		})
 
-		return healthy[0] ?? null
+		return available[0] ?? null
+	}
+
+	/**
+	 * Get container availability summary for queue management
+	 */
+	getAvailabilitySummary(): {
+		total: number
+		available: number
+		busy: number
+		containerIds: { available: string[]; busy: string[] }
+	} {
+		const containers = this.getAllContainers()
+		const available: string[] = []
+		const busy: string[] = []
+
+		for (const container of containers) {
+			if (this.isContainerAvailable(container.info.containerId)) {
+				available.push(container.info.containerId)
+			} else {
+				busy.push(container.info.containerId)
+			}
+		}
+
+		return {
+			total: containers.length,
+			available: available.length,
+			busy: busy.length,
+			containerIds: { available, busy },
+		}
 	}
 }

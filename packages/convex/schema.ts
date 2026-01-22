@@ -1,6 +1,14 @@
 import { defineSchema, defineTable } from "convex/server"
 import { v } from "convex/values"
 import {
+	agentMessageTypeValidator,
+	aiProviderTypeValidator,
+	authTypeValidator,
+	commandPriorityValidator,
+	containerPoolStatusValidator,
+	containerTypeValidator,
+	gatewayCommandStatusValidator,
+	gatewayCommandTypeValidator,
 	phaseStatusValidator,
 	prDetectedViaValidator,
 	remediationTriggerValidator,
@@ -237,6 +245,8 @@ export default defineSchema({
 			v.literal("exited"),
 		),
 		port: v.string(),
+		// Container type - "agent" for task execution, "management" for auth/admin
+		containerType: v.optional(containerTypeValidator), // Optional for backward compat, defaults to "agent"
 		// Server hostname for containers without serverId (e.g., agent-gateway created)
 		serverHostname: v.optional(v.string()),
 		// Tailscale integration fields
@@ -248,7 +258,8 @@ export default defineSchema({
 	})
 		.index("by_server", ["serverId"])
 		.index("by_status", ["status"])
-		.index("by_tailscale_node_id", ["tailscaleNodeId"]),
+		.index("by_tailscale_node_id", ["tailscaleNodeId"])
+		.index("by_container_type", ["containerType"]),
 
 	// Server metrics - time-series metrics
 	serverMetrics: defineTable({
@@ -337,18 +348,33 @@ export default defineSchema({
 		.index("by_status", ["status"]),
 
 	// Agent messages - streaming output from Claude Code CLI
+	// Stores structured content for rich display and analysis
 	agentMessages: defineTable({
 		sessionId: v.string(), // References agentSessions.sessionId
-		messageType: v.union(
-			v.literal("assistant"),
-			v.literal("result"),
-			v.literal("system"),
-		),
-		content: v.string(), // JSON stringified CliOutputMessage
+
+		// Message classification
+		messageType: agentMessageTypeValidator,
+		streamType: v.optional(v.string()), // Original stream type from CLI (assistant, result, system)
+
+		// Structured content fields
+		text: v.optional(v.string()), // Text content for text/thinking/error types
+		toolName: v.optional(v.string()), // Tool name for tool_use/tool_result
+		toolId: v.optional(v.string()), // Tool call ID for correlation
+		toolInput: v.optional(v.any()), // Tool input parameters (JSON object)
+		toolResult: v.optional(v.any()), // Tool result data (JSON object)
+		isError: v.optional(v.boolean()), // Whether tool result is an error
+
+		// For backward compatibility - raw JSON content
+		rawContent: v.optional(v.string()), // Original JSON stringified content
+
+		// Metadata
 		timestamp: v.number(),
+		sequenceNumber: v.optional(v.number()), // Order within session for streaming
 	})
 		.index("by_session", ["sessionId"])
-		.index("by_session_and_timestamp", ["sessionId", "timestamp"]),
+		.index("by_session_and_timestamp", ["sessionId", "timestamp"])
+		.index("by_session_and_sequence", ["sessionId", "sequenceNumber"])
+		.index("by_session_and_type", ["sessionId", "messageType"]),
 
 	// Notifications - notification queue for toast messages
 	notifications: defineTable({
@@ -377,6 +403,29 @@ export default defineSchema({
 		value: v.string(),
 		description: v.optional(v.string()),
 	}).index("by_key", ["key"]),
+
+	// AI Providers - configuration for AI model providers (Anthropic, OpenAI, Google)
+	aiProviders: defineTable({
+		name: v.string(),
+		type: aiProviderTypeValidator,
+		enabled: v.boolean(),
+		authType: authTypeValidator,
+		// API Key auth - references secrets table
+		apiKeySecretKey: v.optional(v.string()),
+		// OAuth auth - uses existing gateway flow, token stored as ANTHROPIC_AUTH_TOKEN in secrets
+		models: v.array(
+			v.object({
+				id: v.string(),
+				name: v.string(),
+				enabled: v.boolean(),
+			}),
+		),
+		isBuiltin: v.boolean(),
+		createdAt: v.number(),
+		updatedAt: v.number(),
+	})
+		.index("by_type", ["type"])
+		.index("by_enabled", ["enabled"]),
 
 	// Container builds - top-level build session tracking
 	containerBuilds: defineTable({
@@ -479,6 +528,32 @@ export default defineSchema({
 		.index("by_task_and_cycle", ["taskId", "cycleNumber"])
 		.index("by_status", ["status"]),
 
+	// OAuth flows - track OAuth flow requests for gateway processing
+	// Frontend creates a flow, gateway processes it, updates with results
+	oauthFlows: defineTable({
+		provider: v.string(), // "anthropic", "openai", etc.
+		status: v.union(
+			v.literal("pending"), // Waiting for gateway to process
+			v.literal("started"), // Gateway initiated OAuth, has URL
+			v.literal("code_received"), // User submitted auth code
+			v.literal("completing"), // Gateway is exchanging code for token
+			v.literal("completed"), // Successfully got token
+			v.literal("failed"), // Error occurred
+		),
+		// Set by gateway when it starts the flow
+		oauthUrl: v.optional(v.string()),
+		flowId: v.optional(v.string()), // Gateway's internal flow ID
+		expiresAt: v.optional(v.number()),
+		// Set by frontend when user submits code
+		authCode: v.optional(v.string()),
+		// Set by gateway on completion
+		error: v.optional(v.string()),
+		createdAt: v.number(),
+		updatedAt: v.number(),
+	})
+		.index("by_status", ["status"])
+		.index("by_provider_and_status", ["provider", "status"]),
+
 	// Phase configs - store default and per-task agent configurations
 	phaseConfigs: defineTable({
 		taskId: v.optional(v.id("tasks")), // null = global default
@@ -496,4 +571,130 @@ export default defineSchema({
 	})
 		.index("by_phase", ["phase"])
 		.index("by_task_and_phase", ["taskId", "phase"]),
+
+	// Gateway commands - queued work for the gateway to process
+	// Frontend creates commands, gateway subscribes and processes them
+	// Supports priority-based queuing and automatic retry
+	gatewayCommands: defineTable({
+		// Command type determines what operation to perform
+		type: gatewayCommandTypeValidator,
+
+		// Status tracks command lifecycle
+		// pending -> queued (waiting for container) -> processing -> completed/failed
+		status: gatewayCommandStatusValidator,
+
+		// Priority for queue ordering (higher = more urgent)
+		priority: commandPriorityValidator,
+
+		// Payload contains type-specific parameters (varies by command type)
+		// createContainer: { repo, branch?, name?, server?, sshUser?, taskId?, projectId? }
+		// stopContainer: { containerName, server, sshUser? }
+		// deleteContainer: { containerName, server, sshUser? }
+		// startExecution: { containerId?, message, model?, workingDirectory?, permissionMode?, ... }
+		// abortExecution: { correlationId }
+		// pushAuthToken: { containerId, token }
+		// startPhaseExecution: { taskId, phase, containerId?, customPrompt?, configOverrides? }
+		payload: v.any(),
+
+		// Result set by gateway on completion (type-specific)
+		result: v.optional(v.any()),
+
+		// Error message if command failed
+		error: v.optional(v.string()),
+
+		// For execution commands - correlation ID for tracking streams
+		correlationId: v.optional(v.string()),
+
+		// For task-related commands
+		taskId: v.optional(v.string()),
+		projectId: v.optional(v.string()),
+
+		// Container assignment (for execution commands)
+		assignedContainerId: v.optional(v.string()), // Container assigned to this command
+
+		// Retry handling
+		retryCount: v.number(), // Current retry attempt (0 = first attempt)
+		maxRetries: v.number(), // Maximum retries before permanent failure
+		lastError: v.optional(v.string()), // Error from last retry attempt
+
+		// Queue position tracking
+		queuePosition: v.optional(v.number()), // Position in queue (for UI display)
+
+		// Timestamps
+		createdAt: v.number(),
+		updatedAt: v.number(),
+		queuedAt: v.optional(v.number()), // When command entered queue
+		processedAt: v.optional(v.number()), // When gateway started processing
+		completedAt: v.optional(v.number()), // When command finished
+	})
+		.index("by_status", ["status"])
+		.index("by_type_and_status", ["type", "status"])
+		.index("by_correlation_id", ["correlationId"])
+		.index("by_priority_and_status", ["priority", "status"])
+		.index("by_assigned_container", ["assignedContainerId"])
+		.index("by_task", ["taskId"]),
+
+	// Container pool - tracks container availability for execution commands
+	// Gateway maintains this based on container connections and execution state
+	containerPool: defineTable({
+		containerId: v.string(), // Container identifier
+		hostname: v.string(), // Tailscale/network hostname
+
+		// Availability status
+		status: containerPoolStatusValidator,
+
+		// Current work assignment
+		currentSessionId: v.optional(v.string()), // Active session correlation ID
+		currentCommandId: v.optional(v.id("gatewayCommands")), // Command being executed
+		reservedForTaskId: v.optional(v.string()), // If reserved for a specific task
+
+		// Capacity and health
+		capabilities: v.optional(v.array(v.string())), // Container capabilities
+		maxConcurrent: v.number(), // Max concurrent executions (usually 1)
+		currentLoad: v.number(), // Current number of executions
+
+		// Timestamps
+		connectedAt: v.number(),
+		lastActivityAt: v.number(),
+		lastHealthCheck: v.optional(v.number()),
+	})
+		.index("by_container_id", ["containerId"])
+		.index("by_status", ["status"])
+		.index("by_status_and_activity", ["status", "lastActivityAt"]),
+
+	// Execution queue - dedicated queue for execution commands
+	// Provides more granular control over execution scheduling
+	executionQueue: defineTable({
+		commandId: v.id("gatewayCommands"), // Reference to the command
+		taskId: v.optional(v.string()),
+		projectId: v.optional(v.string()),
+
+		// Queue management
+		priority: commandPriorityValidator,
+		queuedAt: v.number(),
+		estimatedWaitMs: v.optional(v.number()), // Estimated wait time
+
+		// Assignment
+		assignedContainerId: v.optional(v.string()),
+		assignedAt: v.optional(v.number()),
+
+		// Status
+		status: v.union(
+			v.literal("waiting"), // Waiting for container
+			v.literal("assigned"), // Container assigned, about to start
+			v.literal("executing"), // Currently executing
+			v.literal("completed"), // Done
+			v.literal("failed"), // Failed
+			v.literal("cancelled"), // Cancelled
+		),
+
+		// Metrics
+		startedAt: v.optional(v.number()),
+		completedAt: v.optional(v.number()),
+	})
+		.index("by_status", ["status"])
+		.index("by_priority_and_queued", ["priority", "queuedAt"])
+		.index("by_command", ["commandId"])
+		.index("by_assigned_container", ["assignedContainerId"])
+		.index("by_task", ["taskId"]),
 })

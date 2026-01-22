@@ -767,6 +767,307 @@ This approach means:
 - No per-container authentication flow required
 - Token can be manually updated via POST /auth/token if needed
 
+## Command Queuing System
+
+The command queuing system ensures that agent prompts are never lost and are executed in priority order when containers become available.
+
+### Queue Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         COMMAND QUEUING FLOW                                 │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  Frontend                  Convex                    Gateway                 │
+│  ────────                  ──────                    ───────                 │
+│                                                                              │
+│  User initiates     ┌──────────────────┐                                    │
+│  execution          │ gatewayCommands  │     ConvexCommandProcessor         │
+│       │             │     (pending)    │            subscribes              │
+│       ▼             └──────────────────┘                 │                  │
+│  ┌──────────┐              │                             │                  │
+│  │  Call    │──────────────┼─────────────────────────────▶                  │
+│  │startExec │              │                             │                  │
+│  └──────────┘              │                             ▼                  │
+│                            │                   ┌──────────────────┐         │
+│                            │                   │ Container avail? │         │
+│                            │                   └──────────────────┘         │
+│                            │                      │           │             │
+│                            │                     YES          NO            │
+│                            │                      │           │             │
+│                            ▼                      ▼           ▼             │
+│                   ┌──────────────────┐    ┌────────────┐ ┌────────────┐     │
+│                   │ executionQueue   │    │ Processing │ │  Queued    │     │
+│                   │   (tracking)     │    │ (execute)  │ │  (wait)    │     │
+│                   └──────────────────┘    └────────────┘ └────────────┘     │
+│                            │                      │           │             │
+│                            │                      │           │             │
+│                            │                      │    ┌──────┴─────┐       │
+│                            │                      │    │ Container  │       │
+│                            │                      │    │ available  │       │
+│                            │                      │    └──────┬─────┘       │
+│                            │                      │           │             │
+│                            │                      ▼           ▼             │
+│                            │              ┌─────────────────────┐           │
+│                            │              │    Execute on       │           │
+│                            │              │     Container       │           │
+│                            │              └─────────────────────┘           │
+│                            │                      │                         │
+│                            ▼                      ▼                         │
+│                   ┌──────────────────┐    ┌────────────────┐                │
+│                   │    Completed     │◀───│  Update status │                │
+│                   │    (results)     │    │  in Convex     │                │
+│                   └──────────────────┘    └────────────────┘                │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Command Lifecycle
+
+Commands progress through these states:
+
+| State | Description |
+|-------|-------------|
+| `pending` | Command created, waiting for gateway to pick up |
+| `queued` | Gateway received but no container available, waiting in queue |
+| `processing` | Container assigned and executing |
+| `completed` | Successfully finished |
+| `failed` | Error occurred (may retry) |
+
+### Priority System
+
+Commands have four priority levels that determine execution order:
+
+| Priority | Value | Use Case |
+|----------|-------|----------|
+| `critical` | 4 | Abort commands, urgent operations |
+| `high` | 3 | User-initiated actions, auth token pushes |
+| `normal` | 2 | Standard task executions (default) |
+| `low` | 1 | Background tasks, batch operations |
+
+Within the same priority level, commands execute in FIFO order (oldest first).
+
+### Retry Configuration
+
+Commands can automatically retry on failure:
+
+```typescript
+// Default retry settings
+const DEFAULT_MAX_RETRIES = 3      // Container/server commands
+const EXECUTION_MAX_RETRIES = 2    // Agent execution commands
+```
+
+Retry behavior:
+- Transient failures (network, container restart) retry automatically
+- Commands return to `pending` state with incremented `retryCount`
+- After `maxRetries`, command enters permanent `failed` state
+- Non-retryable errors (validation, auth) fail immediately
+
+### Container Pool Management
+
+The `containerPool` table tracks container availability:
+
+```typescript
+containerPool: defineTable({
+  containerId: v.string(),
+  hostname: v.string(),
+  status: v.union(
+    v.literal("idle"),      // Available for work
+    v.literal("busy"),      // Currently executing
+    v.literal("reserved"),  // Reserved for specific task
+    v.literal("offline")    // Not connected
+  ),
+  currentSessionId: v.optional(v.string()),
+  currentCommandId: v.optional(v.id("gatewayCommands")),
+  reservedForTaskId: v.optional(v.string()),
+  maxConcurrent: v.number(),    // Capacity (usually 1)
+  currentLoad: v.number(),      // Active executions
+  lastActivityAt: v.number(),
+  lastHealthCheck: v.optional(v.number()),
+})
+```
+
+Container selection uses LRU (Least Recently Used) strategy - the container with the oldest `lastActivityAt` is selected first.
+
+### Execution Queue Table
+
+For detailed tracking of execution commands:
+
+```typescript
+executionQueue: defineTable({
+  commandId: v.id("gatewayCommands"),
+  taskId: v.optional(v.string()),
+  projectId: v.optional(v.string()),
+  priority: commandPriorityValidator,
+  queuedAt: v.number(),
+  estimatedWaitMs: v.optional(v.number()),
+  assignedContainerId: v.optional(v.string()),
+  assignedAt: v.optional(v.number()),
+  status: v.union(
+    v.literal("waiting"),    // In queue
+    v.literal("assigned"),   // Container assigned
+    v.literal("executing"),  // Running
+    v.literal("completed"),  // Done
+    v.literal("failed"),     // Error
+    v.literal("cancelled")   // Aborted
+  ),
+  startedAt: v.optional(v.number()),
+  completedAt: v.optional(v.number()),
+})
+```
+
+### ConvexCommandProcessor
+
+The gateway's `ConvexCommandProcessor` class manages command execution:
+
+```typescript
+class ConvexCommandProcessor {
+  // Subscriptions
+  - Subscribes to `gatewayCommands.getPending` for new commands
+  - Subscribes to `gatewayCommands.getQueued` for queue state
+
+  // Queue processing
+  - Checks for available containers every 1 second
+  - Assigns highest priority queued command to available container
+  - Tracks active executions for abort handling
+
+  // Command types
+  - CONTAINER_COMMANDS: startExecution, startPhaseExecution, pushAuthToken
+    → Queue if no container available
+  - SERVER_COMMANDS: createContainer, stopContainer, deleteContainer
+    → Execute immediately (don't require container WebSocket)
+}
+```
+
+### API Functions
+
+**Frontend Mutations:**
+- `gatewayCommands.startExecution` - Start agent execution
+- `gatewayCommands.startPhaseExecution` - Start task phase
+- `gatewayCommands.abortExecution` - Abort running execution
+
+**Gateway Mutations:**
+- `gatewayCommands.markProcessing` - Mark command in progress
+- `gatewayCommands.markQueued` - Mark command waiting for container
+- `gatewayCommands.assignContainer` - Assign container to command
+- `gatewayCommands.complete` - Mark command completed with result
+- `gatewayCommands.fail` - Mark command failed (with retry logic)
+
+**Container Pool:**
+- `containerPool.register` - Container connects
+- `containerPool.unregister` - Container disconnects
+- `containerPool.acquire` - Reserve container for execution
+- `containerPool.release` - Free container after execution
+- `containerPool.getAvailable` - List idle containers (LRU sorted)
+
+## Structured Streaming Storage
+
+Agent messages are stored in structured format for rich display and analysis.
+
+### Message Types
+
+```typescript
+agentMessageTypeValidator = v.union(
+  v.literal("text"),        // Plain text output
+  v.literal("tool_use"),    // Tool invocation
+  v.literal("tool_result"), // Tool execution result
+  v.literal("thinking"),    // Claude's thinking output
+  v.literal("error"),       // Error message
+  v.literal("system"),      // System message
+  v.literal("result")       // Final execution result
+)
+```
+
+### Structured Message Schema
+
+```typescript
+agentMessages: defineTable({
+  sessionId: v.string(),
+  messageType: agentMessageTypeValidator,
+  streamType: v.optional(v.string()),  // Original stream type
+
+  // Structured content fields
+  text: v.optional(v.string()),
+  toolName: v.optional(v.string()),
+  toolId: v.optional(v.string()),
+  toolInput: v.optional(v.any()),
+  toolResult: v.optional(v.any()),
+  isError: v.optional(v.boolean()),
+
+  // Backward compatibility
+  rawContent: v.optional(v.string()),
+
+  // Ordering
+  timestamp: v.number(),
+  sequenceNumber: v.optional(v.number()),
+})
+```
+
+### Content Parsing
+
+The `agentMessages.create` mutation automatically parses streaming content:
+
+```
+Input (raw stream)                    Output (structured)
+──────────────────                    ───────────────────
+
+{ "type": "tool_use",            →    messageType: "tool_use"
+  "content_block": {                  toolId: "call_123"
+    "id": "call_123",                 toolName: "Read"
+    "name": "Read"                    toolInput: undefined (from delta)
+  }}
+
+{ "type": "tool_result",         →    messageType: "tool_result"
+  "tool_use_id": "call_123",          toolId: "call_123"
+  "content": [...],                   toolResult: [...]
+  "is_error": false }                 isError: false
+
+Plain text string                →    messageType: "text"
+                                      text: "string content"
+```
+
+### Batch Processing
+
+For high-throughput streaming, messages can be batched:
+
+```typescript
+// ConvexSync batches messages
+private BATCH_SIZE = 10
+private BATCH_TIMEOUT_MS = 100
+
+// Batch mutation
+agentMessages.createBatch({ messages: [
+  { sessionId, streamType, content, sequenceNumber },
+  ...
+]})
+```
+
+### Session Summary Query
+
+```typescript
+agentMessages.getSessionSummary({ sessionId })
+// Returns:
+{
+  totalMessages: number,
+  byType: { text: n, tool_use: n, tool_result: n, ... },
+  toolsUsed: string[],
+  hasErrors: boolean,
+  firstTimestamp: number,
+  lastTimestamp: number
+}
+```
+
+### Tool Call Queries
+
+```typescript
+// Get only tool-related messages
+agentMessages.getToolCalls({ sessionId })
+// Returns tool_use and tool_result messages in order
+
+// Get messages by type
+agentMessages.getByType({ sessionId, messageType: "error" })
+```
+
 ## Container API Architecture
 
 The Container API (`packages/container-api`) runs inside each agent container and manages the Claude Code CLI.

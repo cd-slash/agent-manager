@@ -9,9 +9,9 @@ import {
 } from "lucide-react"
 import { useState } from "react"
 import { useToast } from "@/components/ToastProvider"
-import { agentGateway } from "@/lib/agent-gateway"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { useStartPhaseExecution } from "@/hooks/useGatewayCommand"
 import type { TaskId, TaskPhaseDoc } from "@/types"
 import { PhaseConfigPanel } from "./PhaseConfigPanel"
 import { PhaseStatusHeader } from "./PhaseStatusHeader"
@@ -30,6 +30,7 @@ export function ImplementationTab({
 	const toast = useToast()
 	const [showConfig, setShowConfig] = useState(false)
 	const [isStarting, setIsStarting] = useState(false)
+	const startPhaseCmd = useStartPhaseExecution()
 
 	const status = implementationPhase?.status || "pending"
 	const isPending = status === "pending"
@@ -40,9 +41,9 @@ export function ImplementationTab({
 	const handleStartImplementation = async () => {
 		setIsStarting(true)
 		try {
-			// Call gateway to start phase execution
+			// Call gateway to start phase execution via Convex
 			// This will create/assign a container, generate prompt, and start the agent
-			const result = await agentGateway.startPhaseExecution({
+			const result = await startPhaseCmd.execute({
 				taskId: taskId as string,
 				phase: "implementation",
 			})

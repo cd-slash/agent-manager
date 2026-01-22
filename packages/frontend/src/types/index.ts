@@ -10,6 +10,43 @@ type Doc<T extends string> = { _id: Id<T>; _creationTime: number } & Record<
 	unknown
 >
 
+// AI Provider types
+export type AiProviderType = "anthropic" | "openai" | "google" | "custom"
+export type AuthType = "api_key" | "oauth"
+
+export interface AiModelConfig {
+	id: string
+	name: string
+	enabled: boolean
+}
+
+export type AiProviderDoc = Doc<"aiProviders"> & {
+	name: string
+	type: AiProviderType
+	enabled: boolean
+	authType: AuthType
+	apiKeySecretKey?: string
+	models: AiModelConfig[]
+	isBuiltin: boolean
+	createdAt: number
+	updatedAt: number
+}
+
+export interface EnabledModel {
+	id: string
+	name: string
+	providerId: string
+	providerName: string
+	providerType: AiProviderType
+}
+
+export interface EnabledModelsGrouped {
+	providerId: string
+	providerName: string
+	providerType: AiProviderType
+	models: Array<{ id: string; name: string }>
+}
+
 // Task phase types (defined early to avoid forward references)
 export type TaskPhase =
 	| "requirements"
@@ -407,6 +444,7 @@ export interface ServerWithContainers extends ServerDoc {
 }
 
 // Type helpers for Convex IDs
+export type AiProviderId = Id<"aiProviders">
 export type ProjectId = Id<"projects">
 export type TaskId = Id<"tasks">
 export type AcceptanceCriteriaId = Id<"acceptanceCriteria">

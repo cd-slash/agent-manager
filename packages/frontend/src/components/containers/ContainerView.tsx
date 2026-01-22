@@ -31,7 +31,11 @@ import {
 	TooltipContent,
 	TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { agentGateway } from "@/lib/agent-gateway"
+import {
+	useCreateContainer,
+	useDeleteContainer,
+	useStopContainer,
+} from "@/hooks/useGatewayCommand"
 import type { Container } from "@/types"
 
 interface ContainerViewProps {
@@ -71,13 +75,18 @@ export function ContainerView({
 	const deleteContainerFromDb = useMutation(api.containers.deleteContainer)
 	const toast = useToast()
 
+	// Use Convex-driven gateway commands
+	const stopContainerCmd = useStopContainer()
+	const deleteContainerCmd = useDeleteContainer()
+	const createContainerCmd = useCreateContainer()
+
 	const handleStopContainer = useCallback(
 		async (container: Container) => {
 			const serverHostname =
 				container.serverHostname || container.server || "localhost"
 			setStoppingContainers((prev) => new Set(prev).add(container.id))
 			try {
-				await agentGateway.stopContainer(container.name, serverHostname)
+				await stopContainerCmd.execute(container.name, serverHostname)
 				await updateContainerStatus({
 					id: container.id as Parameters<typeof updateContainerStatus>[0]["id"],
 					status: "stopped",
@@ -99,7 +108,7 @@ export function ContainerView({
 				})
 			}
 		},
-		[updateContainerStatus, toast],
+		[stopContainerCmd, updateContainerStatus, toast],
 	)
 
 	const handleDeleteContainer = useCallback(
@@ -115,7 +124,7 @@ export function ContainerView({
 				container.serverHostname || container.server || "localhost"
 			setDeletingContainers((prev) => new Set(prev).add(container.id))
 			try {
-				await agentGateway.deleteContainer(container.name, serverHostname)
+				await deleteContainerCmd.execute(container.name, serverHostname)
 				await deleteContainerFromDb({
 					id: container.id as Parameters<typeof deleteContainerFromDb>[0]["id"],
 				})
@@ -136,7 +145,7 @@ export function ContainerView({
 				})
 			}
 		},
-		[deleteContainerFromDb, toast],
+		[deleteContainerCmd, deleteContainerFromDb, toast],
 	)
 
 	const handleBulkStop = async () => {
@@ -170,7 +179,7 @@ export function ContainerView({
 		name?: string
 		server: string
 	}) => {
-		const result = await agentGateway.createContainer({
+		const result = await createContainerCmd.execute({
 			repo: data.repo,
 			branch: data.branch,
 			name: data.name,

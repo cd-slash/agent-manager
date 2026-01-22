@@ -25,12 +25,11 @@ import type {
 	OAuthStartResult,
 } from "./types"
 
-// Type for Bun.spawn subprocess with terminal
+// Type for Bun.spawn subprocess with piped stdin/stdout
 interface BunSubprocess {
-	terminal?: {
-		write(data: string): void
-		close(): void
-	}
+	stdin: WritableStream<Uint8Array>
+	stdout: ReadableStream<Uint8Array>
+	stderr: ReadableStream<Uint8Array>
 	kill(): void
 	exited: Promise<number>
 }
@@ -132,7 +131,7 @@ export class AuthManager extends EventEmitter {
 
 	/**
 	 * Start OAuth flow using `claude setup-token`
-	 * Uses Bun.spawn with terminal option for proper PTY handling of the Ink TUI.
+	 * Uses `script` command to create a proper PTY that Ink can use.
 	 * Returns a URL for the user to visit.
 	 */
 	async startOAuthFlow(): Promise<OAuthStartResult> {
@@ -142,7 +141,6 @@ export class AuthManager extends EventEmitter {
 		console.log(`[auth] Starting OAuth flow: ${flowId}`)
 
 		// Shared state to track output across both start and complete phases
-		// This is mutable so we can accumulate output in the data callback
 		const outputState: OAuthFlowOutput = {
 			allOutput: "",
 			foundToken: "",
@@ -151,16 +149,30 @@ export class AuthManager extends EventEmitter {
 
 		// State to resolve URL promise
 		let urlResolve: ((url: string) => void) | null = null
-		let _urlReject: ((err: Error) => void) | null = null
 		let foundUrl = ""
 
-		// Use Bun.spawn with terminal option for proper PTY handling
-		const proc = Bun.spawn(["claude", "setup-token"], {
-			terminal: {
-				cols: 120,
-				rows: 40,
-				data(_terminal, data) {
-					const chunk = data.toString()
+		// Use `script` command to create a proper PTY that Ink can use
+		// Bun's terminal option doesn't properly support Ink's raw mode requirements
+		const proc = Bun.spawn(
+			["script", "-q", "-c", "claude setup-token", "/dev/null"],
+			{
+				stdin: "pipe",
+				stdout: "pipe",
+				stderr: "pipe",
+				env: process.env,
+			},
+		) as unknown as BunSubprocess
+		console.log("[auth] PTY process spawned via script, waiting for output...")
+
+		// Process stdout in background
+		const processOutput = async () => {
+			const reader = proc.stdout.getReader()
+			try {
+				while (true) {
+					const { done, value } = await reader.read()
+					if (done) break
+
+					const chunk = new TextDecoder().decode(value)
 					outputState.allOutput += chunk
 
 					// Clean ANSI codes for logging
@@ -179,7 +191,9 @@ export class AuthManager extends EventEmitter {
 						/https:\/\/claude\.ai\/oauth\/authorize[^\s\x1b\]]+/,
 					)
 					if (urlMatch && !foundUrl) {
-						foundUrl = urlMatch[0].replace(/\x1b\[[0-9;]*[a-zA-Z]/g, "").trim()
+						foundUrl = urlMatch[0]
+							.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, "")
+							.trim()
 						console.log(`[auth] Found OAuth URL: ${foundUrl}`)
 						if (urlResolve) {
 							urlResolve(foundUrl)
@@ -187,38 +201,38 @@ export class AuthManager extends EventEmitter {
 						}
 					}
 
-					// Look for token in the output (multiple possible formats)
-					// Tokens typically start with sk-ant- followed by alphanumeric chars
+					// Look for token in the output
 					const tokenPatterns = [
-						/sk-ant-[a-zA-Z0-9_-]{20,}/g, // General format
-						/sk-ant-oat01-[a-zA-Z0-9_-]+/g, // OAuth token format
+						/sk-ant-[a-zA-Z0-9_-]{20,}/g,
+						/sk-ant-oat01-[a-zA-Z0-9_-]+/g,
 					]
 
 					for (const pattern of tokenPatterns) {
 						const matches = chunk.match(pattern)
 						if (matches && !outputState.foundToken) {
-							// Clean ANSI codes from token
 							const token = matches[0]
 								.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, "")
 								.trim()
 							if (token.length > 20) {
-								// Sanity check
 								outputState.foundToken = token
 								console.log(
-									`[auth] ✅ Token found in PTY output: ${token.substring(0, 20)}...`,
+									`[auth] Token found in PTY output: ${token.substring(0, 20)}...`,
 								)
 							}
 						}
 					}
-				},
-			},
-			env: process.env,
-		}) as BunSubprocess
+				}
+			} catch (err) {
+				console.error("[auth] Output reader error:", err)
+			}
+		}
+
+		// Start processing output in background
+		processOutput()
 
 		// Wait for URL with timeout
 		const url = await new Promise<string>((resolve, reject) => {
 			urlResolve = resolve
-			_urlReject = reject
 
 			// If URL was already found during setup
 			if (foundUrl) {
@@ -227,6 +241,7 @@ export class AuthManager extends EventEmitter {
 			}
 
 			const timeout = setTimeout(() => {
+				console.log("[auth] Timeout waiting for OAuth URL, killing process")
 				proc.kill()
 				reject(
 					new Error(
@@ -236,27 +251,37 @@ export class AuthManager extends EventEmitter {
 			}, 60000) // 60 second timeout
 
 			// Also check when process exits
-			proc.exited.then((exitCode) => {
-				clearTimeout(timeout)
-				if (!foundUrl) {
-					reject(
-						new Error(
-							`Process exited (code ${exitCode}) without URL. Output: ${outputState.allOutput.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, "")}`,
-						),
-					)
-				}
-			})
+			proc.exited
+				.then((exitCode) => {
+					clearTimeout(timeout)
+					if (!foundUrl) {
+						console.log(
+							`[auth] Process exited with code ${exitCode} without finding URL`,
+						)
+						reject(
+							new Error(
+								`Process exited (code ${exitCode}) without URL. Output: ${outputState.allOutput.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, "")}`,
+							),
+						)
+					}
+				})
+				.catch((exitError) => {
+					clearTimeout(timeout)
+					const msg =
+						exitError instanceof Error ? exitError.message : String(exitError)
+					console.error(`[auth] Process exit error: ${msg}`)
+					reject(new Error(`Process error: ${msg}`))
+				})
 		})
 
 		// Store flow state with process handle and shared output state
-		// The outputState is mutable, so completeOAuthFlow can read accumulated output
 		this.activeFlows.set(flowId, {
 			flowId,
 			url,
 			expiresAt: Date.now() + expiresIn * 1000,
 			port: 0,
 			server: outputState, // Store outputState in 'server' field (re-purposing unused field)
-			process: proc, // BunSubprocess - we write code via terminal.write()
+			process: proc,
 		})
 
 		console.log(`[auth] OAuth flow started: ${flowId}, URL: ${url}`)
@@ -289,9 +314,9 @@ export class AuthManager extends EventEmitter {
 		const proc = flow.process as BunSubprocess | undefined
 		const outputState = flow.server as OAuthFlowOutput | undefined
 
-		if (!proc || !proc.terminal) {
+		if (!proc || !proc.stdin) {
 			this.activeFlows.delete(flowId)
-			throw new Error("OAuth flow process/terminal not available")
+			throw new Error("OAuth flow process/stdin not available")
 		}
 
 		try {
@@ -299,15 +324,17 @@ export class AuthManager extends EventEmitter {
 			const codeOnly = (code.split("#")[0] ?? code).trim()
 
 			console.log(
-				`[auth] ⏳ Sending authorization code (${codeOnly.length} chars) to PTY`,
+				`[auth] Sending authorization code (${codeOnly.length} chars) to PTY`,
 			)
 
-			// Write the code to the PTY terminal
+			// Write the code to stdin
 			// Add a small delay to ensure the TUI is ready for input
 			await Bun.sleep(500)
 
-			// Send the code followed by Enter (use \r for terminal)
-			proc.terminal.write(`${codeOnly}\r`)
+			// Send the code followed by Enter via stdin
+			const writer = proc.stdin.getWriter()
+			await writer.write(new TextEncoder().encode(`${codeOnly}\r`))
+			writer.releaseLock()
 
 			if (outputState) {
 				outputState.codeWasSent = true

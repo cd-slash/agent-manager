@@ -11,10 +11,13 @@
 import type * as acceptanceCriteria from "../acceptanceCriteria.js";
 import type * as agentMessages from "../agentMessages.js";
 import type * as agentSessions from "../agentSessions.js";
+import type * as aiProviders from "../aiProviders.js";
 import type * as chat from "../chat.js";
 import type * as containerBuilds from "../containerBuilds.js";
+import type * as containerPool from "../containerPool.js";
 import type * as containers from "../containers.js";
 import type * as crons from "../crons.js";
+import type * as gatewayCommands from "../gatewayCommands.js";
 import type * as http from "../http.js";
 import type * as internal_aiResponses from "../internal/aiResponses.js";
 import type * as internal_cascadeDelete from "../internal/cascadeDelete.js";
@@ -51,10 +54,13 @@ declare const fullApi: ApiFromModules<{
   acceptanceCriteria: typeof acceptanceCriteria;
   agentMessages: typeof agentMessages;
   agentSessions: typeof agentSessions;
+  aiProviders: typeof aiProviders;
   chat: typeof chat;
   containerBuilds: typeof containerBuilds;
+  containerPool: typeof containerPool;
   containers: typeof containers;
   crons: typeof crons;
+  gatewayCommands: typeof gatewayCommands;
   http: typeof http;
   "internal/aiResponses": typeof internal_aiResponses;
   "internal/cascadeDelete": typeof internal_cascadeDelete;

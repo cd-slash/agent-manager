@@ -1,4 +1,5 @@
 import { mutation } from "./_generated/server"
+import { BUILTIN_PROVIDERS } from "./aiProviders"
 import { BUILTIN_TEMPLATES } from "./taskTemplates"
 
 // Seed example acceptance criteria and tests for existing tasks
@@ -127,6 +128,62 @@ export const seedTemplates = mutation({
 				created.length > 0
 					? `Created templates: ${created.join(", ")}`
 					: "All templates already exist",
+		}
+	},
+})
+
+// Seed built-in AI providers
+export const seedAiProviders = mutation({
+	args: {},
+	handler: async (ctx) => {
+		const now = Date.now()
+		const created: string[] = []
+		const updated: string[] = []
+
+		for (const provider of BUILTIN_PROVIDERS) {
+			// Check if provider already exists by type
+			const existing = await ctx.db
+				.query("aiProviders")
+				.withIndex("by_type", (q) => q.eq("type", provider.type))
+				.first()
+
+			if (!existing) {
+				await ctx.db.insert("aiProviders", {
+					name: provider.name,
+					type: provider.type,
+					enabled: provider.enabled,
+					authType: provider.authType,
+					apiKeySecretKey: provider.apiKeySecretKey,
+					models: provider.models,
+					isBuiltin: true,
+					createdAt: now,
+					updatedAt: now,
+				})
+				created.push(provider.name)
+			} else if (existing.isBuiltin) {
+				// Update built-in providers with any new models
+				const existingModelIds = new Set(existing.models.map((m) => m.id))
+				const newModels = provider.models.filter(
+					(m) => !existingModelIds.has(m.id),
+				)
+
+				if (newModels.length > 0) {
+					await ctx.db.patch(existing._id, {
+						models: [...existing.models, ...newModels],
+						updatedAt: now,
+					})
+					updated.push(provider.name)
+				}
+			}
+		}
+
+		return {
+			message:
+				created.length > 0 || updated.length > 0
+					? `Created: ${created.join(", ") || "none"}. Updated: ${updated.join(", ") || "none"}`
+					: "All providers already exist",
+			created,
+			updated,
 		}
 	},
 })

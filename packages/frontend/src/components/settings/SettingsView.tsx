@@ -11,12 +11,14 @@ import {
 	EyeOff,
 	FileStack,
 	Key,
+	Link2,
 	Lock,
 	Network,
 	RefreshCw,
+	Server,
 	Sliders,
 } from "lucide-react"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useToast } from "@/components/ToastProvider"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -31,7 +33,196 @@ import {
 import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { PhaseDefaultsSettings } from "./PhaseDefaultsSettings"
+import { ProvidersSettings } from "./ProvidersSettings"
 import { TaskTemplatesSettings } from "./TaskTemplatesSettings"
+
+// Gateway Configuration Section Component
+function GatewayConfigSection() {
+	const toast = useToast()
+	const [gatewayUrl, setGatewayUrl] = useState("")
+	const [defaultServer, setDefaultServer] = useState("")
+	const [defaultRepo, setDefaultRepo] = useState("")
+	const [isSaving, setIsSaving] = useState(false)
+	const [isCheckingStatus, setIsCheckingStatus] = useState(false)
+
+	// Convex hooks
+	const gatewayConfig = useQuery(api.settings.getGatewayConfig)
+	const setGatewayConfig = useMutation(api.settings.setGatewayConfig)
+	const getManagementContainerStatus = useAction(
+		api.aiProviders.getManagementContainerStatus,
+	)
+
+	const [managementStatus, setManagementStatus] = useState<{
+		exists: boolean
+		running: boolean
+		container: { containerId: string; name: string; hostname: string } | null
+	} | null>(null)
+
+	// Load initial values
+	useEffect(() => {
+		if (gatewayConfig) {
+			setGatewayUrl(gatewayConfig.url || "")
+			setDefaultServer(gatewayConfig.defaultServer || "")
+			setDefaultRepo(gatewayConfig.defaultRepo || "")
+		}
+	}, [gatewayConfig])
+
+	const handleCheckStatus = async () => {
+		setIsCheckingStatus(true)
+		try {
+			const status = await getManagementContainerStatus()
+			setManagementStatus(status)
+			if (status.running) {
+				toast.success("Gateway Connected", "Management container is running")
+			} else if (status.exists) {
+				toast.warning(
+					"Container Stopped",
+					"Management container exists but is not running",
+				)
+			} else {
+				toast.info("No Container", "No management container found")
+			}
+		} catch (error) {
+			toast.error(
+				"Connection Failed",
+				error instanceof Error ? error.message : "Could not connect to gateway",
+			)
+		} finally {
+			setIsCheckingStatus(false)
+		}
+	}
+
+	const handleSave = async () => {
+		setIsSaving(true)
+		try {
+			await setGatewayConfig({
+				url: gatewayUrl || undefined,
+				defaultServer: defaultServer || undefined,
+				defaultRepo: defaultRepo || undefined,
+			})
+			toast.success("Saved", "Gateway configuration saved")
+		} catch (error) {
+			toast.error(
+				"Failed to save",
+				error instanceof Error ? error.message : "Unknown error",
+			)
+		} finally {
+			setIsSaving(false)
+		}
+	}
+
+	const isDirty =
+		gatewayUrl !== (gatewayConfig?.url || "") ||
+		defaultServer !== (gatewayConfig?.defaultServer || "") ||
+		defaultRepo !== (gatewayConfig?.defaultRepo || "")
+
+	return (
+		<section>
+			<h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center">
+				<Server size={16} className="mr-2" /> Agent Gateway
+			</h3>
+			<div className="bg-surface border border-border rounded-lg p-4">
+				<p className="text-sm text-muted-foreground mb-4">
+					Configure the agent gateway for container management and OAuth
+					authentication. The gateway handles communication with agent
+					containers.
+				</p>
+				<div className="space-y-4 max-w-3xl">
+					<div className="space-y-2">
+						<Label>Gateway URL</Label>
+						<Input
+							type="text"
+							placeholder="http://localhost:3100"
+							value={gatewayUrl}
+							onChange={(e) => setGatewayUrl(e.target.value)}
+						/>
+						<p className="text-xs text-muted-foreground">
+							The URL of your agent-gateway server
+						</p>
+					</div>
+					<div className="space-y-2">
+						<Label>Default Server</Label>
+						<Input
+							type="text"
+							placeholder="localhost or server hostname"
+							value={defaultServer}
+							onChange={(e) => setDefaultServer(e.target.value)}
+						/>
+						<p className="text-xs text-muted-foreground">
+							Default server for creating new containers
+						</p>
+					</div>
+					<div className="space-y-2">
+						<Label>Default Repository</Label>
+						<Input
+							type="text"
+							placeholder="anthropics/claude-code-sandbox"
+							value={defaultRepo}
+							onChange={(e) => setDefaultRepo(e.target.value)}
+						/>
+						<p className="text-xs text-muted-foreground">
+							Default repository for agent containers
+						</p>
+					</div>
+
+					{/* Management Container Status */}
+					<div className="pt-2 border-t border-border">
+						<div className="flex items-center justify-between">
+							<div className="flex items-center gap-2">
+								<Link2 size={14} className="text-muted-foreground" />
+								<span className="text-sm font-medium">
+									Management Container
+								</span>
+								{managementStatus?.running && (
+									<span className="text-[10px] px-1.5 py-0.5 bg-success/20 rounded text-success flex items-center gap-1">
+										<Check size={10} />
+										Running
+									</span>
+								)}
+								{managementStatus?.exists && !managementStatus.running && (
+									<span className="text-[10px] px-1.5 py-0.5 bg-warning/20 rounded text-warning">
+										Stopped
+									</span>
+								)}
+							</div>
+							<Button
+								variant="outline"
+								size="sm"
+								onClick={handleCheckStatus}
+								disabled={isCheckingStatus}
+							>
+								{isCheckingStatus ? (
+									<RefreshCw size={14} className="animate-spin" />
+								) : (
+									"Check Status"
+								)}
+							</Button>
+						</div>
+						{managementStatus?.container && (
+							<div className="mt-2 text-xs text-muted-foreground">
+								<div>Container: {managementStatus.container.name}</div>
+								<div>Hostname: {managementStatus.container.hostname}</div>
+							</div>
+						)}
+					</div>
+
+					<div className="pt-2">
+						<Button onClick={handleSave} disabled={isSaving || !isDirty}>
+							{isSaving ? (
+								<>
+									<RefreshCw size={14} className="mr-2 animate-spin" />
+									Saving...
+								</>
+							) : (
+								"Save Gateway Config"
+							)}
+						</Button>
+					</div>
+				</div>
+			</div>
+		</section>
+	)
+}
 
 export function SettingsView() {
 	const [activeTab, setActiveTab] = useState("credentials")
@@ -187,6 +378,10 @@ export function SettingsView() {
 									<Key size={14} className="mr-1.5" />
 									Credentials
 								</TabsTrigger>
+								<TabsTrigger value="providers" className="flex items-center">
+									<Bot size={14} className="mr-1.5" />
+									Providers
+								</TabsTrigger>
 								<TabsTrigger value="models" className="flex items-center">
 									<Cpu size={14} className="mr-1.5" />
 									Model Config
@@ -340,48 +535,13 @@ export function SettingsView() {
 											</div>
 										</section>
 
-										<section>
-											<h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center">
-												<Key size={16} className="mr-2" /> AI API Keys
-											</h3>
-											<div className="bg-surface border border-border rounded-lg p-4">
-												<div className="space-y-4 max-w-3xl">
-													<div className="space-y-2">
-														<Label>OpenAI API Key</Label>
-														<div className="relative">
-															<Input type="password" placeholder="sk-..." />
-															<Lock
-																size={14}
-																className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-															/>
-														</div>
-													</div>
-													<div className="space-y-2">
-														<Label>Anthropic API Key</Label>
-														<div className="relative">
-															<Input type="password" placeholder="sk-ant-..." />
-															<Lock
-																size={14}
-																className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-															/>
-														</div>
-													</div>
-													<div className="space-y-2">
-														<Label>Gemini API Key</Label>
-														<div className="relative">
-															<Input type="password" placeholder="AIza..." />
-															<Lock
-																size={14}
-																className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-															/>
-														</div>
-													</div>
-													<div className="pt-2">
-														<Button>Save Keys</Button>
-													</div>
-												</div>
-											</div>
-										</section>
+										<GatewayConfigSection />
+									</div>
+								</TabsContent>
+
+								<TabsContent value="providers" className="!mt-0">
+									<div className="space-y-8">
+										<ProvidersSettings />
 									</div>
 								</TabsContent>
 

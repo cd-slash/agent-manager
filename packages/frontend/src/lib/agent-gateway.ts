@@ -103,13 +103,17 @@ class AgentGatewayClient {
 
 	constructor(baseUrl: string = DEFAULT_GATEWAY_URL) {
 		this.baseUrl = baseUrl
+		console.log("[AgentGatewayClient] Initialized with baseUrl:", this.baseUrl)
 	}
 
 	private async request<T>(
 		path: string,
 		options: RequestInit = {},
 	): Promise<T> {
-		const response = await fetch(`${this.baseUrl}${path}`, {
+		const url = `${this.baseUrl}${path}`
+		console.log(`[AgentGatewayClient] ${options.method || "GET"} ${url}`)
+
+		const response = await fetch(url, {
 			...options,
 			headers: {
 				"Content-Type": "application/json",
@@ -119,6 +123,7 @@ class AgentGatewayClient {
 
 		if (!response.ok) {
 			const error = await response.json().catch(() => ({}))
+			console.error("[AgentGatewayClient] Request failed:", response.status, error)
 			throw new Error(
 				error.error ||
 					error.details ||

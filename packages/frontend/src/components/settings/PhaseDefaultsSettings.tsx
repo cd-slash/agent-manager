@@ -15,7 +15,9 @@ import { Label } from "@/components/ui/label"
 import {
 	Select,
 	SelectContent,
+	SelectGroup,
 	SelectItem,
+	SelectLabel,
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select"
@@ -23,13 +25,14 @@ import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import {
 	AGENT_PHASES,
+	type EnabledModelsGrouped,
 	PHASE_DESCRIPTIONS,
 	PHASE_DISPLAY_NAMES,
 	type TaskPhase,
 } from "@/types"
 
-// Available models
-const MODELS = [
+// Fallback models when no providers are configured
+const FALLBACK_MODELS = [
 	{ value: "claude-sonnet-4-20250514", label: "Claude Sonnet 4" },
 	{ value: "claude-opus-4-20250514", label: "Claude Opus 4" },
 	{ value: "claude-3-5-sonnet-20241022", label: "Claude 3.5 Sonnet" },
@@ -75,6 +78,7 @@ interface PhaseConfigCardProps {
 		enabled: boolean
 	}) => Promise<void>
 	isSaving: boolean
+	modelGroups: EnabledModelsGrouped[] | null
 }
 
 function PhaseConfigCard({
@@ -83,6 +87,7 @@ function PhaseConfigCard({
 	builtinPrompt,
 	onSave,
 	isSaving,
+	modelGroups,
 }: PhaseConfigCardProps) {
 	const [isExpanded, setIsExpanded] = useState(false)
 	const [model, setModel] = useState(
@@ -187,11 +192,22 @@ function PhaseConfigCard({
 									<SelectValue />
 								</SelectTrigger>
 								<SelectContent>
-									{MODELS.map((m) => (
-										<SelectItem key={m.value} value={m.value}>
-											{m.label}
-										</SelectItem>
-									))}
+									{modelGroups && modelGroups.length > 0
+										? modelGroups.map((group) => (
+												<SelectGroup key={group.providerId}>
+													<SelectLabel>{group.providerName}</SelectLabel>
+													{group.models.map((m) => (
+														<SelectItem key={m.id} value={m.id}>
+															{m.name}
+														</SelectItem>
+													))}
+												</SelectGroup>
+											))
+										: FALLBACK_MODELS.map((m) => (
+												<SelectItem key={m.value} value={m.value}>
+													{m.label}
+												</SelectItem>
+											))}
 								</SelectContent>
 							</Select>
 						</div>
@@ -284,6 +300,9 @@ export function PhaseDefaultsSettings() {
 	const defaultConfigs = useQuery(api.phaseConfigs.getAllDefaults)
 	const builtinDefaults = useQuery(api.phaseConfigs.getBuiltinDefaults)
 
+	// Fetch enabled models grouped by provider
+	const modelGroups = useQuery(api.aiProviders.getEnabledModelsGrouped)
+
 	// Mutation
 	const upsertDefault = useMutation(api.phaseConfigs.upsertDefault)
 
@@ -339,6 +358,7 @@ export function PhaseDefaultsSettings() {
 						}
 						onSave={(config) => handleSavePhaseConfig(phase, config)}
 						isSaving={savingPhase === phase}
+						modelGroups={modelGroups ?? null}
 					/>
 				))}
 			</div>

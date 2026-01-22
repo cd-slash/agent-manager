@@ -18,6 +18,7 @@
       "version": "0.1.0",
       "dependencies": {
         "@agent-manager/agent-shared": "workspace:*",
+        "@agent-manager/convex": "workspace:*",
         "convex": "^1.31.5",
       },
     },

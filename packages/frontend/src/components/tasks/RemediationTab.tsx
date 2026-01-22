@@ -16,7 +16,6 @@ import {
 } from "lucide-react"
 import { useState } from "react"
 import { useToast } from "@/components/ToastProvider"
-import { agentGateway } from "@/lib/agent-gateway"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -24,6 +23,7 @@ import {
 	CollapsibleContent,
 	CollapsibleTrigger,
 } from "@/components/ui/collapsible"
+import { useStartPhaseExecution } from "@/hooks/useGatewayCommand"
 import type { RemediationCycleDoc, TaskId, TaskPhaseDoc } from "@/types"
 import { REMEDIATION_TRIGGER_NAMES } from "@/types"
 import { PhaseConfigPanel } from "./PhaseConfigPanel"
@@ -207,6 +207,7 @@ export function RemediationTab({
 	const toast = useToast()
 	const [showConfig, setShowConfig] = useState(false)
 	const [isStarting, setIsStarting] = useState(false)
+	const startPhaseCmd = useStartPhaseExecution()
 
 	// Fetch remediation cycles
 	const cycles = useQuery(api.remediationCycles.listByTask, { taskId }) ?? []
@@ -222,8 +223,8 @@ export function RemediationTab({
 	const handleStartRemediation = async () => {
 		setIsStarting(true)
 		try {
-			// Call gateway to start phase execution
-			const result = await agentGateway.startPhaseExecution({
+			// Call gateway to start phase execution via Convex
+			const result = await startPhaseCmd.execute({
 				taskId: taskId as string,
 				phase: "remediation",
 			})

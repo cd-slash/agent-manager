@@ -1,5 +1,5 @@
 import { v } from "convex/values"
-import { mutation, query } from "./_generated/server"
+import { internalQuery, mutation, query } from "./_generated/server"
 
 // Get a setting by key
 export const get = query({
@@ -108,6 +108,120 @@ export const deleteSetting = mutation({
 
 		if (setting) {
 			await ctx.db.delete(setting._id)
+		}
+	},
+})
+
+// =============================================================================
+// Agent Gateway Settings
+// =============================================================================
+
+const DEFAULT_GATEWAY_URL = "http://localhost:3100"
+
+// Get agent gateway configuration
+export const getGatewayConfig = query({
+	args: {},
+	handler: async (ctx) => {
+		const setting = await ctx.db
+			.query("settings")
+			.withIndex("by_key", (q) => q.eq("key", "agentGateway"))
+			.first()
+
+		if (!setting) {
+			return {
+				url: DEFAULT_GATEWAY_URL,
+				defaultServer: null,
+				defaultRepo: null,
+				lastValidated: null,
+			}
+		}
+
+		const value = setting.value as {
+			url?: string
+			defaultServer?: string
+			defaultRepo?: string
+		}
+		return {
+			url: value.url ?? DEFAULT_GATEWAY_URL,
+			defaultServer: value.defaultServer ?? null,
+			defaultRepo: value.defaultRepo ?? null,
+			lastValidated: setting.lastValidated ?? null,
+		}
+	},
+})
+
+// Internal query for gateway config (used by actions)
+export const getGatewayConfigInternal = internalQuery({
+	args: {},
+	handler: async (ctx) => {
+		const setting = await ctx.db
+			.query("settings")
+			.withIndex("by_key", (q) => q.eq("key", "agentGateway"))
+			.first()
+
+		if (!setting) {
+			return {
+				url: DEFAULT_GATEWAY_URL,
+				defaultServer: null,
+				defaultRepo: null,
+			}
+		}
+
+		const value = setting.value as {
+			url?: string
+			defaultServer?: string
+			defaultRepo?: string
+		}
+		return {
+			url: value.url ?? DEFAULT_GATEWAY_URL,
+			defaultServer: value.defaultServer ?? null,
+			defaultRepo: value.defaultRepo ?? null,
+		}
+	},
+})
+
+// Set agent gateway configuration
+export const setGatewayConfig = mutation({
+	args: {
+		url: v.optional(v.string()),
+		defaultServer: v.optional(v.string()),
+		defaultRepo: v.optional(v.string()),
+	},
+	handler: async (ctx, args) => {
+		const existing = await ctx.db
+			.query("settings")
+			.withIndex("by_key", (q) => q.eq("key", "agentGateway"))
+			.first()
+
+		const now = Date.now()
+
+		// Build the value object, preserving existing values
+		const existingValue = (existing?.value as Record<string, unknown>) ?? {}
+		const value = {
+			...existingValue,
+			...(args.url !== undefined ? { url: args.url } : {}),
+			...(args.defaultServer !== undefined
+				? { defaultServer: args.defaultServer }
+				: {}),
+			...(args.defaultRepo !== undefined
+				? { defaultRepo: args.defaultRepo }
+				: {}),
+		}
+
+		if (existing) {
+			await ctx.db.patch(existing._id, {
+				value,
+				updatedAt: now,
+			})
+			return existing._id
+		} else {
+			const id = await ctx.db.insert("settings", {
+				key: "agentGateway",
+				value,
+				createdAt: now,
+				updatedAt: now,
+			})
+			return id
 		}
 	},
 })

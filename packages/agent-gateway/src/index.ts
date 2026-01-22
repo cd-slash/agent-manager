@@ -22,6 +22,7 @@ import { isConnectMessage, parseMessage } from "@agent-manager/agent-shared"
 import type { ServerWebSocket } from "bun"
 import { ClaudeAuth } from "./claude-auth"
 import { ConnectionManager, type ContainerContext } from "./connections"
+import { ConvexCommandProcessor } from "./convex-commands"
 import { ConvexSync } from "./convex-sync"
 import type { TaskPhase } from "./phase-prompts"
 import { TaskOrchestrator } from "./task-orchestrator"
@@ -1018,6 +1019,22 @@ const taskOrchestrator = CONVEX_URL
 	? new TaskOrchestrator(CONVEX_URL, connections)
 	: null
 
+// Command processor for Convex-driven gateway operations
+const commandProcessor = CONVEX_URL
+	? new ConvexCommandProcessor(CONVEX_URL, {
+			connections,
+			convexSync,
+			taskOrchestrator,
+			createContainerOnServer,
+			fetchSecrets,
+		})
+	: null
+
+// Wire up ClaudeAuth with connection manager for container-based OAuth
+if (claudeAuth) {
+	claudeAuth.setConnectionManager(connections)
+}
+
 // Active executions tracking (correlationId -> { containerId, taskId, projectId })
 const activeExecutions = new Map<
 	string,
@@ -1107,7 +1124,38 @@ function handleContainerMessage(
 		case "auth:status": {
 			const payload = message.payload as AuthStatusPayload
 			console.log(`[gateway] Auth status from ${containerId}:`, payload)
-			// Could sync to Convex if needed
+			// Forward to ClaudeAuth for OAuth flow handling
+			if (claudeAuth) {
+				claudeAuth.handleContainerAuthStatus(containerId, payload)
+			}
+			break
+		}
+
+		case "auth:flow:url": {
+			// Container started OAuth flow and returned the URL
+			const payload = message.payload as {
+				flowId: string
+				url: string
+				expiresIn: number
+			}
+			console.log(`[gateway] OAuth URL from ${containerId}:`, payload.url)
+			if (claudeAuth) {
+				claudeAuth.handleContainerAuthFlowUrl(containerId, payload)
+			}
+			break
+		}
+
+		case "error": {
+			const payload = message.payload as { code: string; message: string }
+			console.log(`[gateway] Error from ${containerId}:`, payload)
+			// Forward to ClaudeAuth for error handling
+			if (claudeAuth) {
+				claudeAuth.handleContainerError(
+					containerId,
+					payload,
+					message.correlationId,
+				)
+			}
 			break
 		}
 
@@ -1136,7 +1184,11 @@ function handleExecStream(
 	payload: ExecStreamPayload,
 	correlationId?: string,
 ): void {
-	const execution = correlationId ? activeExecutions.get(correlationId) : null
+	// Check both local (REST API) and command processor (Convex) execution tracking
+	const execution = correlationId
+		? (activeExecutions.get(correlationId) ??
+			commandProcessor?.getActiveExecution(correlationId))
+		: null
 
 	// Log stream events
 	console.log(
@@ -1165,7 +1217,11 @@ function handleExecComplete(
 	payload: ExecCompletePayload,
 	correlationId?: string,
 ): void {
-	const execution = correlationId ? activeExecutions.get(correlationId) : null
+	// Check both local (REST API) and command processor (Convex) execution tracking
+	const execution = correlationId
+		? (activeExecutions.get(correlationId) ??
+			commandProcessor?.getActiveExecution(correlationId))
+		: null
 
 	console.log(
 		`[gateway] Execution complete from ${containerId}:`,
@@ -1193,9 +1249,10 @@ function handleExecComplete(
 		})
 	}
 
-	// Clean up
+	// Clean up from both tracking sources
 	if (correlationId) {
 		activeExecutions.delete(correlationId)
+		commandProcessor?.removeActiveExecution(correlationId)
 	}
 }
 
@@ -1924,6 +1981,25 @@ setInterval(() => {
 	}
 }, PRUNE_INTERVAL)
 
+// Start Convex subscriptions for OAuth flows if claudeAuth is available
+if (claudeAuth) {
+	claudeAuth.startConvexSubscriptions()
+
+	// Listen for token acquisition to push to all containers
+	claudeAuth.on("auth:token-acquired", () => {
+		console.log("[gateway] Token acquired, pushing to all containers...")
+		const containers = connections.getAllContainers()
+		for (const container of containers) {
+			pushTokenToContainer(container.info.containerId)
+		}
+	})
+}
+
+// Start Convex command processor for real-time command handling
+if (commandProcessor) {
+	commandProcessor.start()
+}
+
 console.log(`[gateway] Agent Gateway started`)
 console.log(`[gateway]   Server ID: ${SERVER_ID}`)
 console.log(`[gateway]   WebSocket: ws://localhost:${PORT}`)
@@ -1932,6 +2008,12 @@ if (convexSync) {
 	console.log(`[gateway]   Convex:    enabled`)
 } else {
 	console.log(`[gateway]   Convex:    disabled (set CONVEX_URL to enable)`)
+}
+if (claudeAuth) {
+	console.log(`[gateway]   OAuth:     Convex real-time subscriptions enabled`)
+}
+if (commandProcessor) {
+	console.log(`[gateway]   Commands:  Convex-driven command processing enabled`)
 }
 
 export { server }
