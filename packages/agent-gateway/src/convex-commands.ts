@@ -86,6 +86,13 @@ const CONTAINER_COMMANDS = new Set([
 	"pushAuthToken",
 ])
 
+// Commands that are handled directly by containers (via container-api)
+// These should NOT be processed by the gateway command processor
+const CONTAINER_TARGETED_COMMANDS = new Set([
+	"startOAuthFlow",
+	"completeOAuthFlow",
+])
+
 /**
  * Processes gateway commands from Convex using real-time subscriptions.
  *
@@ -260,6 +267,10 @@ export class ConvexCommandProcessor {
 		for (const cmd of commands) {
 			// Skip if already processing
 			if (this.processing.has(cmd._id)) continue
+
+			// Skip commands that are handled directly by containers (via container-api)
+			// These are created by claude-auth and processed by the target container
+			if (CONTAINER_TARGETED_COMMANDS.has(cmd.type)) continue
 
 			this.processing.add(cmd._id)
 			console.log(`[commands] Processing command: ${cmd.type} (${cmd._id})`)
