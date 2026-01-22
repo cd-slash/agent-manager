@@ -30,12 +30,16 @@ interface CommandProcessorDeps {
 		containerName: string,
 		server: string,
 		sshUser?: string,
-	) => Promise<void>
+	) => Promise<{ stopped: boolean; notFound: boolean }>
 	deleteContainerOnServer: (
 		containerName: string,
 		server: string,
 		sshUser?: string,
 	) => Promise<void>
+	listContainersOnServer: (
+		server: string,
+		sshUser?: string,
+	) => Promise<Array<{ name: string; containerId: string; running: boolean }>>
 	fetchSecrets: (
 		convexUrl: string,
 		keys: string[],
@@ -184,6 +188,8 @@ export class ConvexCommandProcessor {
 				return this.handleStopContainer(cmd)
 			case "deleteContainer":
 				return this.handleDeleteContainer(cmd)
+			case "listContainers":
+				return this.handleListContainers(cmd)
 			default:
 				throw new Error(`Unknown server command type: ${cmd.type}`)
 		}
@@ -230,14 +236,25 @@ export class ConvexCommandProcessor {
 
 		console.log(`[commands] Stopping container: ${payload.containerName}`)
 
-		await this.deps.stopContainerOnServer(
+		const result = await this.deps.stopContainerOnServer(
 			payload.containerName,
 			payload.server,
 			payload.sshUser,
 		)
 
-		console.log(`[commands] Container stopped: ${payload.containerName}`)
-		return { stopped: true, containerName: payload.containerName }
+		if (result.notFound) {
+			console.log(
+				`[commands] Container not found on host: ${payload.containerName}`,
+			)
+		} else {
+			console.log(`[commands] Container stopped: ${payload.containerName}`)
+		}
+
+		return {
+			stopped: result.stopped,
+			notFound: result.notFound,
+			containerName: payload.containerName,
+		}
 	}
 
 	private async handleDeleteContainer(cmd: ServerCommand): Promise<unknown> {
@@ -257,5 +274,24 @@ export class ConvexCommandProcessor {
 
 		console.log(`[commands] Container deleted: ${payload.containerName}`)
 		return { deleted: true, containerName: payload.containerName }
+	}
+
+	private async handleListContainers(cmd: ServerCommand): Promise<unknown> {
+		const payload = cmd.payload as {
+			server: string
+			sshUser?: string
+		}
+
+		console.log(`[commands] Listing containers on: ${payload.server}`)
+
+		const containers = await this.deps.listContainersOnServer(
+			payload.server,
+			payload.sshUser,
+		)
+
+		console.log(
+			`[commands] Found ${containers.length} containers on ${payload.server}`,
+		)
+		return { containers, server: payload.server }
 	}
 }

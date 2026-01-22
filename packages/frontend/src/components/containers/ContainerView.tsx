@@ -71,6 +71,7 @@ export function ContainerView({
 		new Set(),
 	)
 	const syncDevices = useAction(api.tailscale.syncDevices)
+	const syncWithHost = useAction(api.containers.syncWithHost)
 	const updateContainerStatus = useMutation(api.containers.updateStatus)
 	const deleteContainerFromDb = useMutation(api.containers.deleteContainer)
 	const toast = useToast()
@@ -86,15 +87,33 @@ export function ContainerView({
 				container.serverHostname || container.server || "localhost"
 			setStoppingContainers((prev) => new Set(prev).add(container.id))
 			try {
-				await stopContainerCmd.execute(container.name, serverHostname)
-				await updateContainerStatus({
-					id: container.id as Parameters<typeof updateContainerStatus>[0]["id"],
-					status: "stopped",
-				})
-				toast.success(
-					"Container stopped",
-					`Container "${container.name}" has been stopped`,
+				const result = await stopContainerCmd.execute(
+					container.name,
+					serverHostname,
 				)
+
+				if (result.notFound) {
+					// Container doesn't exist on host - remove from database
+					await deleteContainerFromDb({
+						id: container.id as Parameters<typeof deleteContainerFromDb>[0]["id"],
+					})
+					toast.success(
+						"Container removed",
+						`Container "${container.name}" was not found on host and has been removed`,
+					)
+				} else {
+					// Container was stopped - update status
+					await updateContainerStatus({
+						id: container.id as Parameters<
+							typeof updateContainerStatus
+						>[0]["id"],
+						status: "stopped",
+					})
+					toast.success(
+						"Container stopped",
+						`Container "${container.name}" has been stopped`,
+					)
+				}
 			} catch (error) {
 				toast.error(
 					"Failed to stop container",
@@ -108,7 +127,7 @@ export function ContainerView({
 				})
 			}
 		},
-		[stopContainerCmd, updateContainerStatus, toast],
+		[stopContainerCmd, updateContainerStatus, deleteContainerFromDb, toast],
 	)
 
 	const handleDeleteContainer = useCallback(
@@ -124,7 +143,29 @@ export function ContainerView({
 				container.serverHostname || container.server || "localhost"
 			setDeletingContainers((prev) => new Set(prev).add(container.id))
 			try {
-				await deleteContainerCmd.execute(container.name, serverHostname)
+				// Try to delete from Docker host first
+				try {
+					await deleteContainerCmd.execute(container.name, serverHostname)
+				} catch (dockerError) {
+					// If Docker delete fails (e.g., container doesn't exist on host),
+					// check if it's a "not found" type error and proceed with DB cleanup
+					const errorMsg =
+						dockerError instanceof Error
+							? dockerError.message.toLowerCase()
+							: ""
+					const isNotFoundError =
+						errorMsg.includes("no such container") ||
+						errorMsg.includes("not found") ||
+						errorMsg.includes("does not exist")
+
+					if (!isNotFoundError) {
+						// Re-throw if it's a different error
+						throw dockerError
+					}
+					// Container doesn't exist on host, proceed to remove from DB
+				}
+
+				// Delete from database
 				await deleteContainerFromDb({
 					id: container.id as Parameters<typeof deleteContainerFromDb>[0]["id"],
 				})
@@ -148,6 +189,35 @@ export function ContainerView({
 		[deleteContainerCmd, deleteContainerFromDb, toast],
 	)
 
+	// Force delete removes container from DB without trying Docker delete
+	// Useful for orphaned containers that were manually deleted from the host
+	const handleForceDeleteContainer = useCallback(
+		async (container: Container) => {
+			setDeletingContainers((prev) => new Set(prev).add(container.id))
+			try {
+				await deleteContainerFromDb({
+					id: container.id as Parameters<typeof deleteContainerFromDb>[0]["id"],
+				})
+				toast.success(
+					"Container removed",
+					`Container "${container.name}" has been removed from the database`,
+				)
+			} catch (error) {
+				toast.error(
+					"Failed to remove container",
+					error instanceof Error ? error.message : "Unknown error",
+				)
+			} finally {
+				setDeletingContainers((prev) => {
+					const next = new Set(prev)
+					next.delete(container.id)
+					return next
+				})
+			}
+		},
+		[deleteContainerFromDb, toast],
+	)
+
 	const handleBulkStop = async () => {
 		const toStop = selectedContainers.filter((c) => c.status === "running")
 		for (const container of toStop) {
@@ -156,17 +226,48 @@ export function ContainerView({
 		clearSelectionFn?.()
 	}
 
-	const handleRefreshFromTailscale = async () => {
+	const handleRefresh = async () => {
 		setIsRefreshing(true)
 		try {
+			// 1. Sync from Tailscale (for Tailscale-managed containers)
 			await syncDevices()
-			toast.success("Sync complete", "Containers refreshed from Tailscale")
+
+			// 2. Sync with Docker host to verify containers actually exist
+			// Get unique servers from current containers
+			const servers = new Set<string>()
+			for (const container of containers) {
+				const server =
+					container.serverHostname || container.server || "localhost"
+				servers.add(server)
+			}
+
+			// Sync each server
+			let totalRemoved = 0
+			const removedNames: string[] = []
+			for (const server of servers) {
+				try {
+					const result = await syncWithHost({ server })
+					totalRemoved += result.removed
+					removedNames.push(...result.removedContainers)
+				} catch (syncError) {
+					console.warn(`Failed to sync with host ${server}:`, syncError)
+				}
+			}
+
+			if (totalRemoved > 0) {
+				toast.success(
+					"Sync complete",
+					`Removed ${totalRemoved} orphaned container(s): ${removedNames.join(", ")}`,
+				)
+			} else {
+				toast.success("Sync complete", "All containers verified")
+			}
 		} catch (error) {
 			toast.error(
 				"Sync failed",
 				error instanceof Error
 					? error.message
-					: "Failed to sync from Tailscale",
+					: "Failed to sync containers",
 			)
 		} finally {
 			setIsRefreshing(false)
@@ -245,9 +346,9 @@ export function ContainerView({
 			<Button
 				variant="outline"
 				size="icon"
-				onClick={handleRefreshFromTailscale}
+				onClick={handleRefresh}
 				disabled={isRefreshing}
-				title="Refresh from Tailscale"
+				title="Refresh and verify containers"
 				className="h-9 w-9"
 			>
 				<RefreshCw size={16} className={isRefreshing ? "animate-spin" : ""} />
@@ -392,6 +493,16 @@ export function ContainerView({
 												? "Delete (stop first)"
 												: "Delete"}
 									</DropdownMenuItem>
+									<DropdownMenuItem
+										className="text-destructive focus:text-destructive"
+										onClick={() => handleForceDeleteContainer(container)}
+										disabled={deletingContainers.has(container.id)}
+									>
+										<Trash2 size={16} />
+										{deletingContainers.has(container.id)
+											? "Removing..."
+											: "Force Remove (DB only)"}
+									</DropdownMenuItem>
 								</DropdownMenuContent>
 							</DropdownMenu>
 						</div>
@@ -402,6 +513,7 @@ export function ContainerView({
 		[
 			deletingContainers,
 			handleDeleteContainer,
+			handleForceDeleteContainer,
 			handleStopContainer,
 			stoppingContainers,
 		],

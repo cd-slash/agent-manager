@@ -161,6 +161,7 @@ export function useStopContainer() {
 	const [pendingId, setPendingId] = useState<Id<"serverCommands"> | null>(null)
 	const pendingRef = useRef<PendingServerCommand<{
 		stopped: boolean
+		notFound: boolean
 		containerName: string
 	}> | null>(null)
 
@@ -173,6 +174,7 @@ export function useStopContainer() {
 			pendingRef.current.resolve(
 				commandStatus.result as {
 					stopped: boolean
+					notFound: boolean
 					containerName: string
 				},
 			)
@@ -192,7 +194,7 @@ export function useStopContainer() {
 			containerName: string,
 			server: string,
 			sshUser?: string,
-		): Promise<{ stopped: boolean; containerName: string }> => {
+		): Promise<{ stopped: boolean; notFound: boolean; containerName: string }> => {
 			return new Promise((resolve, reject) => {
 				createCommand({
 					containerName,

@@ -59,15 +59,32 @@ export function ContainerDetailView({
 	const handleStopContainer = async () => {
 		setIsStoppingContainer(true)
 		try {
-			await stopContainerCmd.execute(container.name, serverHostname)
-			await updateContainerStatus({
-				id: container.id as Parameters<typeof updateContainerStatus>[0]["id"],
-				status: "stopped",
-			})
-			toast.success(
-				"Container stopped",
-				`Container "${container.name}" has been stopped`,
+			const result = await stopContainerCmd.execute(
+				container.name,
+				serverHostname,
 			)
+
+			if (result.notFound) {
+				// Container doesn't exist on host - remove from database
+				await deleteContainerFromDb({
+					id: container.id as Parameters<typeof deleteContainerFromDb>[0]["id"],
+				})
+				toast.success(
+					"Container removed",
+					`Container "${container.name}" was not found on host and has been removed`,
+				)
+				onDeleted?.()
+			} else {
+				// Container was stopped - update status
+				await updateContainerStatus({
+					id: container.id as Parameters<typeof updateContainerStatus>[0]["id"],
+					status: "stopped",
+				})
+				toast.success(
+					"Container stopped",
+					`Container "${container.name}" has been stopped`,
+				)
+			}
 		} catch (error) {
 			toast.error(
 				"Failed to stop container",
@@ -81,9 +98,29 @@ export function ContainerDetailView({
 	const handleDeleteContainer = async () => {
 		setIsDeletingContainer(true)
 		try {
-			// First delete from Docker via Convex command
-			await deleteContainerCmd.execute(container.name, serverHostname)
-			// Then delete from database
+			// Try to delete from Docker host first
+			try {
+				await deleteContainerCmd.execute(container.name, serverHostname)
+			} catch (dockerError) {
+				// If Docker delete fails (e.g., container doesn't exist on host),
+				// check if it's a "not found" type error and proceed with DB cleanup
+				const errorMsg =
+					dockerError instanceof Error
+						? dockerError.message.toLowerCase()
+						: ""
+				const isNotFoundError =
+					errorMsg.includes("no such container") ||
+					errorMsg.includes("not found") ||
+					errorMsg.includes("does not exist")
+
+				if (!isNotFoundError) {
+					// Re-throw if it's a different error
+					throw dockerError
+				}
+				// Container doesn't exist on host, proceed to remove from DB
+			}
+
+			// Delete from database
 			await deleteContainerFromDb({
 				id: container.id as Parameters<typeof deleteContainerFromDb>[0]["id"],
 			})
@@ -95,6 +132,30 @@ export function ContainerDetailView({
 		} catch (error) {
 			toast.error(
 				"Failed to delete container",
+				error instanceof Error ? error.message : "Unknown error",
+			)
+		} finally {
+			setIsDeletingContainer(false)
+			setShowDeleteConfirm(false)
+		}
+	}
+
+	// Force delete removes container from DB without trying Docker delete
+	// Useful for orphaned containers that were manually deleted from the host
+	const handleForceDeleteContainer = async () => {
+		setIsDeletingContainer(true)
+		try {
+			await deleteContainerFromDb({
+				id: container.id as Parameters<typeof deleteContainerFromDb>[0]["id"],
+			})
+			toast.success(
+				"Container removed",
+				`Container "${container.name}" has been removed from the database`,
+			)
+			onDeleted?.()
+		} catch (error) {
+			toast.error(
+				"Failed to remove container",
 				error instanceof Error ? error.message : "Unknown error",
 			)
 		} finally {
@@ -358,6 +419,39 @@ export function ContainerDetailView({
 																	</TooltipContent>
 																</Tooltip>
 															)}
+														</div>
+													</div>
+
+													<div className="border-t border-border pt-4">
+														<div className="flex items-center justify-between">
+															<div>
+																<div className="text-sm font-medium text-warning">
+																	Force Remove (DB Only)
+																</div>
+																<div className="text-xs text-muted-foreground mt-0.5">
+																	Remove this container from the database without
+																	attempting Docker cleanup. Use for orphaned
+																	containers.
+																</div>
+															</div>
+															<Button
+																variant="outline"
+																onClick={handleForceDeleteContainer}
+																disabled={isDeletingContainer}
+																className="text-warning hover:text-warning min-w-[100px]"
+															>
+																{isDeletingContainer ? (
+																	<>
+																		<div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2" />
+																		Removing...
+																	</>
+																) : (
+																	<>
+																		<Trash2 size={16} className="mr-2" />
+																		Force Remove
+																	</>
+																)}
+															</Button>
 														</div>
 													</div>
 												</div>

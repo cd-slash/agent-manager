@@ -1,5 +1,11 @@
 import { v } from "convex/values"
-import { internalMutation, mutation, query } from "./_generated/server"
+import {
+	action,
+	internalMutation,
+	mutation,
+	query,
+} from "./_generated/server"
+import { api } from "./_generated/api"
 import { patchWithTimestamp } from "./internal/updateUtils"
 import { containerStatusValidator, containerTypeValidator } from "./validators"
 
@@ -631,5 +637,131 @@ export const upsertManagementContainerInternal = internalMutation({
 		})
 
 		return id
+	},
+})
+
+// =============================================================================
+// Actions - For syncing containers with host
+// =============================================================================
+
+/**
+ * Sync containers with the actual Docker host.
+ * Sends a listContainers command to the gateway, waits for the result,
+ * and removes any containers from the DB that don't exist on the host.
+ */
+export const syncWithHost = action({
+	args: {
+		server: v.string(),
+		sshUser: v.optional(v.string()),
+	},
+	handler: async (ctx, args): Promise<{
+		verified: number
+		removed: number
+		removedContainers: string[]
+		updated: number
+	}> => {
+		// 1. Get all containers from DB for this host
+		const allContainers = await ctx.runQuery(api.containers.list)
+		const hostContainers = allContainers.filter(
+			(c) =>
+				c.serverHostname === args.server ||
+				(!c.serverHostname && args.server === "localhost"),
+		)
+
+		if (hostContainers.length === 0) {
+			return { verified: 0, removed: 0, removedContainers: [], updated: 0 }
+		}
+
+		// 2. Send listContainers command to gateway
+		const commandId = await ctx.runMutation(api.serverCommands.listContainers, {
+			server: args.server,
+			sshUser: args.sshUser,
+			priority: "high",
+		})
+
+		// 3. Poll for command completion (max 30 seconds)
+		const maxWaitMs = 30000
+		const pollIntervalMs = 500
+		const startTime = Date.now()
+
+		type ListContainersResult = {
+			containers: Array<{ name: string; containerId: string; running: boolean }>
+			server: string
+		}
+
+		let commandResult: ListContainersResult | null = null
+
+		while (Date.now() - startTime < maxWaitMs) {
+			const command = await ctx.runQuery(api.serverCommands.get, {
+				id: commandId,
+			})
+
+			if (!command) {
+				throw new Error("Command not found")
+			}
+
+			if (command.status === "completed" && command.result) {
+				commandResult = command.result as ListContainersResult
+				break
+			}
+
+			if (command.status === "failed") {
+				throw new Error(command.error || "Failed to list containers on host")
+			}
+
+			// Wait before polling again
+			await new Promise((resolve) => setTimeout(resolve, pollIntervalMs))
+		}
+
+		if (!commandResult) {
+			throw new Error("Timeout waiting for listContainers command")
+		}
+
+		// 4. Build a set of container names that exist on the host
+		const actualContainers = commandResult.containers
+		const hostContainerNames = new Set(actualContainers.map((c) => c.name))
+		const hostContainerStatus = new Map(
+			actualContainers.map((c) => [c.name, c.running] as const),
+		)
+
+		// 5. Compare and remove orphans, update status for existing containers
+		let removed = 0
+		let updated = 0
+		const removedContainers: string[] = []
+
+		for (const container of hostContainers) {
+			// Check by name or tailscaleHostname
+			const nameToCheck = container.tailscaleHostname || container.name
+			const existsOnHost = hostContainerNames.has(nameToCheck)
+
+			if (!existsOnHost) {
+				// Container doesn't exist on host - remove from DB
+				await ctx.runMutation(api.containers.deleteContainer, {
+					id: container._id,
+				})
+				removed++
+				removedContainers.push(container.name)
+			} else {
+				// Container exists - check if status needs updating
+				const isRunningOnHost = hostContainerStatus.get(nameToCheck)
+				const dbStatus = container.status
+				const hostStatus = isRunningOnHost ? "running" : "stopped"
+
+				if (dbStatus !== hostStatus) {
+					await ctx.runMutation(api.containers.updateStatus, {
+						id: container._id,
+						status: hostStatus,
+					})
+					updated++
+				}
+			}
+		}
+
+		return {
+			verified: hostContainers.length - removed,
+			removed,
+			removedContainers,
+			updated,
+		}
 	},
 })

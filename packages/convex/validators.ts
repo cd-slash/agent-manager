@@ -148,6 +148,7 @@ export const serverCommandTypeValidator = v.union(
 	v.literal("createContainer"),
 	v.literal("stopContainer"),
 	v.literal("deleteContainer"),
+	v.literal("listContainers"),
 )
 
 // Container command types - operations that containers process directly

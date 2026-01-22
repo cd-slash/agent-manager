@@ -1127,23 +1127,33 @@ docker exec ${containerName} tailscale serve --bg --http 80 http://localhost:409
 
 /**
  * Stop a container on a server via SSH/Docker
+ * Returns { stopped: true, notFound: false } on success
+ * Returns { stopped: false, notFound: true } if container doesn't exist
  */
 async function stopContainerOnServer(
 	containerName: string,
 	server: string,
 	sshUser?: string,
-): Promise<void> {
+): Promise<{ stopped: boolean; notFound: boolean }> {
 	console.log(`[gateway] Stopping container ${containerName} on ${server}...`)
 
 	const sshTarget =
 		server === "localhost" ? "localhost" : `${sshUser || "ubuntu"}@${server}`
 
 	// Find container by label first, fallback to direct name
+	// Check if container exists before stopping
 	const stopScript = `
 CONTAINER_ID=$(docker ps -aq --filter "label=agent-manager.tailscale-hostname=${containerName}" | head -1)
 if [ -z "$CONTAINER_ID" ]; then
   CONTAINER_ID="${containerName}"
 fi
+
+# Check if container exists
+if ! docker inspect "$CONTAINER_ID" >/dev/null 2>&1; then
+  echo "NOT_FOUND"
+  exit 0
+fi
+
 docker stop "$CONTAINER_ID"
 `
 
@@ -1159,14 +1169,23 @@ docker stop "$CONTAINER_ID"
 					stderr: "pipe",
 				})
 
+	const stdout = (await new Response(stopProc.stdout).text()).trim()
 	const stderr = await new Response(stopProc.stderr).text()
 	const exitCode = await stopProc.exited
+
+	if (stdout === "NOT_FOUND") {
+		console.log(
+			`[gateway] Container ${containerName} not found on host - marking as orphaned`,
+		)
+		return { stopped: false, notFound: true }
+	}
 
 	if (exitCode !== 0) {
 		throw new Error(`Failed to stop container: ${stderr}`)
 	}
 
 	console.log(`[gateway] Container ${containerName} stopped successfully`)
+	return { stopped: true, notFound: false }
 }
 
 /**
@@ -1234,6 +1253,60 @@ docker rm "$CONTAINER_ID"
 	console.log(`[gateway] Container ${containerName} deleted successfully`)
 }
 
+/**
+ * List all agent-manager containers on a server via SSH/Docker
+ * Returns container names and their running status
+ */
+async function listContainersOnServer(
+	server: string,
+	sshUser?: string,
+): Promise<Array<{ name: string; containerId: string; running: boolean }>> {
+	console.log(`[gateway] Listing containers on ${server}...`)
+
+	const sshTarget =
+		server === "localhost" ? "localhost" : `${sshUser || "ubuntu"}@${server}`
+
+	// List all containers with agent-manager labels, output JSON format
+	const listScript = `
+docker ps -a --filter "label=agent-manager.tailscale-hostname" --format '{"name":"{{.Names}}","containerId":"{{.ID}}","running":{{if eq .State "running"}}true{{else}}false{{end}}}'
+`
+
+	const listProc =
+		server === "localhost"
+			? Bun.spawn(["bash", "-c", listScript], {
+					stdout: "pipe",
+					stderr: "pipe",
+				})
+			: Bun.spawn(["ssh", sshTarget, "bash", "-s"], {
+					stdin: new Blob([listScript]),
+					stdout: "pipe",
+					stderr: "pipe",
+				})
+
+	const stdout = await new Response(listProc.stdout).text()
+	const stderr = await new Response(listProc.stderr).text()
+	const exitCode = await listProc.exited
+
+	if (exitCode !== 0) {
+		throw new Error(`Failed to list containers: ${stderr}`)
+	}
+
+	// Parse JSON lines output
+	const containers: Array<{ name: string; containerId: string; running: boolean }> = []
+	for (const line of stdout.trim().split("\n")) {
+		if (line) {
+			try {
+				containers.push(JSON.parse(line))
+			} catch {
+				console.warn(`[gateway] Failed to parse container line: ${line}`)
+			}
+		}
+	}
+
+	console.log(`[gateway] Found ${containers.length} containers on ${server}`)
+	return containers
+}
+
 // Configuration from environment
 // Note: No HTTP/WebSocket server - containers connect directly to Convex
 const CONVEX_URL = process.env.CONVEX_URL || ""
@@ -1256,6 +1329,7 @@ const commandProcessor = CONVEX_URL
 			createContainerOnServer,
 			stopContainerOnServer,
 			deleteContainerOnServer,
+			listContainersOnServer,
 			fetchSecrets,
 			fetchTailscaleConfig,
 		})

@@ -117,6 +117,33 @@ export const deleteContainer = mutation({
 	},
 })
 
+/**
+ * Request listing containers on a server (for orphan detection)
+ */
+export const listContainers = mutation({
+	args: {
+		server: v.string(),
+		sshUser: v.optional(v.string()),
+		priority: v.optional(commandPriorityValidator),
+	},
+	handler: async (ctx, args) => {
+		const now = Date.now()
+		return await ctx.db.insert("serverCommands", {
+			type: "listContainers",
+			status: "pending",
+			priority: args.priority ?? "high",
+			payload: {
+				server: args.server,
+				sshUser: args.sshUser,
+			},
+			retryCount: 0,
+			maxRetries: DEFAULT_MAX_RETRIES,
+			createdAt: now,
+			updatedAt: now,
+		})
+	},
+})
+
 // =============================================================================
 // Queries - For gateway to get work and frontend to check status
 // =============================================================================
