@@ -15,7 +15,7 @@ import { EventEmitter } from "node:events"
 import type { AuthManager } from "./auth-manager"
 import type { ProcessManager } from "./process-manager"
 
-type GatewayCommand = Doc<"gatewayCommands">
+type ContainerCommand = Doc<"containerCommands">
 
 interface ConvexIntegrationConfig {
 	convexUrl: string
@@ -28,7 +28,7 @@ interface ConvexIntegrationEvents {
 	connected: []
 	disconnected: []
 	error: [Error]
-	"command:received": [GatewayCommand]
+	"command:received": [ContainerCommand]
 	"command:completed": [string, unknown]
 	"command:failed": [string, string]
 }
@@ -129,17 +129,17 @@ export class ConvexIntegration extends EventEmitter<ConvexIntegrationEvents> {
 	}
 
 	private subscribeToCommands(): void {
-		// Subscribe to commands assigned to this container
+		// Subscribe to commands targeted at this container
 		this.commandUnsubscribe = this.client.onUpdate(
-			api.gatewayCommands.getByAssignedContainer,
+			api.containerCommands.getForContainer,
 			{ containerId: this.config.containerId },
 			(commands) => {
 				if (!commands) return
 
 				for (const command of commands) {
-					// Only process pending/queued commands we haven't started
+					// Only process pending commands we haven't started
 					if (
-						(command.status === "pending" || command.status === "queued") &&
+						command.status === "pending" &&
 						!this.processingCommands.has(command._id)
 					) {
 						this.handleCommand(command)
@@ -167,7 +167,7 @@ export class ConvexIntegration extends EventEmitter<ConvexIntegrationEvents> {
 		)
 	}
 
-	private async handleCommand(command: GatewayCommand): Promise<void> {
+	private async handleCommand(command: ContainerCommand): Promise<void> {
 		const commandId = command._id
 		this.processingCommands.add(commandId)
 		this.emit("command:received", command)
@@ -176,9 +176,8 @@ export class ConvexIntegration extends EventEmitter<ConvexIntegrationEvents> {
 
 		try {
 			// Mark command as processing
-			await this.client.mutation(api.gatewayCommands.updateStatus, {
+			await this.client.mutation(api.containerCommands.markProcessing, {
 				id: commandId,
-				status: "processing",
 			})
 
 			let result: unknown
@@ -213,7 +212,7 @@ export class ConvexIntegration extends EventEmitter<ConvexIntegrationEvents> {
 			}
 
 			// Mark command as completed
-			await this.client.mutation(api.gatewayCommands.complete, {
+			await this.client.mutation(api.containerCommands.complete, {
 				id: commandId,
 				result,
 			})
@@ -225,7 +224,7 @@ export class ConvexIntegration extends EventEmitter<ConvexIntegrationEvents> {
 			console.error(`[convex] Command failed: ${command.type} (${commandId}):`, message)
 
 			// Mark command as failed
-			await this.client.mutation(api.gatewayCommands.fail, {
+			await this.client.mutation(api.containerCommands.fail, {
 				id: commandId,
 				error: message,
 			})
@@ -241,7 +240,7 @@ export class ConvexIntegration extends EventEmitter<ConvexIntegrationEvents> {
 		}
 	}
 
-	private async handleStartExecution(command: GatewayCommand): Promise<unknown> {
+	private async handleStartExecution(command: ContainerCommand): Promise<unknown> {
 		const payload = command.payload as {
 			message: string
 			model?: string
@@ -282,7 +281,7 @@ export class ConvexIntegration extends EventEmitter<ConvexIntegrationEvents> {
 		return { correlationId, status: "completed" }
 	}
 
-	private async handleStartPhaseExecution(command: GatewayCommand): Promise<unknown> {
+	private async handleStartPhaseExecution(command: ContainerCommand): Promise<unknown> {
 		const payload = command.payload as {
 			taskId: string
 			phase: string
@@ -318,7 +317,7 @@ export class ConvexIntegration extends EventEmitter<ConvexIntegrationEvents> {
 		})
 	}
 
-	private async handlePushAuthToken(command: GatewayCommand): Promise<unknown> {
+	private async handlePushAuthToken(command: ContainerCommand): Promise<unknown> {
 		const payload = command.payload as { token: string }
 
 		if (!payload.token) {
@@ -329,7 +328,7 @@ export class ConvexIntegration extends EventEmitter<ConvexIntegrationEvents> {
 		return { success: true }
 	}
 
-	private async handleAbortExecution(command: GatewayCommand): Promise<unknown> {
+	private async handleAbortExecution(command: ContainerCommand): Promise<unknown> {
 		const payload = command.payload as { correlationId?: string; processId?: number }
 
 		if (payload.processId) {
@@ -342,7 +341,7 @@ export class ConvexIntegration extends EventEmitter<ConvexIntegrationEvents> {
 		return { success: true, abortedAll: true }
 	}
 
-	private async handleStartOAuthFlow(command: GatewayCommand): Promise<unknown> {
+	private async handleStartOAuthFlow(command: ContainerCommand): Promise<unknown> {
 		const payload = command.payload as {
 			provider: string
 			oauthFlowId: string
@@ -365,7 +364,7 @@ export class ConvexIntegration extends EventEmitter<ConvexIntegrationEvents> {
 		}
 	}
 
-	private async handleCompleteOAuthFlow(command: GatewayCommand): Promise<unknown> {
+	private async handleCompleteOAuthFlow(command: ContainerCommand): Promise<unknown> {
 		const payload = command.payload as {
 			oauthFlowId: string
 			containerFlowId: string

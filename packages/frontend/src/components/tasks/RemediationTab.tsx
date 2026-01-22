@@ -198,11 +198,13 @@ function RemediationCycleCard({
 interface RemediationTabProps {
 	taskId: TaskId
 	remediationPhase: TaskPhaseDoc | null
+	activeContainerId?: string
 }
 
 export function RemediationTab({
 	taskId,
 	remediationPhase,
+	activeContainerId,
 }: RemediationTabProps) {
 	const toast = useToast()
 	const [showConfig, setShowConfig] = useState(false)
@@ -221,17 +223,22 @@ export function RemediationTab({
 	const triggeredBy = remediationPhase?.remediationTriggeredBy
 
 	const handleStartRemediation = async () => {
+		if (!activeContainerId) {
+			toast.error("No container", "Please assign a container to this task first")
+			return
+		}
 		setIsStarting(true)
 		try {
-			// Call gateway to start phase execution via Convex
+			// Call container to start phase execution via Convex
 			const result = await startPhaseCmd.execute({
+				containerId: activeContainerId,
 				taskId: taskId as string,
 				phase: "remediation",
 			})
 
 			toast.success(
 				"Remediation started",
-				`Agent running on container ${result.containerId}`,
+				`Agent running on container ${activeContainerId}`,
 			)
 		} catch (error) {
 			toast.error(

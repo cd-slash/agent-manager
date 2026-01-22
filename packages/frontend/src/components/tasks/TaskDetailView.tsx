@@ -570,6 +570,7 @@ export function TaskDetailView({
 											acceptanceCriteria={task.acceptanceCriteria || []}
 											tests={task.tests || []}
 											implementationPrompt={task.implementationPrompt}
+											activeContainerId={task.activeContainerId}
 										/>
 									</TabsContent>
 
@@ -829,6 +830,7 @@ export function TaskDetailView({
 										<RemediationTab
 											taskId={taskId}
 											remediationPhase={getPhaseByName("remediation")}
+											activeContainerId={task.activeContainerId}
 										/>
 									</TabsContent>
 

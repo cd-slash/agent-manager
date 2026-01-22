@@ -38,6 +38,7 @@ interface PlanningTabProps {
 	acceptanceCriteria: AcceptanceCriteriaItem[]
 	tests: TestItem[]
 	implementationPrompt?: string
+	activeContainerId?: string
 }
 
 export function PlanningTab({
@@ -46,6 +47,7 @@ export function PlanningTab({
 	acceptanceCriteria,
 	tests,
 	implementationPrompt,
+	activeContainerId,
 }: PlanningTabProps) {
 	const toast = useToast()
 	const [showConfig, setShowConfig] = useState(false)
@@ -59,17 +61,22 @@ export function PlanningTab({
 	const isCompleted = status === "completed" || status === "skipped"
 
 	const handleStartPlanning = async () => {
+		if (!activeContainerId) {
+			toast.error("No container", "Please assign a container to this task first")
+			return
+		}
 		setIsStarting(true)
 		try {
-			// Call gateway to start phase execution via Convex
+			// Call container to start phase execution via Convex
 			const result = await startPhaseCmd.execute({
+				containerId: activeContainerId,
 				taskId: taskId as string,
 				phase: "planning",
 			})
 
 			toast.success(
 				"Planning started",
-				`Agent running on container ${result.containerId}`,
+				`Agent running on container ${activeContainerId}`,
 			)
 		} catch (error) {
 			toast.error(

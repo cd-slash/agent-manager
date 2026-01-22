@@ -243,7 +243,7 @@ export const acquire = mutation({
 	args: {
 		containerId: v.string(),
 		sessionId: v.string(),
-		commandId: v.id("gatewayCommands"),
+		commandId: v.id("containerCommands"),
 	},
 	handler: async (ctx, args) => {
 		const now = Date.now()

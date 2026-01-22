@@ -7,12 +7,12 @@
  * Uses Convex real-time subscriptions for OAuth flows where:
  * 1. Frontend creates a pending OAuth flow in Convex
  * 2. Gateway subscribes and reacts instantly to new flows
- * 3. Gateway creates a gatewayCommand for OAuth start
+ * 3. Gateway creates a containerCommand for OAuth start on specific container
  * 4. Container processes command, runs `claude setup-token`, returns URL
  * 5. Gateway watches for command completion, updates OAuth flow
  * 6. Frontend shows URL to user
  * 7. User submits auth code via frontend
- * 8. Gateway creates another gatewayCommand for OAuth complete
+ * 8. Gateway creates another containerCommand for OAuth complete
  * 9. Container completes OAuth and stores token in Convex secrets
  * 10. Gateway marks OAuth flow as completed
  */
@@ -68,7 +68,7 @@ interface ActiveContainerOAuthFlow {
 
 /**
  * Claude authentication manager for the gateway.
- * Delegates OAuth to containers via gatewayCommands (Convex-driven).
+ * Delegates OAuth to containers via containerCommands (Convex-driven).
  */
 export class ClaudeAuth extends EventEmitter {
 	private convexUrl: string
@@ -290,7 +290,7 @@ export class ClaudeAuth extends EventEmitter {
 	}
 
 	/**
-	 * Process a single pending OAuth flow by delegating to a container via gatewayCommands
+	 * Process a single pending OAuth flow by delegating to a container via containerCommands
 	 */
 	private async processPendingFlow(flow: ConvexOAuthFlow): Promise<void> {
 		if (!this.convexClient) {
@@ -362,7 +362,7 @@ export class ClaudeAuth extends EventEmitter {
 		try {
 			// Create a gatewayCommand to start OAuth flow on the container
 			const commandId = await this.convexClient.mutation(
-				api.gatewayCommands.startOAuthFlow,
+				api.containerCommands.startOAuthFlow,
 				{
 					containerId,
 					provider: flow.provider,
@@ -386,7 +386,7 @@ export class ClaudeAuth extends EventEmitter {
 				attempts++
 
 				const command = await this.convexClient.query(
-					api.gatewayCommands.get,
+					api.containerCommands.get,
 					{ id: commandId },
 				)
 
@@ -498,9 +498,9 @@ export class ClaudeAuth extends EventEmitter {
 		await this.updateConvexFlowCompleting(flow._id)
 
 		try {
-			// Create a gatewayCommand to complete the OAuth flow
+			// Create a containerCommand to complete the OAuth flow
 			const commandId = await this.convexClient.mutation(
-				api.gatewayCommands.completeOAuthFlow,
+				api.containerCommands.completeOAuthFlow,
 				{
 					containerId: activeFlow.containerId,
 					oauthFlowId: flow._id,
@@ -519,7 +519,7 @@ export class ClaudeAuth extends EventEmitter {
 				attempts++
 
 				const command = await this.convexClient.query(
-					api.gatewayCommands.get,
+					api.containerCommands.get,
 					{ id: commandId },
 				)
 

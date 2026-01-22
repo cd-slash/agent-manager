@@ -5,6 +5,7 @@ import {
 	aiProviderTypeValidator,
 	authTypeValidator,
 	commandPriorityValidator,
+	containerCommandTypeValidator,
 	containerPoolStatusValidator,
 	containerTypeValidator,
 	gatewayCommandStatusValidator,
@@ -12,6 +13,7 @@ import {
 	phaseStatusValidator,
 	prDetectedViaValidator,
 	remediationTriggerValidator,
+	serverCommandTypeValidator,
 	taskPhaseValidator,
 } from "./validators"
 
@@ -572,31 +574,76 @@ export default defineSchema({
 		.index("by_phase", ["phase"])
 		.index("by_task_and_phase", ["taskId", "phase"]),
 
-	// Gateway commands - queued work for the gateway to process
+	// Server commands - queued work for the gateway to process via SSH/Docker
+	// These are infrastructure operations, NOT sent to containers
 	// Frontend creates commands, gateway subscribes and processes them
-	// Supports priority-based queuing and automatic retry
-	gatewayCommands: defineTable({
-		// Command type determines what operation to perform
-		type: gatewayCommandTypeValidator,
+	serverCommands: defineTable({
+		// Command type: createContainer, stopContainer, deleteContainer
+		type: serverCommandTypeValidator,
 
-		// Status tracks command lifecycle
-		// pending -> queued (waiting for container) -> processing -> completed/failed
+		// Status tracks command lifecycle: pending -> processing -> completed/failed
 		status: gatewayCommandStatusValidator,
 
 		// Priority for queue ordering (higher = more urgent)
 		priority: commandPriorityValidator,
 
-		// Payload contains type-specific parameters (varies by command type)
-		// createContainer: { repo, branch?, name?, server?, sshUser?, taskId?, projectId? }
+		// Payload contains type-specific parameters:
+		// createContainer: { repo?, branch?, name?, server?, sshUser?, taskId?, projectId? }
 		// stopContainer: { containerName, server, sshUser? }
 		// deleteContainer: { containerName, server, sshUser? }
-		// startExecution: { containerId?, message, model?, workingDirectory?, permissionMode?, ... }
-		// abortExecution: { correlationId }
-		// pushAuthToken: { containerId, token }
-		// startPhaseExecution: { taskId, phase, containerId?, customPrompt?, configOverrides? }
 		payload: v.any(),
 
-		// Result set by gateway on completion (type-specific)
+		// Result set by gateway on completion
+		result: v.optional(v.any()),
+
+		// Error message if command failed
+		error: v.optional(v.string()),
+
+		// For task-related commands
+		taskId: v.optional(v.string()),
+		projectId: v.optional(v.string()),
+
+		// Retry handling
+		retryCount: v.number(),
+		maxRetries: v.number(),
+		lastError: v.optional(v.string()),
+
+		// Timestamps
+		createdAt: v.number(),
+		updatedAt: v.number(),
+		processedAt: v.optional(v.number()),
+		completedAt: v.optional(v.number()),
+	})
+		.index("by_status", ["status"])
+		.index("by_type_and_status", ["type", "status"])
+		.index("by_priority_and_status", ["priority", "status"])
+		.index("by_task", ["taskId"]),
+
+	// Container commands - work items targeted at specific containers
+	// Each container subscribes to its own queue via containerId
+	containerCommands: defineTable({
+		// Target container - REQUIRED, each container only sees its own commands
+		containerId: v.string(),
+
+		// Command type determines what operation to perform
+		type: containerCommandTypeValidator,
+
+		// Status: pending -> processing -> completed/failed
+		status: gatewayCommandStatusValidator,
+
+		// Priority for ordering
+		priority: commandPriorityValidator,
+
+		// Payload contains type-specific parameters:
+		// startExecution: { message, model?, workingDirectory?, permissionMode?, ... }
+		// abortExecution: { correlationId }
+		// pushAuthToken: { token }
+		// startPhaseExecution: { taskId, phase, customPrompt?, configOverrides? }
+		// startOAuthFlow: { provider, oauthFlowId }
+		// completeOAuthFlow: { oauthFlowId, authCode }
+		payload: v.any(),
+
+		// Result set by container on completion
 		result: v.optional(v.any()),
 
 		// Error message if command failed
@@ -609,23 +656,45 @@ export default defineSchema({
 		taskId: v.optional(v.string()),
 		projectId: v.optional(v.string()),
 
-		// Container assignment (for execution commands)
-		assignedContainerId: v.optional(v.string()), // Container assigned to this command
-
 		// Retry handling
-		retryCount: v.number(), // Current retry attempt (0 = first attempt)
-		maxRetries: v.number(), // Maximum retries before permanent failure
-		lastError: v.optional(v.string()), // Error from last retry attempt
-
-		// Queue position tracking
-		queuePosition: v.optional(v.number()), // Position in queue (for UI display)
+		retryCount: v.number(),
+		maxRetries: v.number(),
+		lastError: v.optional(v.string()),
 
 		// Timestamps
 		createdAt: v.number(),
 		updatedAt: v.number(),
-		queuedAt: v.optional(v.number()), // When command entered queue
-		processedAt: v.optional(v.number()), // When gateway started processing
-		completedAt: v.optional(v.number()), // When command finished
+		processedAt: v.optional(v.number()),
+		completedAt: v.optional(v.number()),
+	})
+		.index("by_container", ["containerId"])
+		.index("by_container_and_status", ["containerId", "status"])
+		.index("by_status", ["status"])
+		.index("by_correlation_id", ["correlationId"])
+		.index("by_task", ["taskId"]),
+
+	// Legacy gateway commands table - DEPRECATED, kept for migration
+	// TODO: Remove after migration to serverCommands + containerCommands
+	gatewayCommands: defineTable({
+		type: gatewayCommandTypeValidator,
+		status: gatewayCommandStatusValidator,
+		priority: commandPriorityValidator,
+		payload: v.any(),
+		result: v.optional(v.any()),
+		error: v.optional(v.string()),
+		correlationId: v.optional(v.string()),
+		taskId: v.optional(v.string()),
+		projectId: v.optional(v.string()),
+		assignedContainerId: v.optional(v.string()),
+		retryCount: v.number(),
+		maxRetries: v.number(),
+		lastError: v.optional(v.string()),
+		queuePosition: v.optional(v.number()),
+		createdAt: v.number(),
+		updatedAt: v.number(),
+		queuedAt: v.optional(v.number()),
+		processedAt: v.optional(v.number()),
+		completedAt: v.optional(v.number()),
 	})
 		.index("by_status", ["status"])
 		.index("by_type_and_status", ["type", "status"])
@@ -645,7 +714,7 @@ export default defineSchema({
 
 		// Current work assignment
 		currentSessionId: v.optional(v.string()), // Active session correlation ID
-		currentCommandId: v.optional(v.id("gatewayCommands")), // Command being executed
+		currentCommandId: v.optional(v.id("containerCommands")), // Command being executed
 		reservedForTaskId: v.optional(v.string()), // If reserved for a specific task
 
 		// Capacity and health

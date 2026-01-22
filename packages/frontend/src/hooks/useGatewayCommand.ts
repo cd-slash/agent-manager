@@ -1,12 +1,11 @@
 /**
- * Hook for executing gateway commands via Convex with status tracking.
+ * Hooks for executing commands via Convex with status tracking.
  *
- * Gateway commands follow an async pattern:
- * 1. Frontend creates command (pending status)
- * 2. Gateway picks up and processes (processing status)
- * 3. Command completes or fails (completed/failed status)
+ * Commands are split between two tables:
+ * - serverCommands: Infrastructure operations (create/stop/delete containers) processed by gateway via SSH
+ * - containerCommands: Container-targeted operations (executions, OAuth) processed directly by containers
  *
- * This hook provides a promise-based interface that resolves when the command completes.
+ * Each hook provides a promise-based interface that resolves when the command completes.
  */
 
 import { api } from "@agent-manager/convex/api"
@@ -14,7 +13,7 @@ import type { Id } from "@agent-manager/convex/dataModel"
 import { useMutation, useQuery } from "convex/react"
 import { useCallback, useEffect, useRef, useState } from "react"
 
-type CommandStatus = "pending" | "queued" | "processing" | "completed" | "failed"
+type CommandStatus = "pending" | "processing" | "completed" | "failed"
 
 interface CommandResult<T = unknown> {
 	status: CommandStatus
@@ -22,20 +21,26 @@ interface CommandResult<T = unknown> {
 	error?: string
 }
 
-interface PendingCommand<T> {
-	id: Id<"gatewayCommands">
+interface PendingServerCommand<T> {
+	id: Id<"serverCommands">
+	resolve: (result: T) => void
+	reject: (error: Error) => void
+}
+
+interface PendingContainerCommand<T> {
+	id: Id<"containerCommands">
 	resolve: (result: T) => void
 	reject: (error: Error) => void
 }
 
 /**
- * Hook for watching and waiting for a specific command to complete
+ * Hook for watching and waiting for a server command to complete
  */
-export function useCommandWatcher<T = unknown>(
-	commandId: Id<"gatewayCommands"> | null,
+export function useServerCommandWatcher<T = unknown>(
+	commandId: Id<"serverCommands"> | null,
 ): CommandResult<T> | null {
 	const command = useQuery(
-		api.gatewayCommands.get,
+		api.serverCommands.get,
 		commandId ? { id: commandId } : "skip",
 	)
 
@@ -49,19 +54,43 @@ export function useCommandWatcher<T = unknown>(
 }
 
 /**
+ * Hook for watching and waiting for a container command to complete
+ */
+export function useContainerCommandWatcher<T = unknown>(
+	commandId: Id<"containerCommands"> | null,
+): CommandResult<T> | null {
+	const command = useQuery(
+		api.containerCommands.get,
+		commandId ? { id: commandId } : "skip",
+	)
+
+	if (!command) return null
+
+	return {
+		status: command.status,
+		result: command.result as T,
+		error: command.error,
+	}
+}
+
+// =============================================================================
+// Server Commands (Gateway processes via SSH/Docker)
+// =============================================================================
+
+/**
  * Hook for executing container creation commands
  */
 export function useCreateContainer() {
-	const createCommand = useMutation(api.gatewayCommands.createContainer)
-	const [pendingId, setPendingId] = useState<Id<"gatewayCommands"> | null>(null)
-	const pendingRef = useRef<PendingCommand<{
+	const createCommand = useMutation(api.serverCommands.createContainer)
+	const [pendingId, setPendingId] = useState<Id<"serverCommands"> | null>(null)
+	const pendingRef = useRef<PendingServerCommand<{
 		name: string
 		containerId: string
 		hostname: string
 		server: string
 	}> | null>(null)
 
-	const commandStatus = useCommandWatcher(pendingId)
+	const commandStatus = useServerCommandWatcher(pendingId)
 
 	// Watch for completion
 	useEffect(() => {
@@ -89,7 +118,7 @@ export function useCreateContainer() {
 
 	const execute = useCallback(
 		(args: {
-			repo: string
+			repo?: string
 			branch?: string
 			name?: string
 			server?: string
@@ -128,15 +157,14 @@ export function useCreateContainer() {
  * Hook for executing container stop commands
  */
 export function useStopContainer() {
-	const createCommand = useMutation(api.gatewayCommands.stopContainer)
-	const [pendingId, setPendingId] = useState<Id<"gatewayCommands"> | null>(null)
-	const pendingRef = useRef<PendingCommand<{
-		status: string
+	const createCommand = useMutation(api.serverCommands.stopContainer)
+	const [pendingId, setPendingId] = useState<Id<"serverCommands"> | null>(null)
+	const pendingRef = useRef<PendingServerCommand<{
+		stopped: boolean
 		containerName: string
-		output: string
 	}> | null>(null)
 
-	const commandStatus = useCommandWatcher(pendingId)
+	const commandStatus = useServerCommandWatcher(pendingId)
 
 	useEffect(() => {
 		if (!commandStatus || !pendingRef.current) return
@@ -144,9 +172,8 @@ export function useStopContainer() {
 		if (commandStatus.status === "completed" && commandStatus.result) {
 			pendingRef.current.resolve(
 				commandStatus.result as {
-					status: string
+					stopped: boolean
 					containerName: string
-					output: string
 				},
 			)
 			pendingRef.current = null
@@ -165,7 +192,7 @@ export function useStopContainer() {
 			containerName: string,
 			server: string,
 			sshUser?: string,
-		): Promise<{ status: string; containerName: string; output: string }> => {
+		): Promise<{ stopped: boolean; containerName: string }> => {
 			return new Promise((resolve, reject) => {
 				createCommand({
 					containerName,
@@ -197,15 +224,14 @@ export function useStopContainer() {
  * Hook for executing container delete commands
  */
 export function useDeleteContainer() {
-	const createCommand = useMutation(api.gatewayCommands.deleteContainer)
-	const [pendingId, setPendingId] = useState<Id<"gatewayCommands"> | null>(null)
-	const pendingRef = useRef<PendingCommand<{
-		status: string
+	const createCommand = useMutation(api.serverCommands.deleteContainer)
+	const [pendingId, setPendingId] = useState<Id<"serverCommands"> | null>(null)
+	const pendingRef = useRef<PendingServerCommand<{
+		deleted: boolean
 		containerName: string
-		output: string
 	}> | null>(null)
 
-	const commandStatus = useCommandWatcher(pendingId)
+	const commandStatus = useServerCommandWatcher(pendingId)
 
 	useEffect(() => {
 		if (!commandStatus || !pendingRef.current) return
@@ -213,9 +239,8 @@ export function useDeleteContainer() {
 		if (commandStatus.status === "completed" && commandStatus.result) {
 			pendingRef.current.resolve(
 				commandStatus.result as {
-					status: string
+					deleted: boolean
 					containerName: string
-					output: string
 				},
 			)
 			pendingRef.current = null
@@ -234,7 +259,7 @@ export function useDeleteContainer() {
 			containerName: string,
 			server: string,
 			sshUser?: string,
-		): Promise<{ status: string; containerName: string; output: string }> => {
+		): Promise<{ deleted: boolean; containerName: string }> => {
 			return new Promise((resolve, reject) => {
 				createCommand({
 					containerName,
@@ -262,19 +287,22 @@ export function useDeleteContainer() {
 	}
 }
 
+// =============================================================================
+// Container Commands (Containers process directly)
+// =============================================================================
+
 /**
  * Hook for starting executions on containers
  */
 export function useStartExecution() {
-	const createCommand = useMutation(api.gatewayCommands.startExecution)
-	const [pendingId, setPendingId] = useState<Id<"gatewayCommands"> | null>(null)
-	const pendingRef = useRef<PendingCommand<{
+	const createCommand = useMutation(api.containerCommands.startExecution)
+	const [pendingId, setPendingId] = useState<Id<"containerCommands"> | null>(null)
+	const pendingRef = useRef<PendingContainerCommand<{
 		correlationId: string
-		containerId: string
 		status: string
 	}> | null>(null)
 
-	const commandStatus = useCommandWatcher(pendingId)
+	const commandStatus = useContainerCommandWatcher(pendingId)
 
 	useEffect(() => {
 		if (!commandStatus || !pendingRef.current) return
@@ -283,7 +311,6 @@ export function useStartExecution() {
 			pendingRef.current.resolve(
 				commandStatus.result as {
 					correlationId: string
-					containerId: string
 					status: string
 				},
 			)
@@ -300,7 +327,7 @@ export function useStartExecution() {
 
 	const execute = useCallback(
 		(args: {
-			containerId?: string
+			containerId: string
 			message: string
 			model?: string
 			workingDirectory?: string
@@ -309,18 +336,17 @@ export function useStartExecution() {
 			projectId?: string
 		}): Promise<{
 			correlationId: string
-			containerId: string
 			status: string
 		}> => {
 			return new Promise((resolve, reject) => {
 				createCommand(args)
-					.then((commandId) => {
+					.then((result) => {
 						pendingRef.current = {
-							id: commandId,
+							id: result.commandId,
 							resolve,
 							reject,
 						}
-						setPendingId(commandId)
+						setPendingId(result.commandId)
 					})
 					.catch(reject)
 			})
@@ -339,17 +365,16 @@ export function useStartExecution() {
  * Hook for starting phase executions on tasks
  */
 export function useStartPhaseExecution() {
-	const createCommand = useMutation(api.gatewayCommands.startPhaseExecution)
-	const [pendingId, setPendingId] = useState<Id<"gatewayCommands"> | null>(null)
-	const pendingRef = useRef<PendingCommand<{
+	const createCommand = useMutation(api.containerCommands.startPhaseExecution)
+	const [pendingId, setPendingId] = useState<Id<"containerCommands"> | null>(null)
+	const pendingRef = useRef<PendingContainerCommand<{
 		correlationId: string
-		containerId: string
 		taskId: string
 		phase: string
 		status: string
 	}> | null>(null)
 
-	const commandStatus = useCommandWatcher(pendingId)
+	const commandStatus = useContainerCommandWatcher(pendingId)
 
 	useEffect(() => {
 		if (!commandStatus || !pendingRef.current) return
@@ -358,7 +383,6 @@ export function useStartPhaseExecution() {
 			pendingRef.current.resolve(
 				commandStatus.result as {
 					correlationId: string
-					containerId: string
 					taskId: string
 					phase: string
 					status: string
@@ -377,6 +401,7 @@ export function useStartPhaseExecution() {
 
 	const execute = useCallback(
 		(args: {
+			containerId: string
 			taskId: string
 			phase:
 				| "requirements"
@@ -386,25 +411,23 @@ export function useStartPhaseExecution() {
 				| "remediation"
 				| "human_review"
 				| "merge"
-			containerId?: string
 			customPrompt?: string
 			configOverrides?: Record<string, unknown>
 		}): Promise<{
 			correlationId: string
-			containerId: string
 			taskId: string
 			phase: string
 			status: string
 		}> => {
 			return new Promise((resolve, reject) => {
 				createCommand(args)
-					.then((commandId) => {
+					.then((result) => {
 						pendingRef.current = {
-							id: commandId,
+							id: result.commandId,
 							resolve,
 							reject,
 						}
-						setPendingId(commandId)
+						setPendingId(result.commandId)
 					})
 					.catch(reject)
 			})

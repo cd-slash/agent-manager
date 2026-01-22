@@ -1125,6 +1125,115 @@ docker exec ${containerName} tailscale serve --bg --http 80 http://localhost:409
 	}
 }
 
+/**
+ * Stop a container on a server via SSH/Docker
+ */
+async function stopContainerOnServer(
+	containerName: string,
+	server: string,
+	sshUser?: string,
+): Promise<void> {
+	console.log(`[gateway] Stopping container ${containerName} on ${server}...`)
+
+	const sshTarget =
+		server === "localhost" ? "localhost" : `${sshUser || "ubuntu"}@${server}`
+
+	// Find container by label first, fallback to direct name
+	const stopScript = `
+CONTAINER_ID=$(docker ps -aq --filter "label=agent-manager.tailscale-hostname=${containerName}" | head -1)
+if [ -z "$CONTAINER_ID" ]; then
+  CONTAINER_ID="${containerName}"
+fi
+docker stop "$CONTAINER_ID"
+`
+
+	const stopProc =
+		server === "localhost"
+			? Bun.spawn(["bash", "-c", stopScript], {
+					stdout: "pipe",
+					stderr: "pipe",
+				})
+			: Bun.spawn(["ssh", sshTarget, "bash", "-s"], {
+					stdin: new Blob([stopScript]),
+					stdout: "pipe",
+					stderr: "pipe",
+				})
+
+	const stderr = await new Response(stopProc.stderr).text()
+	const exitCode = await stopProc.exited
+
+	if (exitCode !== 0) {
+		throw new Error(`Failed to stop container: ${stderr}`)
+	}
+
+	console.log(`[gateway] Container ${containerName} stopped successfully`)
+}
+
+/**
+ * Delete a container on a server via SSH/Docker
+ * Container must be stopped first
+ */
+async function deleteContainerOnServer(
+	containerName: string,
+	server: string,
+	sshUser?: string,
+): Promise<void> {
+	console.log(`[gateway] Deleting container ${containerName} on ${server}...`)
+
+	const sshTarget =
+		server === "localhost" ? "localhost" : `${sshUser || "ubuntu"}@${server}`
+
+	// Find container by label first, check if running, then delete
+	const deleteScript = `
+CONTAINER_ID=$(docker ps -aq --filter "label=agent-manager.tailscale-hostname=${containerName}" | head -1)
+if [ -z "$CONTAINER_ID" ]; then
+  CONTAINER_ID="${containerName}"
+fi
+
+# Check if container exists
+if ! docker inspect "$CONTAINER_ID" >/dev/null 2>&1; then
+  echo "NOT_FOUND"
+  exit 0
+fi
+
+# Check if container is running
+RUNNING=$(docker inspect --format='{{.State.Running}}' "$CONTAINER_ID" 2>/dev/null || echo "false")
+if [ "$RUNNING" = "true" ]; then
+  echo "STILL_RUNNING"
+  exit 1
+fi
+
+# Delete the container
+docker rm "$CONTAINER_ID"
+`
+
+	const deleteProc =
+		server === "localhost"
+			? Bun.spawn(["bash", "-c", deleteScript], {
+					stdout: "pipe",
+					stderr: "pipe",
+				})
+			: Bun.spawn(["ssh", sshTarget, "bash", "-s"], {
+					stdin: new Blob([deleteScript]),
+					stdout: "pipe",
+					stderr: "pipe",
+				})
+
+	const stdout = (await new Response(deleteProc.stdout).text()).trim()
+	const stderr = await new Response(deleteProc.stderr).text()
+	const exitCode = await deleteProc.exited
+
+	if (stdout === "STILL_RUNNING") {
+		throw new Error("Container is still running - stop it first")
+	}
+
+	if (exitCode !== 0 && stdout !== "NOT_FOUND") {
+		throw new Error(`Failed to delete container: ${stderr}`)
+	}
+
+	console.log(`[gateway] Container ${containerName} deleted successfully`)
+}
+
 // Configuration from environment
 // Note: No HTTP/WebSocket server - containers connect directly to Convex
 const CONVEX_URL = process.env.CONVEX_URL || ""
@@ -1140,13 +1249,13 @@ const taskOrchestrator = CONVEX_URL
 	? new TaskOrchestrator(CONVEX_URL, connections)
 	: null
 
-// Command processor for Convex-driven gateway operations
+// Command processor for Convex-driven server operations
 const commandProcessor = CONVEX_URL
 	? new ConvexCommandProcessor(CONVEX_URL, {
-			connections,
 			convexSync,
-			taskOrchestrator,
 			createContainerOnServer,
+			stopContainerOnServer,
+			deleteContainerOnServer,
 			fetchSecrets,
 			fetchTailscaleConfig,
 		})
@@ -1301,10 +1410,9 @@ function handleExecStream(
 	payload: ExecStreamPayload,
 	correlationId?: string,
 ): void {
-	// Check both local (REST API) and command processor (Convex) execution tracking
+	// Check local execution tracking (for REST API initiated executions)
 	const execution = correlationId
-		? (activeExecutions.get(correlationId) ??
-			commandProcessor?.getActiveExecution(correlationId))
+		? activeExecutions.get(correlationId)
 		: null
 
 	// Log stream events
@@ -1334,10 +1442,9 @@ function handleExecComplete(
 	payload: ExecCompletePayload,
 	correlationId?: string,
 ): void {
-	// Check both local (REST API) and command processor (Convex) execution tracking
+	// Check local execution tracking (for REST API initiated executions)
 	const execution = correlationId
-		? (activeExecutions.get(correlationId) ??
-			commandProcessor?.getActiveExecution(correlationId))
+		? activeExecutions.get(correlationId)
 		: null
 
 	console.log(
@@ -1366,10 +1473,9 @@ function handleExecComplete(
 		})
 	}
 
-	// Clean up from both tracking sources
+	// Clean up from local tracking
 	if (correlationId) {
 		activeExecutions.delete(correlationId)
-		commandProcessor?.removeActiveExecution(correlationId)
 	}
 }
 

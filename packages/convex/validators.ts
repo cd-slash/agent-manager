@@ -143,19 +143,34 @@ export const prDetectedViaValidator = v.union(
 	v.literal("manual"),
 )
 
-// Gateway command types - operations the gateway can perform
-export const gatewayCommandTypeValidator = v.union(
-	// Server commands (SSH/Docker operations)
+// Server command types - operations the gateway performs via SSH/Docker
+export const serverCommandTypeValidator = v.union(
 	v.literal("createContainer"),
 	v.literal("stopContainer"),
 	v.literal("deleteContainer"),
-	// Container commands (WebSocket to connected containers)
+)
+
+// Container command types - operations that containers process directly
+export const containerCommandTypeValidator = v.union(
 	v.literal("startExecution"),
 	v.literal("abortExecution"),
 	v.literal("pushAuthToken"),
-	// Task orchestration
 	v.literal("startPhaseExecution"),
-	// OAuth flow commands
+	v.literal("startOAuthFlow"),
+	v.literal("completeOAuthFlow"),
+)
+
+// Combined type for backwards compatibility (deprecated - use specific validators)
+export const gatewayCommandTypeValidator = v.union(
+	// Server commands
+	v.literal("createContainer"),
+	v.literal("stopContainer"),
+	v.literal("deleteContainer"),
+	// Container commands
+	v.literal("startExecution"),
+	v.literal("abortExecution"),
+	v.literal("pushAuthToken"),
+	v.literal("startPhaseExecution"),
 	v.literal("startOAuthFlow"),
 	v.literal("completeOAuthFlow"),
 )
