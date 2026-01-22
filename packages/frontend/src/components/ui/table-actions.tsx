@@ -1,5 +1,6 @@
 import type { ReactNode } from "react"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
 interface TableHeaderActionsProps {
@@ -92,4 +93,58 @@ export function SelectionActionButton({
 			<span>{label}</span>
 		</button>
 	)
+}
+
+interface HeaderSelectionButtonProps {
+	icon: ReactNode
+	label: string
+	count: number
+	onClick: () => void
+	variant?: "default" | "destructive"
+	disabled?: boolean
+}
+
+/**
+ * An outline button for selection actions that appears inline with header actions.
+ * Shows a count badge inside the button. Used when rows are selected.
+ */
+export function HeaderSelectionButton({
+	icon,
+	label,
+	count,
+	onClick,
+	variant = "default",
+	disabled = false,
+}: HeaderSelectionButtonProps) {
+	return (
+		<Button
+			variant="outline"
+			onClick={onClick}
+			disabled={disabled}
+			className={cn(
+				"h-9",
+				variant === "destructive" && "text-destructive hover:text-destructive",
+			)}
+		>
+			<span className="mr-2">{icon}</span>
+			{label}
+			<span
+				className={cn(
+					"ml-1.5 inline-flex items-center justify-center rounded text-[11px] font-medium min-w-[1.125rem] h-[1.125rem] px-1 tabular-nums",
+					variant === "destructive"
+						? "bg-destructive/15 text-destructive"
+						: "bg-muted text-muted-foreground",
+				)}
+			>
+				{count}
+			</span>
+		</Button>
+	)
+}
+
+/**
+ * A vertical divider for separating groups of header actions.
+ */
+export function HeaderDivider() {
+	return <div className="h-6 w-px bg-border mx-1" />
 }

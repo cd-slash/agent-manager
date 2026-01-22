@@ -1,12 +1,12 @@
 import type { ColumnDef } from "@tanstack/react-table"
 import { Clock, Edit2, Layout, List, Plus, Trash2 } from "lucide-react"
-import { useMemo } from "react"
+import { useMemo, useState } from "react"
 import { GenericListView } from "@/components/layouts/GenericListView"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import {
-	SelectionActionButton,
-	TableSelectionActions,
+	HeaderDivider,
+	HeaderSelectionButton,
 } from "@/components/ui/table-actions"
 import type { Project } from "@/types"
 
@@ -21,6 +21,24 @@ export function ProjectListView({
 	onSelectProject,
 	onNewProject,
 }: ProjectListViewProps) {
+	const [selectedProjects, setSelectedProjects] = useState<Project[]>([])
+	const [clearSelectionFn, setClearSelectionFn] = useState<(() => void) | null>(
+		null,
+	)
+
+	const handleSelectionChange = (
+		rows: Project[],
+		clearSelection: () => void,
+	) => {
+		setSelectedProjects(rows)
+		setClearSelectionFn(() => clearSelection)
+	}
+
+	const handleDeleteSelected = () => {
+		// TODO: Implement bulk delete
+		clearSelectionFn?.()
+	}
+
 	const columns: ColumnDef<Project>[] = useMemo(
 		() => [
 			{
@@ -90,35 +108,35 @@ export function ProjectListView({
 		[],
 	)
 
-	const headerActions = (
-		<Button variant="outline" onClick={onNewProject}>
-			<Plus size={16} className="mr-2" />
-			New Project
-		</Button>
-	)
+	const selectedCount = selectedProjects.length
 
-	const selectionActions = (
-		selectedProjects: Project[],
-		clearSelection: () => void,
-	) => (
-		<TableSelectionActions selectedCount={selectedProjects.length}>
-			<SelectionActionButton
-				icon={<Edit2 size={16} />}
-				label="Edit"
-				onClick={() => {
-					// TODO: Implement bulk edit
-				}}
-			/>
-			<SelectionActionButton
-				icon={<Trash2 size={16} />}
-				label="Delete"
-				variant="destructive"
-				onClick={() => {
-					// TODO: Implement bulk delete
-					clearSelection()
-				}}
-			/>
-		</TableSelectionActions>
+	const headerActions = (
+		<div className="flex items-center gap-2 h-9">
+			{selectedCount > 0 && (
+				<>
+					<HeaderSelectionButton
+						icon={<Edit2 size={16} />}
+						label="Edit"
+						count={selectedCount}
+						onClick={() => {
+							// TODO: Implement bulk edit
+						}}
+					/>
+					<HeaderSelectionButton
+						icon={<Trash2 size={16} />}
+						label="Delete"
+						count={selectedCount}
+						variant="destructive"
+						onClick={handleDeleteSelected}
+					/>
+					<HeaderDivider />
+				</>
+			)}
+			<Button variant="outline" onClick={onNewProject} className="h-9">
+				<Plus size={16} className="mr-2" />
+				New Project
+			</Button>
+		</div>
 	)
 
 	return (
@@ -132,7 +150,7 @@ export function ProjectListView({
 			searchPlaceholder="Search projects..."
 			searchFields={["name", "description"]}
 			headerActions={headerActions}
-			selectionActions={selectionActions}
+			onSelectionChange={handleSelectionChange}
 			getRowId={(row) => row.id.toString()}
 			className="p-page"
 		/>

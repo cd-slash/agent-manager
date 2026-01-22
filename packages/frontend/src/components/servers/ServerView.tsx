@@ -11,8 +11,8 @@ import { useToast } from "@/components/ToastProvider"
 import { Button } from "@/components/ui/button"
 import { StatusBadge } from "@/components/ui/status-badge"
 import {
-	SelectionActionButton,
-	TableSelectionActions,
+	HeaderDivider,
+	HeaderSelectionButton,
 } from "@/components/ui/table-actions"
 import type { Server as ServerType } from "@/types"
 
@@ -35,8 +35,20 @@ const statusFilters: FilterConfig[] = [
 
 export function ServerView({ servers, onSelectServer }: ServerViewProps) {
 	const [isRefreshing, setIsRefreshing] = useState(false)
+	const [selectedServers, setSelectedServers] = useState<ServerType[]>([])
+	const [_clearSelectionFn, setClearSelectionFn] = useState<
+		(() => void) | null
+	>(null)
 	const syncDevices = useAction(api.tailscale.syncDevices)
 	const toast = useToast()
+
+	const handleSelectionChange = (
+		rows: ServerType[],
+		clearSelection: () => void,
+	) => {
+		setSelectedServers(rows)
+		setClearSelectionFn(() => clearSelection)
+	}
 
 	const handleRefreshFromTailscale = async () => {
 		setIsRefreshing(true)
@@ -136,12 +148,36 @@ export function ServerView({ servers, onSelectServer }: ServerViewProps) {
 		[],
 	)
 
+	const selectedCount = selectedServers.length
+
 	const headerActions = (
-		<div className="flex items-center gap-2">
+		<div className="flex items-center gap-2 h-9">
+			{selectedCount > 0 && (
+				<>
+					<HeaderSelectionButton
+						icon={<Terminal size={16} />}
+						label="Terminal"
+						count={selectedCount}
+						onClick={() => {
+							// TODO: Implement open terminal
+						}}
+					/>
+					<HeaderSelectionButton
+						icon={<FileText size={16} />}
+						label="Logs"
+						count={selectedCount}
+						onClick={() => {
+							// TODO: Implement view logs
+						}}
+					/>
+					<HeaderDivider />
+				</>
+			)}
 			<Button
 				variant="outline"
 				onClick={handleRefreshFromTailscale}
 				disabled={isRefreshing}
+				className="h-9"
 			>
 				<RefreshCw
 					size={16}
@@ -149,33 +185,11 @@ export function ServerView({ servers, onSelectServer }: ServerViewProps) {
 				/>
 				{isRefreshing ? "Syncing..." : "Refresh from Tailscale"}
 			</Button>
-			<Button variant="outline">
+			<Button variant="outline" className="h-9">
 				<Plus size={16} className="mr-2" />
 				Provision Server
 			</Button>
 		</div>
-	)
-
-	const selectionActions = (
-		selectedServers: ServerType[],
-		_clearSelection: () => void,
-	) => (
-		<TableSelectionActions selectedCount={selectedServers.length}>
-			<SelectionActionButton
-				icon={<Terminal size={16} />}
-				label="Terminal"
-				onClick={() => {
-					// TODO: Implement open terminal
-				}}
-			/>
-			<SelectionActionButton
-				icon={<FileText size={16} />}
-				label="Logs"
-				onClick={() => {
-					// TODO: Implement view logs
-				}}
-			/>
-		</TableSelectionActions>
 	)
 
 	return (
@@ -190,7 +204,7 @@ export function ServerView({ servers, onSelectServer }: ServerViewProps) {
 			searchFields={["name", "ip", "region"]}
 			filters={statusFilters}
 			headerActions={headerActions}
-			selectionActions={selectionActions}
+			onSelectionChange={handleSelectionChange}
 			getRowId={(row) => row.id.toString()}
 			className="p-page"
 		/>
