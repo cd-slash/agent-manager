@@ -507,6 +507,74 @@ async function fetchSecrets(
 	return result.value || {}
 }
 
+/**
+ * Fetch Tailscale credentials from Convex (for generating auth keys)
+ */
+async function fetchTailscaleConfig(
+	convexUrl: string,
+): Promise<{ tailnetId?: string; apiKey?: string }> {
+	const response = await fetch(`${convexUrl}/api/query`, {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({
+			path: "settings:getTailscaleCredentials",
+			args: {},
+		}),
+	})
+
+	if (!response.ok) {
+		throw new Error(`Failed to fetch Tailscale config: ${response.statusText}`)
+	}
+
+	const result = await response.json()
+	return result.value || {}
+}
+
+/**
+ * Generate an ephemeral Tailscale auth key via the API
+ * This creates a single-use, ephemeral key for container authentication
+ */
+async function generateTailscaleAuthKey(
+	tailnetId: string,
+	apiKey: string,
+	tags: string[] = ["tag:code-agent"],
+): Promise<string> {
+	console.log(`[gateway] Generating ephemeral Tailscale auth key for tailnet: ${tailnetId}`)
+
+	const response = await fetch(
+		`https://api.tailscale.com/api/v2/tailnet/${tailnetId}/keys`,
+		{
+			method: "POST",
+			headers: {
+				"Authorization": `Bearer ${apiKey}`,
+				"Content-Type": "application/json",
+			},
+			body: JSON.stringify({
+				capabilities: {
+					devices: {
+						create: {
+							reusable: false,
+							ephemeral: true, // Node will be removed when it goes offline
+							preauthorized: true, // No manual approval needed
+							tags: tags,
+						},
+					},
+				},
+				expirySeconds: 3600, // Key valid for 1 hour (container should use it immediately)
+			}),
+		},
+	)
+
+	if (!response.ok) {
+		const errorText = await response.text()
+		throw new Error(`Tailscale API error: ${response.status} - ${errorText}`)
+	}
+
+	const data = await response.json() as { key: string }
+	console.log(`[gateway] Generated ephemeral auth key successfully`)
+	return data.key
+}
+
 // Paths for binary building
 const BINARY_PATH = new URL("../container-api-binary", import.meta.url).pathname
 const CONTAINER_API_SRC = new URL("../../container-api/src", import.meta.url)
@@ -607,11 +675,17 @@ async function _ensureBinaryUpToDate(): Promise<void> {
 
 /**
  * Create a container on a remote server using inline SSH
+ *
+ * @param request - Container creation request (repo is optional)
+ * @param secrets - Secrets from Convex (GH_USERNAME, GH_TOKEN required for repo cloning)
+ * @param buildTracker - Optional build tracker for progress updates
+ * @param tailscaleConfig - Tailscale config for generating auth keys
  */
 async function createContainerOnServer(
 	request: CreateContainerRequest,
 	secrets: Record<string, string>,
 	buildTracker?: ConvexSync,
+	tailscaleConfig?: { tailnetId?: string; apiKey?: string },
 ): Promise<CreateContainerResult> {
 	const {
 		repo,
@@ -622,6 +696,23 @@ async function createContainerOnServer(
 	} = request
 	const containerName = name || generateRandomName()
 	const wgPort = generateWgPort(containerName)
+
+	// Generate ephemeral Tailscale auth key via API
+	if (!tailscaleConfig?.tailnetId || !tailscaleConfig?.apiKey) {
+		throw new Error("Tailscale not configured - set tailnetId and API key in Settings > Tailscale")
+	}
+
+	let tsAuthKey: string
+	try {
+		tsAuthKey = await generateTailscaleAuthKey(
+			tailscaleConfig.tailnetId,
+			tailscaleConfig.apiKey,
+			["tag:code-agent"], // Tag for containers
+		)
+	} catch (error) {
+		const msg = error instanceof Error ? error.message : String(error)
+		throw new Error(`Failed to generate Tailscale auth key: ${msg}`)
+	}
 	// Build SSH target (user@host for remote, just localhost for local)
 	const sshTarget =
 		server === "localhost" ? "localhost" : `${sshUser}@${server}`
@@ -732,24 +823,38 @@ fi
 
 exec "$@"`
 
+	// Build environment variables (conditionally include repo/branch if specified)
+	const envVars = [
+		`TS_AUTHKEY=${tsAuthKey}`,
+		`TS_HOSTNAME=${containerName}`,
+		`TS_WG_PORT=${wgPort}`,
+	]
+
+	// Only include workspace repo if specified
+	if (repo) {
+		envVars.push(`WORKSPACE_REPO=${repo}`)
+		envVars.push(`WORKSPACE_BRANCH=${branch}`)
+	}
+
+	// Include GitHub creds if available (for repo cloning)
+	if (secrets.GH_USERNAME) {
+		envVars.push(`GH_USERNAME=${secrets.GH_USERNAME}`)
+	}
+	if (secrets.GH_TOKEN) {
+		envVars.push(`GH_TOKEN=${secrets.GH_TOKEN}`)
+	}
+
 	const composeYml = `services:
   server:
     build:
       context: /tmp/agent-build
       args:
-        GH_USERNAME: ${secrets.GH_USERNAME}
-        GH_TOKEN: ${secrets.GH_TOKEN}
+        GH_USERNAME: ${secrets.GH_USERNAME || ""}
+        GH_TOKEN: ${secrets.GH_TOKEN || ""}
     hostname: ${containerName}
     container_name: ${containerName}
     environment:
-      - TS_AUTHKEY=${secrets.TS_AUTHKEY}
-      - TS_HOSTNAME=${containerName}
-      - TS_WG_PORT=${wgPort}
-      - WORKSPACE_REPO=${repo}
-      - WORKSPACE_BRANCH=${branch}
-      - GH_USERNAME=${secrets.GH_USERNAME}
-      - GH_TOKEN=${secrets.GH_TOKEN}
-      - MANAGER_WS_URL=${secrets.MANAGER_WS_URL}
+${envVars.map(v => `      - ${v}`).join("\n")}
     devices:
       - /dev/net/tun:/dev/net/tun
     cap_add:
@@ -1012,7 +1117,7 @@ docker exec ${containerName} tailscale serve --bg --http 80 http://localhost:409
 		name: containerName,
 		containerId: containerName,
 		hostname: containerName,
-		repo,
+		repo: repo || "",
 		branch,
 		server,
 		network: "bridge",
@@ -1043,13 +1148,9 @@ const commandProcessor = CONVEX_URL
 			taskOrchestrator,
 			createContainerOnServer,
 			fetchSecrets,
+			fetchTailscaleConfig,
 		})
 	: null
-
-// Wire up ClaudeAuth with connection manager for container-based OAuth
-if (claudeAuth) {
-	claudeAuth.setConnectionManager(connections)
-}
 
 // Active executions tracking (correlationId -> { containerId, taskId, projectId })
 const activeExecutions = new Map<
@@ -1702,49 +1803,43 @@ async function handleHttpRequest(req: Request): Promise<Response> {
 		try {
 			const body = (await req.json()) as CreateContainerRequest
 
-			if (!body.repo) {
-				return Response.json(
-					{ error: "repo is required" },
-					{ status: 400, headers: corsHeaders },
-				)
-			}
+			// Repo is now optional - management containers don't need one
+			console.log(`[gateway] Creating container${body.repo ? ` for repo: ${body.repo}` : " (no repo)"}`)
 
-			console.log("[gateway] Creating container for repo:", body.repo)
-
-			// Fetch secrets from Convex
+			// Fetch config from Convex
 			if (!CONVEX_URL) {
 				return Response.json(
-					{ error: "CONVEX_URL not configured - cannot fetch secrets" },
+					{ error: "CONVEX_URL not configured - cannot fetch config" },
 					{ status: 500, headers: corsHeaders },
 				)
 			}
 
+			// Fetch secrets (GH creds only needed if cloning a repo)
 			const secrets = await fetchSecrets(CONVEX_URL, [
-				"TS_AUTHKEY",
 				"GH_USERNAME",
 				"GH_TOKEN",
-				"MANAGER_WS_URL",
 			])
 
-			// Validate required secrets
-			const requiredSecrets = ["TS_AUTHKEY", "GH_USERNAME", "GH_TOKEN"]
-			const missingSecrets = requiredSecrets.filter((key) => !secrets[key])
-			if (missingSecrets.length > 0) {
-				return Response.json(
-					{ error: `Missing required secrets: ${missingSecrets.join(", ")}` },
-					{ status: 500, headers: corsHeaders },
-				)
+			// Validate required secrets only if repo is specified
+			if (body.repo) {
+				const requiredSecrets = ["GH_USERNAME", "GH_TOKEN"]
+				const missingSecrets = requiredSecrets.filter((key) => !secrets[key])
+				if (missingSecrets.length > 0) {
+					return Response.json(
+						{ error: `Missing required secrets for repo cloning: ${missingSecrets.join(", ")}` },
+						{ status: 500, headers: corsHeaders },
+					)
+				}
 			}
 
-			// Default MANAGER_WS_URL if not set
-			if (!secrets.MANAGER_WS_URL) {
-				secrets.MANAGER_WS_URL = `ws://localhost:${PORT}`
-			}
+			// Fetch Tailscale config (required for generating auth keys)
+			const tailscaleConfig = await fetchTailscaleConfig(CONVEX_URL)
 
 			const result = await createContainerOnServer(
 				body,
 				secrets,
 				convexSync ?? undefined,
+				tailscaleConfig,
 			)
 
 			// Record in Convex

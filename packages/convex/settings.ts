@@ -13,7 +13,7 @@ export const get = query({
 	},
 })
 
-// Get Tailscale config (returns masked data for security)
+// Get Tailscale config (returns masked data for security - for frontend)
 export const getTailscaleConfig = query({
 	args: {},
 	handler: async (ctx) => {
@@ -41,6 +41,31 @@ export const getTailscaleConfig = query({
 			hasApiKey: !!value.apiKey,
 			hasWebhookSecret: !!value.webhookSecret,
 			lastValidated: setting.lastValidated ?? null,
+		}
+	},
+})
+
+// Get Tailscale credentials (returns actual values - for gateway use only)
+// This is called via HTTP API by the gateway to generate ephemeral auth keys
+export const getTailscaleCredentials = query({
+	args: {},
+	handler: async (ctx) => {
+		const setting = await ctx.db
+			.query("settings")
+			.withIndex("by_key", (q) => q.eq("key", "tailscale"))
+			.first()
+
+		if (!setting) {
+			return { tailnetId: undefined, apiKey: undefined }
+		}
+
+		const value = setting.value as {
+			tailnetId?: string
+			apiKey?: string
+		}
+		return {
+			tailnetId: value.tailnetId,
+			apiKey: value.apiKey,
 		}
 	},
 })

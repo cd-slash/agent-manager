@@ -615,14 +615,14 @@ export const requestManagementContainer = mutation({
 		}) || {}
 
 		// Create a command to create the management container
+		// Management containers don't need a repo - they're just for running Claude CLI operations
 		const commandId = await ctx.db.insert("gatewayCommands", {
 			type: "createContainer",
 			status: "pending",
 			priority: "high", // High priority for management container
 			payload: {
 				name: "agent-mgmt",
-				repo: config.defaultRepo || "anthropics/claude-code-sandbox",
-				branch: "main",
+				// No repo - management container just needs Claude CLI, not a workspace
 				server: config.defaultServer || "localhost",
 				containerType: "management", // Gateway should create as management type
 			},

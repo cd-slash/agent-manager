@@ -32,11 +32,15 @@ interface CommandProcessorDeps {
 		request: CreateContainerRequest,
 		secrets: Record<string, string>,
 		buildTracker?: ConvexSync,
+		tailscaleConfig?: { tailnetId?: string; apiKey?: string },
 	) => Promise<CreateContainerResult>
 	fetchSecrets: (
 		convexUrl: string,
 		keys: string[],
 	) => Promise<Record<string, string>>
+	fetchTailscaleConfig: (
+		convexUrl: string,
+	) => Promise<{ tailnetId?: string; apiKey?: string }>
 }
 
 interface CreateContainerRequest {
@@ -414,31 +418,26 @@ export class ConvexCommandProcessor {
 	private async handleCreateContainer(cmd: GatewayCommand): Promise<unknown> {
 		const payload = cmd.payload as CreateContainerRequest
 
-		if (!payload.repo) {
-			throw new Error("repo is required")
-		}
+		// Repo is now optional - management containers don't need one
+		console.log(`[commands] Creating container${payload.repo ? ` for repo: ${payload.repo}` : " (no repo)"}`)
 
-		console.log(`[commands] Creating container for repo: ${payload.repo}`)
-
-		// Fetch secrets from Convex
+		// Fetch secrets from Convex (GH creds only needed if cloning a repo)
 		const secrets = await this.deps.fetchSecrets(this.convexUrl, [
-			"TS_AUTHKEY",
 			"GH_USERNAME",
 			"GH_TOKEN",
-			"MANAGER_WS_URL",
 		])
 
-		// Validate required secrets
-		const requiredSecrets = ["TS_AUTHKEY", "GH_USERNAME", "GH_TOKEN"]
-		const missingSecrets = requiredSecrets.filter((key) => !secrets[key])
-		if (missingSecrets.length > 0) {
-			throw new Error(`Missing required secrets: ${missingSecrets.join(", ")}`)
+		// Validate required secrets only if repo is specified
+		if (payload.repo) {
+			const requiredSecrets = ["GH_USERNAME", "GH_TOKEN"]
+			const missingSecrets = requiredSecrets.filter((key) => !secrets[key])
+			if (missingSecrets.length > 0) {
+				throw new Error(`Missing required secrets for repo cloning: ${missingSecrets.join(", ")}`)
+			}
 		}
 
-		// Default MANAGER_WS_URL if not set
-		if (!secrets.MANAGER_WS_URL) {
-			secrets.MANAGER_WS_URL = `ws://localhost:3100`
-		}
+		// Fetch Tailscale config (required for generating auth keys)
+		const tailscaleConfig = await this.deps.fetchTailscaleConfig(this.convexUrl)
 
 		const result = await this.deps.createContainerOnServer(
 			{
@@ -448,6 +447,7 @@ export class ConvexCommandProcessor {
 			},
 			secrets,
 			this.deps.convexSync ?? undefined,
+			tailscaleConfig,
 		)
 
 		// Record in Convex
