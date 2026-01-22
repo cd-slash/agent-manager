@@ -41,6 +41,16 @@ export function useDebouncedSave<T>({
 	const [isSaving, setIsSaving] = useState(false)
 	const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+	// Use refs for callbacks to avoid triggering effect on callback changes
+	const onSaveRef = useRef(onSave)
+	const onErrorRef = useRef(onError)
+
+	// Keep refs up to date
+	useEffect(() => {
+		onSaveRef.current = onSave
+		onErrorRef.current = onError
+	})
+
 	useEffect(() => {
 		if (!enabled) return
 
@@ -59,9 +69,9 @@ export function useDebouncedSave<T>({
 		timeoutRef.current = setTimeout(async () => {
 			setIsSaving(true)
 			try {
-				await onSave(value)
+				await onSaveRef.current(value)
 			} catch (error) {
-				onError?.(error)
+				onErrorRef.current?.(error)
 			} finally {
 				setIsSaving(false)
 			}
@@ -72,7 +82,7 @@ export function useDebouncedSave<T>({
 				clearTimeout(timeoutRef.current)
 			}
 		}
-	}, [value, savedValue, onSave, onError, delay, enabled])
+	}, [value, savedValue, delay, enabled])
 
 	return { isSaving }
 }
