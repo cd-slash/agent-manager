@@ -309,10 +309,16 @@ export const performFullSync = internalAction({
 		// Mark credentials as validated
 		await ctx.runMutation(internal.internal.tailscale.markCredentialsValidated)
 
+		// Also clean up orphaned containers (non-Tailscale containers not in the pool)
+		const orphanCleanup = await ctx.runMutation(
+			internal.containers.cleanupOrphanedContainersInternal,
+		)
+
 		return {
 			serversAdded: hostServers.length,
 			containersAdded: codeAgents.length,
 			totalDevices: devices.length,
+			orphanedContainersRemoved: orphanCleanup.deleted,
 		}
 	},
 })

@@ -490,8 +490,98 @@ export const listAgentContainers = query({
 })
 
 // =============================================================================
+// Cleanup Functions
+// =============================================================================
+
+/**
+ * Remove orphaned containers that:
+ * - Don't have a tailscaleNodeId (not managed by Tailscale sync)
+ * - Are not actively registered in the containerPool
+ *
+ * This cleans up ghost containers created by the gateway that no longer exist.
+ */
+export const cleanupOrphanedContainers = mutation({
+	args: {},
+	handler: async (ctx) => {
+		const now = Date.now()
+		const containers = await ctx.db.query("containers").collect()
+		const poolEntries = await ctx.db.query("containerPool").collect()
+
+		// Get all active container IDs from the pool
+		const activeContainerIds = new Set(poolEntries.map((p) => p.containerId))
+
+		let deleted = 0
+		const deletedContainers: string[] = []
+
+		for (const container of containers) {
+			// Skip containers managed by Tailscale - they're cleaned up by Tailscale sync
+			if (container.tailscaleNodeId) {
+				continue
+			}
+
+			// Skip containers that are actively registered in the pool
+			if (activeContainerIds.has(container.containerId)) {
+				continue
+			}
+
+			// Skip containers updated in the last 5 minutes (might be starting up)
+			if (container.updatedAt && now - container.updatedAt < 5 * 60 * 1000) {
+				continue
+			}
+
+			// This container is orphaned - delete it
+			await ctx.db.delete(container._id)
+			deleted++
+			deletedContainers.push(container.name)
+		}
+
+		return { deleted, containers: deletedContainers }
+	},
+})
+
+// =============================================================================
 // Internal Mutations (for use by actions)
 // =============================================================================
+
+// Internal mutation to clean up orphaned containers (called from actions like Tailscale sync)
+export const cleanupOrphanedContainersInternal = internalMutation({
+	args: {},
+	handler: async (ctx) => {
+		const now = Date.now()
+		const containers = await ctx.db.query("containers").collect()
+		const poolEntries = await ctx.db.query("containerPool").collect()
+
+		// Get all active container IDs from the pool
+		const activeContainerIds = new Set(poolEntries.map((p) => p.containerId))
+
+		let deleted = 0
+		const deletedContainers: string[] = []
+
+		for (const container of containers) {
+			// Skip containers managed by Tailscale - they're cleaned up by Tailscale sync
+			if (container.tailscaleNodeId) {
+				continue
+			}
+
+			// Skip containers that are actively registered in the pool
+			if (activeContainerIds.has(container.containerId)) {
+				continue
+			}
+
+			// Skip containers updated in the last 5 minutes (might be starting up)
+			if (container.updatedAt && now - container.updatedAt < 5 * 60 * 1000) {
+				continue
+			}
+
+			// This container is orphaned - delete it
+			await ctx.db.delete(container._id)
+			deleted++
+			deletedContainers.push(container.name)
+		}
+
+		return { deleted, containers: deletedContainers }
+	},
+})
 
 // Internal mutation to upsert management container (called from actions)
 export const upsertManagementContainerInternal = internalMutation({
