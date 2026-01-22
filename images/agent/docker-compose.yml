@@ -18,6 +18,9 @@ services:
       - 1.1.1.1
       - 100.100.100.100
     environment:
+      # Convex URL for container-api to receive commands from gateway
+      - CONVEX_URL=${CONVEX_URL:-}
+      - CONTAINER_ID=${DEV_HOSTNAME:-dev-bun}
       - TS_AUTHKEY=${TS_AUTHKEY}
       - TS_HOSTNAME=${DEV_HOSTNAME:-dev-bun}
       - TS_EXTRA_ARGS=${TS_EXTRA_ARGS:---ssh}

@@ -157,20 +157,11 @@ export interface MessageResult {
 // =============================================================================
 
 export interface HealthStatus {
-	status: string
+	status: "ok" | "degraded" | "error"
 	activeProcesses: number
 	version?: string
 	uptime?: number
-}
-
-// =============================================================================
-// Model Types
-// =============================================================================
-
-export interface ModelInfo {
-	id: string
-	name: string
-	provider: string
+	convexConnected: boolean
 }
 
 // =============================================================================

@@ -243,7 +243,9 @@ tmux -L default new-session -d -s init 2>/dev/null || true
 # proxied via Tailscale serve on port 80
 log "Starting container-api server on port 4096..."
 cd /opt/container-api
-PORT=4096 bun run src/index.ts &
+# CONVEX_URL and CONTAINER_ID are needed for the container to receive commands from the gateway
+# TS_HOSTNAME is the Tailscale hostname, used as container ID if CONTAINER_ID not set
+PORT=4096 CONVEX_URL="${CONVEX_URL:-}" CONTAINER_ID="${CONTAINER_ID:-${TS_HOSTNAME:-}}" bun run src/index.ts &
 API_PID=$!
 
 # Wait for API server to be ready (max 30 seconds)
