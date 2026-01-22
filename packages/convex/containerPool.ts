@@ -416,3 +416,22 @@ export const cleanupOffline = mutation({
 		return { deleted }
 	},
 })
+
+/**
+ * Delete a specific container from the pool by containerId
+ */
+export const deleteByContainerId = mutation({
+	args: { containerId: v.string() },
+	handler: async (ctx, args) => {
+		const container = await ctx.db
+			.query("containerPool")
+			.withIndex("by_container_id", (q) => q.eq("containerId", args.containerId))
+			.first()
+
+		if (container) {
+			await ctx.db.delete(container._id)
+			return { deleted: true }
+		}
+		return { deleted: false }
+	},
+})
