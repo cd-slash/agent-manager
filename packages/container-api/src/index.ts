@@ -6,17 +6,19 @@
  *
  * This server runs inside each container and is accessed by the manager app
  * via Tailscale networking (proxied on port 80 via tailscale serve).
+ *
+ * Connects to Convex directly to receive commands and stream results.
  */
 
 import { Elysia } from "elysia"
 import { AuthManager } from "./auth-manager"
+import { ConvexIntegration } from "./convex-integration"
 import { ProcessManager } from "./process-manager"
 import { SessionManager } from "./session-manager"
 import type { HealthStatus, MessageOptions, ModelInfo } from "./types"
-import { WebSocketIntegration } from "./websocket-integration"
 
 const PORT = parseInt(process.env.PORT || "4096", 10)
-const MANAGER_WS_URL = process.env.MANAGER_WS_URL // e.g., ws://manager.ts.net:8048/containers
+const CONVEX_URL = process.env.CONVEX_URL // e.g., https://brazen-skunk-217.convex.cloud
 const CONTAINER_ID =
 	process.env.CONTAINER_ID || process.env.TS_HOSTNAME || "unknown"
 const HOSTNAME = process.env.TS_HOSTNAME || "localhost"
@@ -27,8 +29,8 @@ const authManager = new AuthManager()
 const processManager = new ProcessManager()
 const sessionManager = new SessionManager()
 
-// WebSocket integration (optional - enabled when MANAGER_WS_URL is set)
-let wsIntegration: WebSocketIntegration | null = null
+// Convex integration (connects to Convex for commands and streaming)
+let convexIntegration: ConvexIntegration | null = null
 
 // Start watching for auth changes
 authManager.startWatching().catch(console.error)
@@ -285,76 +287,14 @@ const app = new Elysia()
 	})
 
 	// ==========================================================================
-	// Manager Connection Endpoints
+	// Convex Connection Status
 	// ==========================================================================
-	.post("/manager/takeover", async ({ body, set }) => {
-		const { managerUrl, managerId } = body as {
-			managerUrl: string
-			managerId?: string
-		}
-
-		if (!managerUrl) {
-			set.status = 400
-			return { success: false, error: "managerUrl is required" }
-		}
-
-		console.log(
-			`[api] Manager takeover requested: ${managerId || "unknown"} at ${managerUrl}`,
-		)
-
-		// Track current manager info for response
-		const previousManager = wsIntegration?.getState().managerUrl || null
-
-		// Disconnect from current manager if connected
-		if (wsIntegration) {
-			console.log("[api] Disconnecting from current manager...")
-			try {
-				await wsIntegration.disconnect()
-			} catch (err) {
-				console.error("[api] Error disconnecting from current manager:", err)
-			}
-			wsIntegration = null
-		}
-
-		// Connect to new manager
-		console.log(`[api] Connecting to new manager: ${managerUrl}`)
-		wsIntegration = new WebSocketIntegration(
-			{
-				managerUrl,
-				containerId: CONTAINER_ID,
-				hostname: HOSTNAME,
-			},
-			authManager,
-			processManager,
-			sessionManager,
-		)
-
-		try {
-			await wsIntegration.connect()
-			console.log(`[api] Connected to new manager: ${managerId || managerUrl}`)
-			return {
-				success: true,
-				connected: managerUrl,
-				managerId,
-				previousManager,
-			}
-		} catch (error) {
-			console.error("[api] Failed to connect to new manager:", error)
-			set.status = 500
-			return {
-				success: false,
-				error: error instanceof Error ? error.message : "Connection failed",
-				previousManager,
-			}
-		}
-	})
-
-	.get("/manager/status", () => {
-		const state = wsIntegration?.getState()
+	.get("/convex/status", () => {
+		const state = convexIntegration?.getState()
 		return {
 			connected: state?.connected || false,
-			managerUrl: state?.managerUrl || null,
-			state: state?.state || "disconnected",
+			containerId: state?.containerId || CONTAINER_ID,
+			convexUrl: CONVEX_URL || null,
 		}
 	})
 
@@ -387,31 +327,33 @@ const app = new Elysia()
 // ==========================================================================
 app.listen(PORT, async () => {
 	console.log(`[api] Container API server running on port ${PORT}`)
+	console.log(`[api] Container ID: ${CONTAINER_ID}`)
+	console.log(`[api] Hostname: ${HOSTNAME}`)
 	console.log(`[api] Health check: http://localhost:${PORT}/health`)
 
-	// Start WebSocket connection to manager if configured
-	if (MANAGER_WS_URL) {
-		console.log(`[api] Connecting to manager via WebSocket: ${MANAGER_WS_URL}`)
-		wsIntegration = new WebSocketIntegration(
+	// Connect to Convex if configured
+	if (CONVEX_URL) {
+		console.log(`[api] Connecting to Convex: ${CONVEX_URL}`)
+		convexIntegration = new ConvexIntegration(
 			{
-				managerUrl: MANAGER_WS_URL,
+				convexUrl: CONVEX_URL,
 				containerId: CONTAINER_ID,
 				hostname: HOSTNAME,
 			},
 			authManager,
 			processManager,
-			sessionManager,
 		)
 
 		try {
-			await wsIntegration.connect()
-			console.log("[api] Connected to manager via WebSocket")
+			await convexIntegration.connect()
+			console.log("[api] Connected to Convex - ready to receive commands")
 		} catch (error) {
-			console.error("[api] Failed to connect to manager:", error)
-			// Continue running - REST API still works
+			console.error("[api] Failed to connect to Convex:", error)
+			// Continue running - REST API still works for local testing
 		}
 	} else {
-		console.log("[api] MANAGER_WS_URL not set, running in REST-only mode")
+		console.log("[api] CONVEX_URL not set, running in REST-only mode")
+		console.log("[api] Set CONVEX_URL to enable Convex integration")
 	}
 })
 
@@ -419,7 +361,7 @@ app.listen(PORT, async () => {
 process.on("SIGTERM", async () => {
 	console.log("[api] Received SIGTERM, shutting down...")
 	processManager.abortAll()
-	await wsIntegration?.disconnect()
+	await convexIntegration?.disconnect()
 	await authManager.stopWatching()
 	process.exit(0)
 })
@@ -427,7 +369,7 @@ process.on("SIGTERM", async () => {
 process.on("SIGINT", async () => {
 	console.log("[api] Received SIGINT, shutting down...")
 	processManager.abortAll()
-	await wsIntegration?.disconnect()
+	await convexIntegration?.disconnect()
 	await authManager.stopWatching()
 	process.exit(0)
 })

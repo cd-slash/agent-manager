@@ -940,18 +940,20 @@ rm /tmp/container-api-binary`
 			await buildTracker.startPhase(containerName, "starting_api")
 		console.log(`[gateway] Starting container-api...`)
 
-		// Determine the gateway WebSocket URL for the container to connect back to
-		// For localhost: use host.docker.internal (Docker's host access)
-		// For remote servers: use the gateway's Tailscale hostname or the server creating the container
-		const gatewayHost = server === "localhost"
-			? "host.docker.internal"
-			: process.env.GATEWAY_HOSTNAME || server
-		const gatewayPort = process.env.AGENT_GATEWAY_PORT || "3100"
-		const managerWsUrl = `ws://${gatewayHost}:${gatewayPort}/containers`
+		// Get the Convex URL for the container to connect to
+		const convexUrl = process.env.CONVEX_URL
+		if (!convexUrl) {
+			console.warn("[gateway] CONVEX_URL not set - container will run in REST-only mode")
+		}
 
 		let startLogs = ""
 		try {
-			const startCommand = `docker exec -d ${containerName} bash -c 'PORT=4096 MANAGER_WS_URL=${managerWsUrl} CONTAINER_ID=${containerName} /opt/container-api/container-api &'
+			// Pass CONVEX_URL so container can connect directly to Convex
+			const envVars = convexUrl
+				? `PORT=4096 CONVEX_URL=${convexUrl} CONTAINER_ID=${containerName}`
+				: `PORT=4096 CONTAINER_ID=${containerName}`
+
+			const startCommand = `docker exec -d ${containerName} bash -c '${envVars} /opt/container-api/container-api &'
 sleep 2
 docker exec ${containerName} tailscale serve --bg --http 80 http://localhost:4096 2>/dev/null || true`
 

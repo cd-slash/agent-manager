@@ -412,6 +412,29 @@ export const getByTask = query({
 })
 
 /**
+ * Get commands assigned to a specific container (for container to poll)
+ * Returns pending/queued/processing commands assigned to this container
+ */
+export const getByAssignedContainer = query({
+	args: { containerId: v.string() },
+	handler: async (ctx, args) => {
+		return await ctx.db
+			.query("gatewayCommands")
+			.withIndex("by_assigned_container", (q) =>
+				q.eq("assignedContainerId", args.containerId),
+			)
+			.filter((q) =>
+				q.or(
+					q.eq(q.field("status"), "pending"),
+					q.eq(q.field("status"), "queued"),
+					q.eq(q.field("status"), "processing"),
+				),
+			)
+			.collect()
+	},
+})
+
+/**
  * Get queue statistics
  */
 export const getQueueStats = query({
