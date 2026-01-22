@@ -200,6 +200,14 @@ export class ConvexIntegration extends EventEmitter<ConvexIntegrationEvents> {
 					result = await this.handleAbortExecution(command)
 					break
 
+				case "startOAuthFlow":
+					result = await this.handleStartOAuthFlow(command)
+					break
+
+				case "completeOAuthFlow":
+					result = await this.handleCompleteOAuthFlow(command)
+					break
+
 				default:
 					throw new Error(`Unknown command type: ${command.type}`)
 			}
@@ -332,6 +340,65 @@ export class ConvexIntegration extends EventEmitter<ConvexIntegrationEvents> {
 		// If no specific processId, abort all
 		this.processManager.abortAll()
 		return { success: true, abortedAll: true }
+	}
+
+	private async handleStartOAuthFlow(command: GatewayCommand): Promise<unknown> {
+		const payload = command.payload as {
+			provider: string
+			oauthFlowId: string
+		}
+
+		console.log(`[convex] Starting OAuth flow for provider: ${payload.provider}`)
+
+		try {
+			const result = await this.authManager.startOAuthFlow()
+			return {
+				success: true,
+				flowId: result.flowId,
+				url: result.url,
+				expiresIn: result.expiresIn,
+			}
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error)
+			console.error(`[convex] OAuth flow start failed: ${message}`)
+			return { success: false, error: message }
+		}
+	}
+
+	private async handleCompleteOAuthFlow(command: GatewayCommand): Promise<unknown> {
+		const payload = command.payload as {
+			oauthFlowId: string
+			containerFlowId: string
+			authCode: string
+		}
+
+		console.log(`[convex] Completing OAuth flow: ${payload.containerFlowId}`)
+
+		try {
+			const result = await this.authManager.completeOAuthFlow(
+				payload.containerFlowId,
+				payload.authCode,
+			)
+
+			if (result.success && result.token) {
+				// Store the token in Convex secrets
+				await this.client.mutation(api.secrets.set, {
+					key: "ANTHROPIC_AUTH_TOKEN",
+					value: result.token,
+					description: "Claude OAuth token",
+				})
+				console.log(`[convex] OAuth token stored in Convex secrets`)
+			}
+
+			return {
+				success: result.success,
+				hasToken: !!result.token,
+			}
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error)
+			console.error(`[convex] OAuth flow completion failed: ${message}`)
+			return { success: false, error: message }
+		}
 	}
 
 	getState(): { connected: boolean; containerId: string } {

@@ -7,20 +7,20 @@
  * Uses Convex real-time subscriptions for OAuth flows where:
  * 1. Frontend creates a pending OAuth flow in Convex
  * 2. Gateway subscribes and reacts instantly to new flows
- * 3. Gateway delegates OAuth to a container via WebSocket
- * 4. Container runs `claude setup-token` and returns the URL
- * 5. Gateway updates Convex with OAuth URL
+ * 3. Gateway creates a gatewayCommand for OAuth start
+ * 4. Container processes command, runs `claude setup-token`, returns URL
+ * 5. Gateway watches for command completion, updates OAuth flow
  * 6. Frontend shows URL to user
  * 7. User submits auth code via frontend
- * 8. Gateway delegates code completion to container
- * 9. Container completes OAuth and returns token
- * 10. Gateway stores token in Convex
+ * 8. Gateway creates another gatewayCommand for OAuth complete
+ * 9. Container completes OAuth and stores token in Convex secrets
+ * 10. Gateway marks OAuth flow as completed
  */
 
 import { EventEmitter } from "node:events"
 import { api } from "@agent-manager/convex/api"
+import type { Id } from "@agent-manager/convex/dataModel"
 import { ConvexClient } from "convex/browser"
-import type { ConnectionManager } from "./connections"
 
 // Types for Convex OAuth flows
 interface ConvexOAuthFlow {
@@ -42,6 +42,15 @@ interface ConvexOAuthFlow {
 	updatedAt: number
 }
 
+// Container pool entry type
+interface ContainerPoolEntry {
+	_id: string
+	containerId: string
+	hostname: string
+	status: "idle" | "busy" | "reserved" | "offline"
+	capabilities?: string[]
+}
+
 export interface OAuthFlowResult {
 	success: boolean
 	token?: string
@@ -53,35 +62,28 @@ interface ActiveContainerOAuthFlow {
 	convexFlowId: string
 	containerId: string
 	containerFlowId?: string
+	commandId?: string
 	startedAt: number
 }
 
 /**
  * Claude authentication manager for the gateway.
- * Delegates OAuth to containers which run `claude setup-token`.
+ * Delegates OAuth to containers via gatewayCommands (Convex-driven).
  */
 export class ClaudeAuth extends EventEmitter {
 	private convexUrl: string
 	private convexClient: ConvexClient | null = null
 	private subscriptionsActive = false
-	private connections: ConnectionManager | null = null
 
 	// Track flows being processed to avoid duplicate handling
 	private processingFlows: Set<string> = new Set()
 
-	// Track container flows: containerFlowId -> convexFlowId
+	// Track container flows: convexFlowId -> ActiveContainerOAuthFlow
 	private containerFlowMap: Map<string, ActiveContainerOAuthFlow> = new Map()
 
 	constructor(convexUrl: string) {
 		super()
 		this.convexUrl = convexUrl
-	}
-
-	/**
-	 * Set the connection manager for sending messages to containers
-	 */
-	setConnectionManager(connections: ConnectionManager): void {
-		this.connections = connections
 	}
 
 	/**
@@ -184,74 +186,20 @@ export class ClaudeAuth extends EventEmitter {
 	}
 
 	/**
-	 * Handle OAuth URL response from container
+	 * Find an available container from the containerPool
 	 */
-	handleContainerAuthFlowUrl(
-		containerId: string,
-		payload: { flowId: string; url: string; expiresIn: number },
-	): void {
-		console.log(
-			`[claude-auth] Received auth:flow:url from container ${containerId}`,
-		)
+	private async findAvailableContainer(): Promise<ContainerPoolEntry | null> {
+		if (!this.convexClient) return null
 
-		// Find the Convex flow associated with this container flow
-		const activeFlow = this.containerFlowMap.get(payload.flowId)
-		if (!activeFlow) {
-			console.warn(
-				`[claude-auth] No active flow found for container flowId: ${payload.flowId}`,
+		try {
+			const containers = await this.convexClient.query(
+				api.containerPool.getAvailable,
+				{},
 			)
-			return
-		}
-
-		// Store the container's flow ID
-		activeFlow.containerFlowId = payload.flowId
-
-		// Update Convex with the OAuth URL
-		this.updateConvexFlowStarted(
-			activeFlow.convexFlowId,
-			payload.url,
-			payload.flowId,
-			Date.now() + payload.expiresIn * 1000,
-		)
-	}
-
-	/**
-	 * Handle auth status change from container (used after OAuth completion)
-	 */
-	handleContainerAuthStatus(
-		containerId: string,
-		payload: { authenticated: boolean; method?: string },
-	): void {
-		console.log(
-			`[claude-auth] Auth status from ${containerId}: authenticated=${payload.authenticated}`,
-		)
-
-		// If a container just became authenticated after an OAuth flow,
-		// we should request the token from it
-		// For now, we rely on the container sending the token back
-	}
-
-	/**
-	 * Handle error from container during auth flow
-	 */
-	handleContainerError(
-		containerId: string,
-		payload: { code: string; message: string },
-		correlationId?: string,
-	): void {
-		if (payload.code !== "AUTH_FLOW_FAILED") return
-
-		console.error(
-			`[claude-auth] Auth flow error from ${containerId}: ${payload.message}`,
-		)
-
-		// Find the Convex flow for this container
-		for (const [flowId, activeFlow] of this.containerFlowMap.entries()) {
-			if (activeFlow.containerId === containerId) {
-				this.updateConvexFlowFailure(activeFlow.convexFlowId, payload.message)
-				this.containerFlowMap.delete(flowId)
-				break
-			}
+			return (containers?.[0] as ContainerPoolEntry | undefined) ?? null
+		} catch (error) {
+			console.error("[claude-auth] Failed to query containerPool:", error)
+			return null
 		}
 	}
 
@@ -342,26 +290,22 @@ export class ClaudeAuth extends EventEmitter {
 	}
 
 	/**
-	 * Process a single pending OAuth flow by delegating to a container
+	 * Process a single pending OAuth flow by delegating to a container via gatewayCommands
 	 */
 	private async processPendingFlow(flow: ConvexOAuthFlow): Promise<void> {
-		if (!this.connections) {
-			console.error("[claude-auth] No connection manager set")
-			await this.updateConvexFlowFailure(
-				flow._id,
-				"Gateway not properly configured",
-			)
+		if (!this.convexClient) {
+			console.error("[claude-auth] Convex client not initialized")
+			await this.updateConvexFlowFailure(flow._id, "Gateway not properly configured")
 			return
 		}
 
-		// Find an available container, or request one via command queue
-		let container = this.connections.findAvailableContainer()
+		// Find an available container from containerPool
+		let container = await this.findAvailableContainer()
 
 		if (!container) {
-			console.log("[claude-auth] No connected containers, requesting management container...")
+			console.log("[claude-auth] No available containers in pool, requesting management container...")
 
 			// Request a management container via Convex mutation
-			// The gateway's command processor will handle the actual creation
 			try {
 				const result = await this.requestManagementContainer()
 				if (result.error) {
@@ -376,14 +320,14 @@ export class ClaudeAuth extends EventEmitter {
 					console.log(`[claude-auth] Container creation requested (status: ${result.status})`)
 				}
 
-				// Wait for the container to connect (poll for up to 90 seconds)
-				// Container creation via SSH takes time
-				console.log("[claude-auth] Waiting for container to connect...")
-				for (let i = 0; i < 90; i++) {
+				// Wait for a container to appear in the pool (poll for up to 120 seconds)
+				// Container creation via SSH and Convex registration takes time
+				console.log("[claude-auth] Waiting for container to register in pool...")
+				for (let i = 0; i < 120; i++) {
 					await new Promise(resolve => setTimeout(resolve, 1000))
-					container = this.connections.findAvailableContainer()
+					container = await this.findAvailableContainer()
 					if (container) {
-						console.log(`[claude-auth] Container connected: ${container.info.containerId}`)
+						console.log(`[claude-auth] Container available: ${container.containerId}`)
 						break
 					}
 					// Log progress every 10 seconds
@@ -393,8 +337,8 @@ export class ClaudeAuth extends EventEmitter {
 				}
 
 				if (!container) {
-					console.error("[claude-auth] Container did not connect within timeout")
-					await this.updateConvexFlowFailure(flow._id, "Container did not connect in time")
+					console.error("[claude-auth] Container did not register within timeout")
+					await this.updateConvexFlowFailure(flow._id, "Container did not register in time")
 					return
 				}
 			} catch (error) {
@@ -405,36 +349,105 @@ export class ClaudeAuth extends EventEmitter {
 			}
 		}
 
-		const containerId = container.info.containerId
+		const containerId = container.containerId
 		console.log(`[claude-auth] Delegating OAuth to container: ${containerId}`)
 
-		// Generate a correlation ID for tracking
-		const correlationId = crypto.randomUUID()
-
 		// Track this flow
-		this.containerFlowMap.set(correlationId, {
+		this.containerFlowMap.set(flow._id, {
 			convexFlowId: flow._id,
 			containerId,
 			startedAt: Date.now(),
 		})
 
-		// Send auth:flow:start to container
-		const sent = this.connections.sendToContainer(
-			containerId,
-			"auth:flow:start",
-			{},
-			correlationId,
-		)
+		try {
+			// Create a gatewayCommand to start OAuth flow on the container
+			const commandId = await this.convexClient.mutation(
+				api.gatewayCommands.startOAuthFlow,
+				{
+					containerId,
+					provider: flow.provider,
+					oauthFlowId: flow._id,
+				},
+			)
 
-		if (!sent) {
-			console.error(
-				`[claude-auth] Failed to send auth:flow:start to ${containerId}`,
-			)
-			this.containerFlowMap.delete(correlationId)
-			await this.updateConvexFlowFailure(
-				flow._id,
-				"Failed to communicate with container",
-			)
+			console.log(`[claude-auth] Created startOAuthFlow command: ${commandId}`)
+
+			// Update our tracking with the command ID
+			const activeFlow = this.containerFlowMap.get(flow._id)
+			if (activeFlow) {
+				activeFlow.commandId = commandId as unknown as string
+			}
+
+			// Wait for the command to complete (poll for result)
+			let attempts = 0
+			const maxAttempts = 120 // 2 minutes
+			while (attempts < maxAttempts) {
+				await new Promise(resolve => setTimeout(resolve, 1000))
+				attempts++
+
+				const command = await this.convexClient.query(
+					api.gatewayCommands.get,
+					{ id: commandId },
+				)
+
+				if (!command) {
+					console.error("[claude-auth] Command not found")
+					break
+				}
+
+				if (command.status === "completed") {
+					const result = command.result as {
+						success: boolean
+						flowId?: string
+						url?: string
+						expiresIn?: number
+						error?: string
+					}
+
+					if (result.success && result.url && result.flowId) {
+						// Update the flow with the OAuth URL
+						const activeFlow = this.containerFlowMap.get(flow._id)
+						if (activeFlow) {
+							activeFlow.containerFlowId = result.flowId
+						}
+
+						await this.updateConvexFlowStarted(
+							flow._id,
+							result.url,
+							result.flowId,
+							Date.now() + (result.expiresIn ?? 600) * 1000,
+						)
+						console.log(`[claude-auth] OAuth URL received: ${result.url}`)
+						return
+					} else {
+						console.error(`[claude-auth] OAuth flow start failed: ${result.error}`)
+						await this.updateConvexFlowFailure(flow._id, result.error ?? "Unknown error")
+						this.containerFlowMap.delete(flow._id)
+						return
+					}
+				} else if (command.status === "failed") {
+					console.error(`[claude-auth] Command failed: ${command.error}`)
+					await this.updateConvexFlowFailure(flow._id, command.error ?? "Command failed")
+					this.containerFlowMap.delete(flow._id)
+					return
+				}
+
+				// Log progress every 10 seconds
+				if (attempts > 0 && attempts % 10 === 0) {
+					console.log(`[claude-auth] Waiting for OAuth URL... (${attempts}s)`)
+				}
+			}
+
+			// Timeout
+			console.error("[claude-auth] Timeout waiting for OAuth URL")
+			await this.updateConvexFlowFailure(flow._id, "Timeout waiting for OAuth URL")
+			this.containerFlowMap.delete(flow._id)
+
+		} catch (error) {
+			const msg = error instanceof Error ? error.message : String(error)
+			console.error(`[claude-auth] Failed to start OAuth flow: ${msg}`)
+			await this.updateConvexFlowFailure(flow._id, msg)
+			this.containerFlowMap.delete(flow._id)
 		}
 	}
 
@@ -466,23 +479,14 @@ export class ClaudeAuth extends EventEmitter {
 	 * Process a flow that has an auth code submitted
 	 */
 	private async processFlowWithCode(flow: ConvexOAuthFlow): Promise<void> {
-		if (!this.connections) {
-			console.error("[claude-auth] No connection manager set")
-			await this.updateConvexFlowFailure(
-				flow._id,
-				"Gateway not properly configured",
-			)
+		if (!this.convexClient) {
+			console.error("[claude-auth] Convex client not initialized")
+			await this.updateConvexFlowFailure(flow._id, "Gateway not properly configured")
 			return
 		}
 
 		// Find the container handling this flow
-		let activeFlow: ActiveContainerOAuthFlow | undefined
-		for (const [_, af] of this.containerFlowMap) {
-			if (af.convexFlowId === flow._id) {
-				activeFlow = af
-				break
-			}
-		}
+		const activeFlow = this.containerFlowMap.get(flow._id)
 
 		if (!activeFlow || !activeFlow.containerFlowId) {
 			console.error(`[claude-auth] No active container flow for: ${flow._id}`)
@@ -493,50 +497,84 @@ export class ClaudeAuth extends EventEmitter {
 		// Mark as completing in Convex
 		await this.updateConvexFlowCompleting(flow._id)
 
-		// Send auth:flow:complete to container
-		const sent = this.connections.sendToContainer(
-			activeFlow.containerId,
-			"auth:flow:complete",
-			{
-				flowId: activeFlow.containerFlowId,
-				code: flow.authCode,
-			},
-		)
-
-		if (!sent) {
-			console.error(
-				`[claude-auth] Failed to send auth:flow:complete to ${activeFlow.containerId}`,
+		try {
+			// Create a gatewayCommand to complete the OAuth flow
+			const commandId = await this.convexClient.mutation(
+				api.gatewayCommands.completeOAuthFlow,
+				{
+					containerId: activeFlow.containerId,
+					oauthFlowId: flow._id,
+					containerFlowId: activeFlow.containerFlowId,
+					authCode: flow.authCode!,
+				},
 			)
-			await this.updateConvexFlowFailure(
-				flow._id,
-				"Failed to communicate with container",
-			)
-		}
 
-		// The container will complete the flow and we'll get an auth:status update
-		// We need to listen for that in the gateway's message handler
-	}
+			console.log(`[claude-auth] Created completeOAuthFlow command: ${commandId}`)
 
-	/**
-	 * Called when container reports successful OAuth completion with token
-	 */
-	async handleOAuthSuccess(containerId: string, token: string): Promise<void> {
-		// Find the Convex flow for this container
-		for (const [flowId, activeFlow] of this.containerFlowMap) {
-			if (activeFlow.containerId === containerId) {
-				// Store the token
-				await this.storeToken(token)
+			// Wait for the command to complete (poll for result)
+			let attempts = 0
+			const maxAttempts = 180 // 3 minutes (OAuth completion can take time)
+			while (attempts < maxAttempts) {
+				await new Promise(resolve => setTimeout(resolve, 1000))
+				attempts++
 
-				// Update Convex
-				await this.updateConvexFlowSuccess(activeFlow.convexFlowId)
+				const command = await this.convexClient.query(
+					api.gatewayCommands.get,
+					{ id: commandId },
+				)
 
-				// Emit event for gateway to push token to all containers
-				this.emit("auth:token-acquired", { token })
+				if (!command) {
+					console.error("[claude-auth] Command not found")
+					break
+				}
 
-				// Cleanup
-				this.containerFlowMap.delete(flowId)
-				return
+				if (command.status === "completed") {
+					const result = command.result as {
+						success: boolean
+						hasToken?: boolean
+						error?: string
+					}
+
+					if (result.success && result.hasToken) {
+						// Token was stored in Convex secrets by the container
+						await this.updateConvexFlowSuccess(flow._id)
+						console.log(`[claude-auth] OAuth flow completed successfully`)
+
+						// Emit event for any listeners
+						this.emit("auth:token-acquired", {})
+
+						// Cleanup
+						this.containerFlowMap.delete(flow._id)
+						return
+					} else {
+						console.error(`[claude-auth] OAuth flow completion failed: ${result.error}`)
+						await this.updateConvexFlowFailure(flow._id, result.error ?? "Unknown error")
+						this.containerFlowMap.delete(flow._id)
+						return
+					}
+				} else if (command.status === "failed") {
+					console.error(`[claude-auth] Command failed: ${command.error}`)
+					await this.updateConvexFlowFailure(flow._id, command.error ?? "Command failed")
+					this.containerFlowMap.delete(flow._id)
+					return
+				}
+
+				// Log progress every 15 seconds
+				if (attempts > 0 && attempts % 15 === 0) {
+					console.log(`[claude-auth] Waiting for OAuth completion... (${attempts}s)`)
+				}
 			}
+
+			// Timeout
+			console.error("[claude-auth] Timeout waiting for OAuth completion")
+			await this.updateConvexFlowFailure(flow._id, "Timeout waiting for OAuth completion")
+			this.containerFlowMap.delete(flow._id)
+
+		} catch (error) {
+			const msg = error instanceof Error ? error.message : String(error)
+			console.error(`[claude-auth] Failed to complete OAuth flow: ${msg}`)
+			await this.updateConvexFlowFailure(flow._id, msg)
+			this.containerFlowMap.delete(flow._id)
 		}
 	}
 

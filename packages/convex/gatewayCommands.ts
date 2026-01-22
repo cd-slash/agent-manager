@@ -255,6 +255,70 @@ export const pushAuthToken = mutation({
 })
 
 /**
+ * Request OAuth flow start on a container
+ * Container will run `claude setup-token` and return the OAuth URL
+ */
+export const startOAuthFlow = mutation({
+	args: {
+		containerId: v.string(),
+		provider: v.string(),
+		oauthFlowId: v.string(), // Reference to oauthFlows table
+	},
+	handler: async (ctx, args) => {
+		const now = Date.now()
+		return await ctx.db.insert("gatewayCommands", {
+			type: "startOAuthFlow",
+			status: "pending",
+			priority: "high",
+			payload: {
+				containerId: args.containerId,
+				provider: args.provider,
+				oauthFlowId: args.oauthFlowId,
+			},
+			assignedContainerId: args.containerId,
+			correlationId: args.oauthFlowId,
+			retryCount: 0,
+			maxRetries: 1, // OAuth flows shouldn't retry
+			createdAt: now,
+			updatedAt: now,
+		})
+	},
+})
+
+/**
+ * Request OAuth flow completion on a container
+ * Container will complete the OAuth flow with the auth code
+ */
+export const completeOAuthFlow = mutation({
+	args: {
+		containerId: v.string(),
+		oauthFlowId: v.string(),
+		containerFlowId: v.string(), // Flow ID from the container
+		authCode: v.string(),
+	},
+	handler: async (ctx, args) => {
+		const now = Date.now()
+		return await ctx.db.insert("gatewayCommands", {
+			type: "completeOAuthFlow",
+			status: "pending",
+			priority: "high",
+			payload: {
+				containerId: args.containerId,
+				oauthFlowId: args.oauthFlowId,
+				containerFlowId: args.containerFlowId,
+				authCode: args.authCode,
+			},
+			assignedContainerId: args.containerId,
+			correlationId: args.oauthFlowId,
+			retryCount: 0,
+			maxRetries: 1,
+			createdAt: now,
+			updatedAt: now,
+		})
+	},
+})
+
+/**
  * Request task phase execution
  */
 export const startPhaseExecution = mutation({
