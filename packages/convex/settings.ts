@@ -205,6 +205,50 @@ export const getGatewayConfigInternal = internalQuery({
 	},
 })
 
+// Set Tailscale configuration (merges with existing values)
+export const setTailscaleConfig = mutation({
+	args: {
+		tailnetId: v.optional(v.string()),
+		apiKey: v.optional(v.string()),
+		webhookSecret: v.optional(v.string()),
+	},
+	handler: async (ctx, args) => {
+		const existing = await ctx.db
+			.query("settings")
+			.withIndex("by_key", (q) => q.eq("key", "tailscale"))
+			.first()
+
+		const now = Date.now()
+
+		// Build the value object, preserving existing values
+		const existingValue = (existing?.value as Record<string, unknown>) ?? {}
+		const value = {
+			...existingValue,
+			...(args.tailnetId !== undefined ? { tailnetId: args.tailnetId } : {}),
+			...(args.apiKey !== undefined ? { apiKey: args.apiKey } : {}),
+			...(args.webhookSecret !== undefined
+				? { webhookSecret: args.webhookSecret }
+				: {}),
+		}
+
+		if (existing) {
+			await ctx.db.patch(existing._id, {
+				value,
+				updatedAt: now,
+			})
+			return existing._id
+		} else {
+			const id = await ctx.db.insert("settings", {
+				key: "tailscale",
+				value,
+				createdAt: now,
+				updatedAt: now,
+			})
+			return id
+		}
+	},
+})
+
 // Set agent gateway configuration
 export const setGatewayConfig = mutation({
 	args: {

@@ -42,9 +42,10 @@ function GatewayConfigSection() {
 	const [gatewayUrl, setGatewayUrl] = useState("")
 	const [defaultServer, setDefaultServer] = useState("")
 	const [defaultRepo, setDefaultRepo] = useState("")
-	const [isSaving, setIsSaving] = useState(false)
+	const [savingField, setSavingField] = useState<string | null>(null)
+	const [initialized, setInitialized] = useState(false)
 
-	// Convex hooks - all reactive queries now, no actions
+	// Convex hooks
 	const gatewayConfig = useQuery(api.settings.getGatewayConfig)
 	const setGatewayConfig = useMutation(api.settings.setGatewayConfig)
 	const managementStatus = useQuery(api.aiProviders.getManagementContainerStatus)
@@ -52,14 +53,75 @@ function GatewayConfigSection() {
 		api.aiProviders.requestManagementContainer,
 	)
 
-	// Load initial values
+	// Load initial values once
 	useEffect(() => {
-		if (gatewayConfig) {
+		if (gatewayConfig && !initialized) {
 			setGatewayUrl(gatewayConfig.url || "")
 			setDefaultServer(gatewayConfig.defaultServer || "")
 			setDefaultRepo(gatewayConfig.defaultRepo || "")
+			setInitialized(true)
 		}
-	}, [gatewayConfig])
+	}, [gatewayConfig, initialized])
+
+	// Auto-save gateway URL
+	useEffect(() => {
+		if (!initialized) return
+		const timer = setTimeout(async () => {
+			if (gatewayUrl === (gatewayConfig?.url || "")) return
+			setSavingField("url")
+			try {
+				await setGatewayConfig({ url: gatewayUrl || undefined })
+			} catch (error) {
+				toast.error(
+					"Failed to save",
+					error instanceof Error ? error.message : "Failed to save gateway URL",
+				)
+			} finally {
+				setSavingField(null)
+			}
+		}, 500)
+		return () => clearTimeout(timer)
+	}, [gatewayUrl, initialized, gatewayConfig?.url, setGatewayConfig, toast])
+
+	// Auto-save default server
+	useEffect(() => {
+		if (!initialized) return
+		const timer = setTimeout(async () => {
+			if (defaultServer === (gatewayConfig?.defaultServer || "")) return
+			setSavingField("server")
+			try {
+				await setGatewayConfig({ defaultServer: defaultServer || undefined })
+			} catch (error) {
+				toast.error(
+					"Failed to save",
+					error instanceof Error ? error.message : "Failed to save default server",
+				)
+			} finally {
+				setSavingField(null)
+			}
+		}, 500)
+		return () => clearTimeout(timer)
+	}, [defaultServer, initialized, gatewayConfig?.defaultServer, setGatewayConfig, toast])
+
+	// Auto-save default repo
+	useEffect(() => {
+		if (!initialized) return
+		const timer = setTimeout(async () => {
+			if (defaultRepo === (gatewayConfig?.defaultRepo || "")) return
+			setSavingField("repo")
+			try {
+				await setGatewayConfig({ defaultRepo: defaultRepo || undefined })
+			} catch (error) {
+				toast.error(
+					"Failed to save",
+					error instanceof Error ? error.message : "Failed to save default repo",
+				)
+			} finally {
+				setSavingField(null)
+			}
+		}, 500)
+		return () => clearTimeout(timer)
+	}, [defaultRepo, initialized, gatewayConfig?.defaultRepo, setGatewayConfig, toast])
 
 	const handleRequestContainer = async () => {
 		try {
@@ -79,30 +141,6 @@ function GatewayConfigSection() {
 		}
 	}
 
-	const handleSave = async () => {
-		setIsSaving(true)
-		try {
-			await setGatewayConfig({
-				url: gatewayUrl || undefined,
-				defaultServer: defaultServer || undefined,
-				defaultRepo: defaultRepo || undefined,
-			})
-			toast.success("Saved", "Gateway configuration saved")
-		} catch (error) {
-			toast.error(
-				"Failed to save",
-				error instanceof Error ? error.message : "Unknown error",
-			)
-		} finally {
-			setIsSaving(false)
-		}
-	}
-
-	const isDirty =
-		gatewayUrl !== (gatewayConfig?.url || "") ||
-		defaultServer !== (gatewayConfig?.defaultServer || "") ||
-		defaultRepo !== (gatewayConfig?.defaultRepo || "")
-
 	return (
 		<section>
 			<h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center">
@@ -116,7 +154,15 @@ function GatewayConfigSection() {
 				</p>
 				<div className="space-y-4 max-w-3xl">
 					<div className="space-y-2">
-						<Label>Gateway URL</Label>
+						<div className="flex items-center justify-between">
+							<Label>Gateway URL</Label>
+							{savingField === "url" && (
+								<span className="text-xs text-muted-foreground flex items-center gap-1">
+									<RefreshCw size={10} className="animate-spin" />
+									Saving...
+								</span>
+							)}
+						</div>
 						<Input
 							type="text"
 							placeholder="http://localhost:3100"
@@ -128,7 +174,15 @@ function GatewayConfigSection() {
 						</p>
 					</div>
 					<div className="space-y-2">
-						<Label>Default Server</Label>
+						<div className="flex items-center justify-between">
+							<Label>Default Server</Label>
+							{savingField === "server" && (
+								<span className="text-xs text-muted-foreground flex items-center gap-1">
+									<RefreshCw size={10} className="animate-spin" />
+									Saving...
+								</span>
+							)}
+						</div>
 						<Input
 							type="text"
 							placeholder="localhost or server hostname"
@@ -140,7 +194,15 @@ function GatewayConfigSection() {
 						</p>
 					</div>
 					<div className="space-y-2">
-						<Label>Default Repository</Label>
+						<div className="flex items-center justify-between">
+							<Label>Default Repository</Label>
+							{savingField === "repo" && (
+								<span className="text-xs text-muted-foreground flex items-center gap-1">
+									<RefreshCw size={10} className="animate-spin" />
+									Saving...
+								</span>
+							)}
+						</div>
 						<Input
 							type="text"
 							placeholder="anthropics/claude-code-sandbox"
@@ -197,19 +259,6 @@ function GatewayConfigSection() {
 							Status updates automatically via Convex
 						</p>
 					</div>
-
-					<div className="pt-2">
-						<Button onClick={handleSave} disabled={isSaving || !isDirty}>
-							{isSaving ? (
-								<>
-									<RefreshCw size={14} className="mr-2 animate-spin" />
-									Saving...
-								</>
-							) : (
-								"Save Gateway Config"
-							)}
-						</Button>
-					</div>
 				</div>
 			</div>
 		</section>
@@ -220,15 +269,11 @@ export function SettingsView() {
 	const [activeTab, setActiveTab] = useState("credentials")
 	const toast = useToast()
 
-	// Container secrets state
-	const [tsAuthKey, setTsAuthKey] = useState("")
+	// GitHub credentials state
 	const [ghUsername, setGhUsername] = useState("")
 	const [ghToken, setGhToken] = useState("")
-	const [isSavingContainerSecrets, setIsSavingContainerSecrets] =
-		useState(false)
 
 	// Visibility toggles for password fields
-	const [showTsAuthKey, setShowTsAuthKey] = useState(false)
 	const [showGhToken, setShowGhToken] = useState(false)
 	const [showTailscaleApiKey, setShowTailscaleApiKey] = useState(false)
 	const [showTailscaleWebhookSecret, setShowTailscaleWebhookSecret] =
@@ -238,8 +283,11 @@ export function SettingsView() {
 	const [tailnetId, setTailnetId] = useState("")
 	const [tailscaleApiKey, setTailscaleApiKey] = useState("")
 	const [tailscaleWebhookSecret, setTailscaleWebhookSecret] = useState("")
-	const [isSavingTailscale, setIsSavingTailscale] = useState(false)
+	const [isSyncing, setIsSyncing] = useState(false)
 	const [webhookUrlCopied, setWebhookUrlCopied] = useState(false)
+
+	// Unified saving state for all fields
+	const [savingField, setSavingField] = useState<string | null>(null)
 
 	// Derive webhook URL from Convex URL
 	const convexUrl =
@@ -255,7 +303,7 @@ export function SettingsView() {
 
 	// Convex hooks for Tailscale
 	const tailscaleConfig = useQuery(api.settings.getTailscaleConfig)
-	const upsertSetting = useMutation(api.settings.upsert)
+	const setTailscaleConfig = useMutation(api.settings.setTailscaleConfig)
 	const syncDevices = useAction(api.tailscale.syncDevices)
 
 	// Convex hooks for secrets
@@ -267,95 +315,133 @@ export function SettingsView() {
 	const hasSecret = (key: string) =>
 		secretsList?.some((s) => s.key === key && s.hasValue)
 
-	const handleSaveContainerSecrets = async () => {
-		setIsSavingContainerSecrets(true)
+	// Auto-save GitHub username
+	useEffect(() => {
+		if (!ghUsername) return
+		// Don't save if it matches the stored value
+		if (ghUsername === storedGhUsername?.value) return
+		const timer = setTimeout(async () => {
+			setSavingField("ghUsername")
+			try {
+				await setSecret({
+					key: "GH_USERNAME",
+					value: ghUsername,
+					description: "GitHub username for repository cloning",
+				})
+			} catch (error) {
+				toast.error(
+					"Failed to save",
+					error instanceof Error ? error.message : "Failed to save username",
+				)
+			} finally {
+				setSavingField(null)
+			}
+		}, 500)
+		return () => clearTimeout(timer)
+	}, [ghUsername, storedGhUsername?.value, setSecret, toast])
+
+	// Auto-save GitHub token
+	useEffect(() => {
+		if (!ghToken) return
+		const timer = setTimeout(async () => {
+			setSavingField("ghToken")
+			try {
+				await setSecret({
+					key: "GH_TOKEN",
+					value: ghToken,
+					description: "GitHub personal access token",
+				})
+				setGhToken("") // Clear after saving for security
+				toast.success("Saved", "GitHub token saved securely")
+			} catch (error) {
+				toast.error(
+					"Failed to save",
+					error instanceof Error ? error.message : "Failed to save token",
+				)
+			} finally {
+				setSavingField(null)
+			}
+		}, 500)
+		return () => clearTimeout(timer)
+	}, [ghToken, setSecret, toast])
+
+	// Auto-save Tailscale tailnet ID
+	useEffect(() => {
+		if (!tailnetId) return
+		// Don't save if it matches stored value
+		if (tailnetId === tailscaleConfig?.tailnetId) return
+		const timer = setTimeout(async () => {
+			setSavingField("tailnetId")
+			try {
+				await setTailscaleConfig({ tailnetId })
+			} catch (error) {
+				toast.error(
+					"Failed to save",
+					error instanceof Error ? error.message : "Failed to save tailnet ID",
+				)
+			} finally {
+				setSavingField(null)
+			}
+		}, 500)
+		return () => clearTimeout(timer)
+	}, [tailnetId, tailscaleConfig?.tailnetId, setTailscaleConfig, toast])
+
+	// Auto-save Tailscale API key
+	useEffect(() => {
+		if (!tailscaleApiKey) return
+		const timer = setTimeout(async () => {
+			setSavingField("apiKey")
+			try {
+				await setTailscaleConfig({ apiKey: tailscaleApiKey })
+				setTailscaleApiKey("") // Clear after saving for security
+				toast.success("Saved", "API key saved securely")
+			} catch (error) {
+				toast.error(
+					"Failed to save",
+					error instanceof Error ? error.message : "Failed to save API key",
+				)
+			} finally {
+				setSavingField(null)
+			}
+		}, 500)
+		return () => clearTimeout(timer)
+	}, [tailscaleApiKey, setTailscaleConfig, toast])
+
+	// Auto-save Tailscale webhook secret
+	useEffect(() => {
+		if (!tailscaleWebhookSecret) return
+		const timer = setTimeout(async () => {
+			setSavingField("webhookSecret")
+			try {
+				await setTailscaleConfig({ webhookSecret: tailscaleWebhookSecret })
+				setTailscaleWebhookSecret("") // Clear after saving for security
+				toast.success("Saved", "Webhook secret saved securely")
+			} catch (error) {
+				toast.error(
+					"Failed to save",
+					error instanceof Error
+						? error.message
+						: "Failed to save webhook secret",
+				)
+			} finally {
+				setSavingField(null)
+			}
+		}, 500)
+		return () => clearTimeout(timer)
+	}, [tailscaleWebhookSecret, setTailscaleConfig, toast])
+
+	const handleSyncDevices = async () => {
+		setIsSyncing(true)
 		try {
-			const promises = []
-			if (tsAuthKey) {
-				promises.push(
-					setSecret({
-						key: "TS_AUTHKEY",
-						value: tsAuthKey,
-						description: "Tailscale auth key for container networking",
-					}),
-				)
-			}
-			if (ghUsername) {
-				promises.push(
-					setSecret({
-						key: "GH_USERNAME",
-						value: ghUsername,
-						description: "GitHub username for repository cloning",
-					}),
-				)
-			}
-			if (ghToken) {
-				promises.push(
-					setSecret({
-						key: "GH_TOKEN",
-						value: ghToken,
-						description: "GitHub personal access token",
-					}),
-				)
-			}
-
-			if (promises.length === 0) {
-				toast.error("No changes", "Enter at least one secret to save")
-				return
-			}
-
-			await Promise.all(promises)
-			toast.success(
-				"Secrets saved",
-				"Container secrets have been stored securely",
-			)
-
-			// Clear input fields
-			setTsAuthKey("")
-			setGhUsername("")
-			setGhToken("")
-		} catch (error) {
-			toast.error(
-				"Failed to save",
-				error instanceof Error ? error.message : "Failed to save secrets",
-			)
-		} finally {
-			setIsSavingContainerSecrets(false)
-		}
-	}
-
-	const handleSaveTailscale = async () => {
-		setIsSavingTailscale(true)
-
-		try {
-			// Save credentials
-			await upsertSetting({
-				key: "tailscale",
-				value: {
-					tailnetId: tailnetId || tailscaleConfig?.tailnetId || "",
-					apiKey: tailscaleApiKey || undefined, // Only update if provided
-					webhookSecret: tailscaleWebhookSecret || undefined, // Only update if provided
-				},
-			})
-
-			// Trigger initial sync
 			await syncDevices()
-
-			toast.success(
-				"Tailscale configured",
-				"Configuration saved and devices synced successfully",
-			)
-			setTailscaleApiKey("") // Clear the API key field for security
-			setTailscaleWebhookSecret("") // Clear the webhook secret field for security
+			toast.success("Synced", "Devices synced successfully")
 		} catch (error) {
 			toast.error(
-				"Configuration failed",
-				error instanceof Error
-					? error.message
-					: "Failed to save Tailscale configuration",
+				"Sync failed",
+				error instanceof Error ? error.message : "Failed to sync devices",
 			)
 		} finally {
-			setIsSavingTailscale(false)
+			setIsSyncing(false)
 		}
 	}
 
@@ -401,57 +487,33 @@ export function SettingsView() {
 									<div className="space-y-8">
 										<section>
 											<h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center">
-												<Container size={16} className="mr-2" /> Container
-												Creation Secrets
+												<Container size={16} className="mr-2" /> GitHub
+												Credentials
 											</h3>
 											<div className="bg-surface border border-border rounded-lg p-4">
 												<p className="text-sm text-muted-foreground mb-4">
-													These credentials are required for creating new agent
-													containers. They are stored securely in Convex.
+													GitHub credentials are used to clone repositories into
+													agent containers. Only required if your agents need to
+													work with private repos. Stored securely in Convex.
 												</p>
 												<div className="space-y-4 max-w-3xl">
 													<div className="space-y-2">
-														<Label>Tailscale Auth Key</Label>
-														<div className="relative">
-															<Input
-																type={showTsAuthKey ? "text" : "password"}
-																placeholder={
-																	hasSecret("TS_AUTHKEY")
-																		? "••••••••••••••••"
-																		: "tskey-auth-..."
-																}
-																value={tsAuthKey}
-																onChange={(e) => setTsAuthKey(e.target.value)}
-																className="pr-16"
-															/>
-															<div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
-																<button
-																	type="button"
-																	onClick={() =>
-																		setShowTsAuthKey(!showTsAuthKey)
-																	}
-																	className="text-muted-foreground hover:text-foreground transition-colors"
-																>
-																	{showTsAuthKey ? (
-																		<EyeOff size={14} />
-																	) : (
-																		<Eye size={14} />
-																	)}
-																</button>
-																<Lock
-																	size={14}
-																	className="text-muted-foreground"
-																/>
-															</div>
+														<div className="flex items-center justify-between">
+															<Label>GitHub Username</Label>
+															{savingField === "ghUsername" && (
+																<span className="text-xs text-muted-foreground flex items-center gap-1">
+																	<RefreshCw size={10} className="animate-spin" />
+																	Saving...
+																</span>
+															)}
+															{storedGhUsername?.value &&
+																savingField !== "ghUsername" && (
+																	<span className="text-xs text-success flex items-center gap-1">
+																		<Check size={10} />
+																		Configured
+																	</span>
+																)}
 														</div>
-														<p className="text-xs text-muted-foreground">
-															{hasSecret("TS_AUTHKEY")
-																? "Auth key is configured. Enter a new key to update it."
-																: "Create a reusable auth key in the Tailscale admin console"}
-														</p>
-													</div>
-													<div className="space-y-2">
-														<Label>GitHub Username</Label>
 														<Input
 															type="text"
 															placeholder="your-username"
@@ -465,13 +527,28 @@ export function SettingsView() {
 														</p>
 													</div>
 													<div className="space-y-2">
-														<Label>GitHub Personal Access Token</Label>
+														<div className="flex items-center justify-between">
+															<Label>GitHub Personal Access Token</Label>
+															{savingField === "ghToken" && (
+																<span className="text-xs text-muted-foreground flex items-center gap-1">
+																	<RefreshCw size={10} className="animate-spin" />
+																	Saving...
+																</span>
+															)}
+															{hasSecret("GH_TOKEN") &&
+																savingField !== "ghToken" && (
+																	<span className="text-xs text-success flex items-center gap-1">
+																		<Check size={10} />
+																		Configured
+																	</span>
+																)}
+														</div>
 														<div className="relative">
 															<Input
 																type={showGhToken ? "text" : "password"}
 																placeholder={
 																	hasSecret("GH_TOKEN")
-																		? "••••••••••••••••"
+																		? "Enter new token to update..."
 																		: "ghp_..."
 																}
 																value={ghToken}
@@ -497,31 +574,9 @@ export function SettingsView() {
 															</div>
 														</div>
 														<p className="text-xs text-muted-foreground">
-															{hasSecret("GH_TOKEN")
-																? "Token is configured. Enter a new token to update it."
-																: "Create a PAT with repo access at GitHub Settings > Developer settings"}
+															Create a PAT with repo access at GitHub Settings
+															&gt; Developer settings
 														</p>
-													</div>
-													<div className="pt-2">
-														<Button
-															onClick={handleSaveContainerSecrets}
-															disabled={
-																isSavingContainerSecrets ||
-																(!tsAuthKey && !ghUsername && !ghToken)
-															}
-														>
-															{isSavingContainerSecrets ? (
-																<>
-																	<RefreshCw
-																		size={14}
-																		className="mr-2 animate-spin"
-																	/>
-																	Saving...
-																</>
-															) : (
-																"Save Container Secrets"
-															)}
-														</Button>
 													</div>
 												</div>
 											</div>
@@ -646,7 +701,22 @@ export function SettingsView() {
 												</p>
 												<div className="space-y-4 max-w-3xl">
 													<div className="space-y-2">
-														<Label>Tailnet ID</Label>
+														<div className="flex items-center justify-between">
+															<Label>Tailnet ID</Label>
+															{savingField === "tailnetId" && (
+																<span className="text-xs text-muted-foreground flex items-center gap-1">
+																	<RefreshCw size={10} className="animate-spin" />
+																	Saving...
+																</span>
+															)}
+															{tailscaleConfig?.tailnetId &&
+																savingField !== "tailnetId" && (
+																	<span className="text-xs text-success flex items-center gap-1">
+																		<Check size={10} />
+																		Configured
+																	</span>
+																)}
+														</div>
 														<Input
 															type="text"
 															placeholder="your-tailnet.ts.net or organization name"
@@ -661,13 +731,28 @@ export function SettingsView() {
 														</p>
 													</div>
 													<div className="space-y-2">
-														<Label>API Key</Label>
+														<div className="flex items-center justify-between">
+															<Label>API Key</Label>
+															{savingField === "apiKey" && (
+																<span className="text-xs text-muted-foreground flex items-center gap-1">
+																	<RefreshCw size={10} className="animate-spin" />
+																	Saving...
+																</span>
+															)}
+															{tailscaleConfig?.hasApiKey &&
+																savingField !== "apiKey" && (
+																	<span className="text-xs text-success flex items-center gap-1">
+																		<Check size={10} />
+																		Configured
+																	</span>
+																)}
+														</div>
 														<div className="relative">
 															<Input
 																type={showTailscaleApiKey ? "text" : "password"}
 																placeholder={
 																	tailscaleConfig?.hasApiKey
-																		? "••••••••••••••••"
+																		? "Enter new key to update..."
 																		: "tskey-api-..."
 																}
 																value={tailscaleApiKey}
@@ -697,13 +782,28 @@ export function SettingsView() {
 															</div>
 														</div>
 														<p className="text-xs text-muted-foreground">
-															{tailscaleConfig?.hasApiKey
-																? "API key is configured. Enter a new key to update it."
-																: "Create an API key in the Tailscale admin console with read access to devices"}
+															Create an API key (tskey-api-...) in the Tailscale
+															admin console. This is used to generate ephemeral
+															auth keys for containers.
 														</p>
 													</div>
 													<div className="space-y-2">
-														<Label>Webhook Secret</Label>
+														<div className="flex items-center justify-between">
+															<Label>Webhook Secret</Label>
+															{savingField === "webhookSecret" && (
+																<span className="text-xs text-muted-foreground flex items-center gap-1">
+																	<RefreshCw size={10} className="animate-spin" />
+																	Saving...
+																</span>
+															)}
+															{tailscaleConfig?.hasWebhookSecret &&
+																savingField !== "webhookSecret" && (
+																	<span className="text-xs text-success flex items-center gap-1">
+																		<Check size={10} />
+																		Configured
+																	</span>
+																)}
+														</div>
 														<div className="relative">
 															<Input
 																type={
@@ -713,7 +813,7 @@ export function SettingsView() {
 																}
 																placeholder={
 																	tailscaleConfig?.hasWebhookSecret
-																		? "••••••••••••••••"
+																		? "Enter new secret to update..."
 																		: "tskey-webhook-..."
 																}
 																value={tailscaleWebhookSecret}
@@ -745,9 +845,8 @@ export function SettingsView() {
 															</div>
 														</div>
 														<p className="text-xs text-muted-foreground">
-															{tailscaleConfig?.hasWebhookSecret
-																? "Webhook secret is configured. Enter a new secret to update it."
-																: "Create a webhook in the Tailscale admin console and copy the secret here"}
+															Create a webhook in the Tailscale admin console and
+															copy the secret here
 														</p>
 													</div>
 													<div className="space-y-2">
@@ -787,22 +886,23 @@ export function SettingsView() {
 													)}
 													<div className="pt-2">
 														<Button
-															onClick={handleSaveTailscale}
+															onClick={handleSyncDevices}
 															disabled={
-																isSavingTailscale ||
-																(!tailnetId && !tailscaleConfig?.tailnetId)
+																isSyncing ||
+																(!tailscaleConfig?.tailnetId &&
+																	!tailscaleConfig?.hasApiKey)
 															}
 														>
-															{isSavingTailscale ? (
+															{isSyncing ? (
 																<>
 																	<RefreshCw
 																		size={14}
 																		className="mr-2 animate-spin"
 																	/>
-																	Saving & Syncing...
+																	Syncing...
 																</>
 															) : (
-																"Save & Sync"
+																"Sync Devices"
 															)}
 														</Button>
 													</div>
