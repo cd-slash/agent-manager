@@ -156,29 +156,30 @@ export class ClaudeAuth extends EventEmitter {
 	}
 
 	/**
-	 * Ensure a management container exists by calling Convex action
+	 * Request a management container via Convex command queue
+	 * The gateway's command processor will handle the actual creation
 	 */
-	private async ensureManagementContainer(): Promise<{
+	private async requestManagementContainer(): Promise<{
+		status: "exists" | "requested" | "pending"
 		containerId?: string
-		hostname?: string
 		error?: string
 	}> {
 		if (!this.convexClient) {
-			return { error: "Convex client not initialized" }
+			return { status: "pending", error: "Convex client not initialized" }
 		}
 
 		try {
-			const result = await this.convexClient.action(
-				api.aiProviders.ensureManagementContainer,
+			const result = await this.convexClient.mutation(
+				api.aiProviders.requestManagementContainer,
 				{},
 			)
 			return {
+				status: result.status,
 				containerId: result.containerId,
-				hostname: result.hostname,
 			}
 		} catch (error) {
 			const msg = error instanceof Error ? error.message : String(error)
-			return { error: msg }
+			return { status: "pending", error: msg }
 		}
 	}
 
@@ -353,29 +354,41 @@ export class ClaudeAuth extends EventEmitter {
 			return
 		}
 
-		// Find an available container, or ensure one exists
+		// Find an available container, or request one via command queue
 		let container = this.connections.findAvailableContainer()
 
 		if (!container) {
-			console.log("[claude-auth] No connected containers, ensuring management container exists...")
+			console.log("[claude-auth] No connected containers, requesting management container...")
 
-			// Call Convex action to ensure a management container exists
+			// Request a management container via Convex mutation
+			// The gateway's command processor will handle the actual creation
 			try {
-				const result = await this.ensureManagementContainer()
+				const result = await this.requestManagementContainer()
 				if (result.error) {
-					console.error(`[claude-auth] Failed to ensure container: ${result.error}`)
+					console.error(`[claude-auth] Failed to request container: ${result.error}`)
 					await this.updateConvexFlowFailure(flow._id, result.error)
 					return
 				}
 
-				// Wait for the container to connect (poll for up to 60 seconds)
-				console.log(`[claude-auth] Waiting for container ${result.containerId} to connect...`)
-				for (let i = 0; i < 60; i++) {
+				if (result.status === "exists" && result.containerId) {
+					console.log(`[claude-auth] Management container already exists: ${result.containerId}`)
+				} else {
+					console.log(`[claude-auth] Container creation requested (status: ${result.status})`)
+				}
+
+				// Wait for the container to connect (poll for up to 90 seconds)
+				// Container creation via SSH takes time
+				console.log("[claude-auth] Waiting for container to connect...")
+				for (let i = 0; i < 90; i++) {
 					await new Promise(resolve => setTimeout(resolve, 1000))
 					container = this.connections.findAvailableContainer()
 					if (container) {
 						console.log(`[claude-auth] Container connected: ${container.info.containerId}`)
 						break
+					}
+					// Log progress every 10 seconds
+					if (i > 0 && i % 10 === 0) {
+						console.log(`[claude-auth] Still waiting for container... (${i}s)`)
 					}
 				}
 
@@ -386,7 +399,7 @@ export class ClaudeAuth extends EventEmitter {
 				}
 			} catch (error) {
 				const msg = error instanceof Error ? error.message : String(error)
-				console.error(`[claude-auth] Failed to ensure container: ${msg}`)
+				console.error(`[claude-auth] Failed to request container: ${msg}`)
 				await this.updateConvexFlowFailure(flow._id, `Failed to create container: ${msg}`)
 				return
 			}
