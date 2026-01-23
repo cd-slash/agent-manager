@@ -10,6 +10,15 @@ const server = serve({
 	// Serve static files from frontend dist in production
 	static: isProduction ? frontendDistPath : undefined,
 
+	routes: {
+		"/health": new Response("OK"),
+	},
+
+	fetch(req) {
+		// Fallback handler for unmatched routes
+		return new Response("Not Found", { status: 404 })
+	},
+
 	development: !isProduction && {
 		hmr: true,
 		console: true,
