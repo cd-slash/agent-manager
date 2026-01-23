@@ -8,6 +8,7 @@ import {
 	Info,
 	Network,
 	Play,
+	RotateCcw,
 	Server,
 	StopCircle,
 	Terminal,
@@ -24,7 +25,7 @@ import {
 	TooltipContent,
 	TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { useDeleteContainer, useStopContainer } from "@/hooks/useGatewayCommand"
+import { useDeleteContainer, useRestartContainer, useStopContainer } from "@/hooks/useGatewayCommand"
 import type { Container } from "@/types"
 import { BuildLogViewer } from "./BuildLogViewer"
 import { type BuildPhase, BuildTimeline } from "./BuildTimeline"
@@ -41,6 +42,7 @@ export function ContainerDetailView({
 	const [activeTab, setActiveTab] = useState("overview")
 	const [selectedPhase, setSelectedPhase] = useState<string | undefined>()
 	const [isStoppingContainer, setIsStoppingContainer] = useState(false)
+	const [isRestartingContainer, setIsRestartingContainer] = useState(false)
 	const [isDeletingContainer, setIsDeletingContainer] = useState(false)
 	const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 	const toast = useToast()
@@ -49,9 +51,11 @@ export function ContainerDetailView({
 
 	// Use Convex-driven gateway commands
 	const stopContainerCmd = useStopContainer()
+	const restartContainerCmd = useRestartContainer()
 	const deleteContainerCmd = useDeleteContainer()
 
 	const isRunning = container.status === "running"
+	const isStopped = container.status === "stopped"
 	const canDelete = !isRunning
 	const serverHostname =
 		container.serverHostname || container.server || "localhost"
@@ -92,6 +96,56 @@ export function ContainerDetailView({
 			)
 		} finally {
 			setIsStoppingContainer(false)
+		}
+	}
+
+	const handleRestartContainer = async () => {
+		setIsRestartingContainer(true)
+		try {
+			// Update status to restarting first
+			await updateContainerStatus({
+				id: container.id as Parameters<typeof updateContainerStatus>[0]["id"],
+				status: "restarting",
+			})
+
+			const result = await restartContainerCmd.execute(
+				container.name,
+				serverHostname,
+			)
+
+			if (result.notFound) {
+				// Container doesn't exist on host - remove from database
+				await deleteContainerFromDb({
+					id: container.id as Parameters<typeof deleteContainerFromDb>[0]["id"],
+				})
+				toast.error(
+					"Container not found",
+					`Container "${container.name}" was not found on host and has been removed`,
+				)
+				onDeleted?.()
+			} else {
+				// Container was restarted - update status to running
+				await updateContainerStatus({
+					id: container.id as Parameters<typeof updateContainerStatus>[0]["id"],
+					status: "running",
+				})
+				toast.success(
+					"Container restarted",
+					`Container "${container.name}" has been restarted with a fresh Tailscale auth key`,
+				)
+			}
+		} catch (error) {
+			// Revert status on error
+			await updateContainerStatus({
+				id: container.id as Parameters<typeof updateContainerStatus>[0]["id"],
+				status: "stopped",
+			})
+			toast.error(
+				"Failed to restart container",
+				error instanceof Error ? error.message : "Unknown error",
+			)
+		} finally {
+			setIsRestartingContainer(false)
 		}
 	}
 
@@ -345,6 +399,43 @@ export function ContainerDetailView({
 																</>
 															)}
 														</Button>
+													</div>
+
+													<div className="border-t border-border pt-4">
+														<div className="flex items-center justify-between">
+															<div>
+																<div className="text-sm font-medium text-foreground">
+																	Restart Container
+																</div>
+																<div className="text-xs text-muted-foreground mt-0.5">
+																	Start a stopped container with a fresh Tailscale
+																	auth key.
+																</div>
+															</div>
+															<Button
+																variant="outline"
+																onClick={handleRestartContainer}
+																disabled={!isStopped || isRestartingContainer}
+																className="min-w-[100px]"
+															>
+																{isRestartingContainer ? (
+																	<>
+																		<div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2" />
+																		Restarting...
+																	</>
+																) : isStopped ? (
+																	<>
+																		<RotateCcw size={16} className="mr-2" />
+																		Restart
+																	</>
+																) : (
+																	<>
+																		<Play size={16} className="mr-2" />
+																		Running
+																	</>
+																)}
+															</Button>
+														</div>
 													</div>
 
 													<div className="border-t border-border pt-4">

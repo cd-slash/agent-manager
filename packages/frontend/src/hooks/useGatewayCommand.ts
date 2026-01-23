@@ -223,6 +223,75 @@ export function useStopContainer() {
 }
 
 /**
+ * Hook for executing container restart commands (with fresh Tailscale auth key)
+ */
+export function useRestartContainer() {
+	const createCommand = useMutation(api.serverCommands.restartContainer)
+	const [pendingId, setPendingId] = useState<Id<"serverCommands"> | null>(null)
+	const pendingRef = useRef<PendingServerCommand<{
+		restarted: boolean
+		notFound: boolean
+		containerName: string
+	}> | null>(null)
+
+	const commandStatus = useServerCommandWatcher(pendingId)
+
+	useEffect(() => {
+		if (!commandStatus || !pendingRef.current) return
+
+		if (commandStatus.status === "completed" && commandStatus.result) {
+			pendingRef.current.resolve(
+				commandStatus.result as {
+					restarted: boolean
+					notFound: boolean
+					containerName: string
+				},
+			)
+			pendingRef.current = null
+			setPendingId(null)
+		} else if (commandStatus.status === "failed") {
+			pendingRef.current.reject(
+				new Error(commandStatus.error || "Command failed"),
+			)
+			pendingRef.current = null
+			setPendingId(null)
+		}
+	}, [commandStatus])
+
+	const execute = useCallback(
+		(
+			containerName: string,
+			server: string,
+			sshUser?: string,
+		): Promise<{ restarted: boolean; notFound: boolean; containerName: string }> => {
+			return new Promise((resolve, reject) => {
+				createCommand({
+					containerName,
+					server,
+					sshUser,
+				})
+					.then((commandId) => {
+						pendingRef.current = {
+							id: commandId,
+							resolve,
+							reject,
+						}
+						setPendingId(commandId)
+					})
+					.catch(reject)
+			})
+		},
+		[createCommand],
+	)
+
+	return {
+		execute,
+		isPending: pendingId !== null,
+		status: commandStatus?.status ?? null,
+	}
+}
+
+/**
  * Hook for executing container delete commands
  */
 export function useDeleteContainer() {

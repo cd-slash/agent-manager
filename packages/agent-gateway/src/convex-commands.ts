@@ -31,6 +31,12 @@ interface CommandProcessorDeps {
 		server: string,
 		sshUser?: string,
 	) => Promise<{ stopped: boolean; notFound: boolean }>
+	restartContainerOnServer: (
+		containerName: string,
+		server: string,
+		sshUser?: string,
+		tailscaleConfig?: { tailnetId?: string; apiKey?: string },
+	) => Promise<{ restarted: boolean; notFound: boolean }>
 	deleteContainerOnServer: (
 		containerName: string,
 		server: string,
@@ -186,6 +192,8 @@ export class ConvexCommandProcessor {
 				return this.handleCreateContainer(cmd)
 			case "stopContainer":
 				return this.handleStopContainer(cmd)
+			case "restartContainer":
+				return this.handleRestartContainer(cmd)
 			case "deleteContainer":
 				return this.handleDeleteContainer(cmd)
 			case "listContainers":
@@ -252,6 +260,40 @@ export class ConvexCommandProcessor {
 
 		return {
 			stopped: result.stopped,
+			notFound: result.notFound,
+			containerName: payload.containerName,
+		}
+	}
+
+	private async handleRestartContainer(cmd: ServerCommand): Promise<unknown> {
+		const payload = cmd.payload as {
+			containerName: string
+			server: string
+			sshUser?: string
+		}
+
+		console.log(`[commands] Restarting container: ${payload.containerName}`)
+
+		// Fetch Tailscale config for fresh auth key generation
+		const tailscaleConfig = await this.deps.fetchTailscaleConfig(this.convexUrl)
+
+		const result = await this.deps.restartContainerOnServer(
+			payload.containerName,
+			payload.server,
+			payload.sshUser,
+			tailscaleConfig,
+		)
+
+		if (result.notFound) {
+			console.log(
+				`[commands] Container not found on host: ${payload.containerName}`,
+			)
+		} else {
+			console.log(`[commands] Container restarted: ${payload.containerName}`)
+		}
+
+		return {
+			restarted: result.restarted,
 			notFound: result.notFound,
 			containerName: payload.containerName,
 		}

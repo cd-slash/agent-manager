@@ -89,6 +89,35 @@ export const stopContainer = mutation({
 })
 
 /**
+ * Request container restart with fresh Tailscale auth key
+ */
+export const restartContainer = mutation({
+	args: {
+		containerName: v.string(),
+		server: v.string(),
+		sshUser: v.optional(v.string()),
+		priority: v.optional(commandPriorityValidator),
+	},
+	handler: async (ctx, args) => {
+		const now = Date.now()
+		return await ctx.db.insert("serverCommands", {
+			type: "restartContainer",
+			status: "pending",
+			priority: args.priority ?? "normal",
+			payload: {
+				containerName: args.containerName,
+				server: args.server,
+				sshUser: args.sshUser,
+			},
+			retryCount: 0,
+			maxRetries: DEFAULT_MAX_RETRIES,
+			createdAt: now,
+			updatedAt: now,
+		})
+	},
+})
+
+/**
  * Request container deletion
  */
 export const deleteContainer = mutation({

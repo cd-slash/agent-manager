@@ -792,13 +792,20 @@ WORKDIR /workspace`
 	const entrypoint = `#!/bin/bash
 set -euo pipefail
 
+# Determine auth key - file takes precedence (used for restart with fresh key)
+AUTH_KEY="\${TS_AUTHKEY:-}"
+if [ -f /var/run/tailscale-authkey ]; then
+  AUTH_KEY=\$(cat /var/run/tailscale-authkey)
+  rm -f /var/run/tailscale-authkey  # Single use, remove after reading
+fi
+
 # Start Tailscale (using statedir for persistent state to support TLS certificates)
-if [ -n "\${TS_AUTHKEY:-}" ]; then
+if [ -n "\$AUTH_KEY" ]; then
   TAILSCALED_ARGS="--statedir=/var/lib/tailscale"
-  [ -n "\${TS_WG_PORT:-}" ] && TAILSCALED_ARGS="$TAILSCALED_ARGS --port=\${TS_WG_PORT}"
-  tailscaled $TAILSCALED_ARGS &
+  [ -n "\${TS_WG_PORT:-}" ] && TAILSCALED_ARGS="\$TAILSCALED_ARGS --port=\${TS_WG_PORT}"
+  tailscaled \$TAILSCALED_ARGS &
   sleep 2
-  tailscale up --authkey="\${TS_AUTHKEY}" --hostname="\${TS_HOSTNAME}" --accept-dns=true --ssh
+  tailscale up --authkey="\$AUTH_KEY" --hostname="\${TS_HOSTNAME}" --accept-dns=true --ssh
 fi
 
 # Start SSH
@@ -1272,6 +1279,95 @@ docker rm "$CONTAINER_ID"
 }
 
 /**
+ * Restart a stopped container with a fresh Tailscale auth key
+ * The new key is injected via a file that the entrypoint reads on startup
+ */
+async function restartContainerOnServer(
+	containerName: string,
+	server: string,
+	sshUser?: string,
+	tailscaleConfig?: { tailnetId?: string; apiKey?: string },
+): Promise<{ restarted: boolean; notFound: boolean }> {
+	console.log(`[gateway] Restarting container ${containerName} on ${server}...`)
+
+	const sshTarget =
+		server === "localhost" ? "localhost" : `${sshUser || "ubuntu"}@${server}`
+
+	// Generate a fresh Tailscale auth key for the restart
+	if (!tailscaleConfig?.tailnetId || !tailscaleConfig?.apiKey) {
+		throw new Error("Tailscale config required for container restart")
+	}
+
+	const newAuthKey = await generateTailscaleAuthKey(
+		tailscaleConfig.tailnetId,
+		tailscaleConfig.apiKey,
+	)
+
+	// Script to inject auth key and start the container
+	const restartScript = `
+CONTAINER_ID=$(docker ps -aq --filter "label=agent-manager.tailscale-hostname=${containerName}" | head -1)
+if [ -z "$CONTAINER_ID" ]; then
+  CONTAINER_ID="${containerName}"
+fi
+
+# Check if container exists
+if ! docker inspect "$CONTAINER_ID" >/dev/null 2>&1; then
+  echo "NOT_FOUND"
+  exit 0
+fi
+
+# Check if container is already running
+RUNNING=$(docker inspect --format='{{.State.Running}}' "$CONTAINER_ID" 2>/dev/null || echo "false")
+if [ "$RUNNING" = "true" ]; then
+  echo "ALREADY_RUNNING"
+  exit 0
+fi
+
+# Clear old Tailscale state so it can re-register with the new key
+docker exec "$CONTAINER_ID" rm -rf /var/lib/tailscale/* 2>/dev/null || true
+
+# Inject the new auth key via a file (entrypoint reads this on startup)
+echo '${newAuthKey}' | docker exec -i "$CONTAINER_ID" tee /var/run/tailscale-authkey > /dev/null
+
+# Start the container
+docker start "$CONTAINER_ID"
+`
+
+	const restartProc =
+		server === "localhost"
+			? Bun.spawn(["bash", "-c", restartScript], {
+					stdout: "pipe",
+					stderr: "pipe",
+				})
+			: Bun.spawn(["ssh", sshTarget, "bash", "-s"], {
+					stdin: new Blob([restartScript]),
+					stdout: "pipe",
+					stderr: "pipe",
+				})
+
+	const stdout = (await new Response(restartProc.stdout).text()).trim()
+	const stderr = await new Response(restartProc.stderr).text()
+	const exitCode = await restartProc.exited
+
+	if (stdout === "NOT_FOUND") {
+		console.log(`[gateway] Container ${containerName} not found on host`)
+		return { restarted: false, notFound: true }
+	}
+
+	if (stdout === "ALREADY_RUNNING") {
+		console.log(`[gateway] Container ${containerName} is already running`)
+		return { restarted: true, notFound: false }
+	}
+
+	if (exitCode !== 0) {
+		throw new Error(`Failed to restart container: ${stderr}`)
+	}
+
+	console.log(`[gateway] Container ${containerName} restarted successfully`)
+	return { restarted: true, notFound: false }
+}
+
+/**
  * List all agent-manager containers on a server via SSH/Docker
  * Returns container names and their running status
  */
@@ -1346,6 +1442,7 @@ const commandProcessor = CONVEX_URL
 			convexSync,
 			createContainerOnServer,
 			stopContainerOnServer,
+			restartContainerOnServer,
 			deleteContainerOnServer,
 			listContainersOnServer,
 			fetchSecrets,

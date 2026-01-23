@@ -147,6 +147,7 @@ export const prDetectedViaValidator = v.union(
 export const serverCommandTypeValidator = v.union(
 	v.literal("createContainer"),
 	v.literal("stopContainer"),
+	v.literal("restartContainer"),
 	v.literal("deleteContainer"),
 	v.literal("listContainers"),
 )
