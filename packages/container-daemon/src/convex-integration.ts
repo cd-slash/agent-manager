@@ -274,6 +274,7 @@ export class ConvexIntegration extends EventEmitter<ConvexIntegrationEvents> {
 
 		const correlationId = command.correlationId || crypto.randomUUID()
 		let sequenceNumber = 0
+		let finalResult: string | undefined
 
 		// Stream execution results to Convex
 		for await (const event of this.processManager.executeStream({
@@ -288,11 +289,36 @@ export class ConvexIntegration extends EventEmitter<ConvexIntegrationEvents> {
 		})) {
 			// Store each message in Convex
 			if (event.type === "data" && event.data) {
+				// event.data is already a parsed object from the process manager
+				const data = event.data as { type?: string; result?: string }
+
+				// Store the JSON string in Convex
 				await this.client.mutation(api.agentMessages.create, {
 					sessionId: correlationId,
-					content: event.data,
+					content: JSON.stringify(data),
 					sequenceNumber: sequenceNumber++,
 				})
+
+				// Extract the final result text from the result event
+				if (data.type === "result" && data.result) {
+					finalResult = data.result
+				}
+			}
+		}
+
+		// If we have a task and a final result, insert it as an AI chat message
+		// taskId can be in payload or on the command itself
+		const taskId = payload.taskId || command.taskId
+		if (taskId && finalResult) {
+			try {
+				await this.client.mutation(api.chat.sendTaskMessage, {
+					taskId: taskId as Id<"tasks">,
+					text: finalResult,
+					sender: "ai",
+				})
+				console.log(`[convex] AI response added to chat for task ${taskId}`)
+			} catch (error) {
+				console.error(`[convex] Failed to add AI chat message:`, error)
 			}
 		}
 

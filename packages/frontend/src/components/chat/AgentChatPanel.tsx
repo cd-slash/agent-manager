@@ -8,16 +8,19 @@ import type { ChatMessage } from "@/types"
 interface AgentChatPanelProps {
 	chatHistory?: ChatMessage[]
 	onSendMessage: (text: string) => void
+	isLoading?: boolean
 }
 
 export function AgentChatPanel({
 	chatHistory,
 	onSendMessage,
+	isLoading = false,
 }: AgentChatPanelProps) {
 	const [chatInput, setChatInput] = useState("")
 	const [selectedModel, setSelectedModel] = useState("Opus")
 	const [mode, setMode] = useState<"plan" | "edit">("plan")
 	const textareaRef = useRef<HTMLTextAreaElement>(null)
+	const scrollAreaRef = useRef<HTMLDivElement>(null)
 
 	useEffect(() => {
 		const textarea = textareaRef.current
@@ -26,6 +29,16 @@ export function AgentChatPanel({
 			textarea.style.height = `${textarea.scrollHeight}px`
 		}
 	}, [])
+
+	// Auto-scroll to bottom when new messages arrive or loading state changes
+	useEffect(() => {
+		if (scrollAreaRef.current) {
+			const scrollContainer = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]')
+			if (scrollContainer) {
+				scrollContainer.scrollTop = scrollContainer.scrollHeight
+			}
+		}
+	}, [chatHistory?.length, isLoading])
 
 	const handleSend = (e: React.FormEvent) => {
 		e.preventDefault()
@@ -41,7 +54,7 @@ export function AgentChatPanel({
 				Agent Chat
 			</h3>
 			<div className="bg-surface border border-border rounded-lg flex flex-col flex-1 overflow-hidden">
-				<ScrollArea className="flex-1 p-4">
+				<ScrollArea className="flex-1 p-4" ref={scrollAreaRef}>
 					<div className="space-y-4">
 						{chatHistory?.map((msg) => (
 							<div
@@ -66,6 +79,20 @@ export function AgentChatPanel({
 								</span>
 							</div>
 						))}
+						{isLoading && (
+							<div className="flex flex-col items-start">
+								<div className="bg-surface-elevated text-foreground rounded-lg rounded-bl-sm border border-border p-component text-sm shadow-sm">
+									<div className="flex items-center space-x-1">
+										<div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+										<div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+										<div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+									</div>
+								</div>
+								<span className="text-[10px] text-muted-foreground mt-1 px-compact">
+									Agent thinking...
+								</span>
+							</div>
+						)}
 					</div>
 				</ScrollArea>
 

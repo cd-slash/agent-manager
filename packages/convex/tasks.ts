@@ -213,6 +213,7 @@ export const update = mutation({
 		prompt: v.optional(v.string()),
 		tag: v.optional(v.string()),
 		complexity: v.optional(v.string()),
+		activeContainerId: v.optional(v.string()),
 	},
 	handler: async (ctx, args) => {
 		const { id, ...updates } = args

@@ -344,6 +344,7 @@ export interface Test {
 
 export interface Task {
 	id: string
+	projectId?: string
 	title: string
 	category: "backlog" | "todo" | "in-progress" | "done"
 	tag: string

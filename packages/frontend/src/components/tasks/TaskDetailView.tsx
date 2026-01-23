@@ -173,6 +173,12 @@ export function TaskDetailView({
 	// Mutation to send messages
 	const sendMessage = useMutation(api.chat.sendTaskMessage)
 
+	// Mutation to start agent execution
+	const startExecution = useMutation(api.containerCommands.startExecution)
+
+	// Track if agent is currently processing
+	const [isAgentProcessing, setIsAgentProcessing] = useState(false)
+
 	// Convex mutations for dependencies
 	const addDependency = useMutation(api.tasks.addDependency)
 	const removeDependency = useMutation(api.tasks.removeDependency)
@@ -219,12 +225,34 @@ export function TaskDetailView({
 
 	const handleSendMessage = async (text: string) => {
 		// Send user message to Convex
-		// AI responses are handled by container commands via the containerCommands table
 		await sendMessage({
 			taskId,
 			text,
 			sender: "user",
 		})
+
+		// If there's an active container, trigger agent execution
+		if (task.activeContainerId) {
+			setIsAgentProcessing(true)
+			try {
+				await startExecution({
+					containerId: task.activeContainerId,
+					message: text,
+					model: "claude-3-5-haiku-20241022",
+					taskId: taskId as string,
+					projectId: task.projectId as string,
+				})
+			} catch (error) {
+				console.error("Failed to start agent execution:", error)
+				toast.error("Agent error", "Failed to start agent execution")
+			} finally {
+				// For now, clear loading after a delay
+				// TODO: Track actual command completion
+				setTimeout(() => setIsAgentProcessing(false), 3000)
+			}
+		} else {
+			toast.error("No container", "Please assign a container to this task first")
+		}
 	}
 
 	return (
@@ -1226,6 +1254,7 @@ export function TaskDetailView({
 									<AgentChatPanel
 										chatHistory={chatHistory}
 										onSendMessage={handleSendMessage}
+										isLoading={isAgentProcessing}
 									/>
 								</div>
 							</div>
