@@ -397,6 +397,7 @@ export interface Container {
 	port: string
 	server: string
 	serverHostname?: string
+	tailscaleNodeId?: string // Tailscale device ID (for deletion from Tailscale)
 }
 
 // Extended types that include related data (from Convex queries)

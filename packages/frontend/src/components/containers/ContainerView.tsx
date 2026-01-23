@@ -1,6 +1,7 @@
 import { api } from "@agent-manager/convex/api"
 import type { ColumnDef } from "@tanstack/react-table"
 import { useAction, useMutation } from "convex/react"
+import type { FunctionReturnType } from "convex/server"
 import {
 	Box,
 	MoreHorizontal,
@@ -75,6 +76,7 @@ export function ContainerView({
 		new Set(),
 	)
 	const syncDevices = useAction(api.tailscale.syncDevices)
+	const deleteTailscaleDevice = useAction(api.tailscale.deleteDevice)
 	const syncWithHost = useAction(api.containers.syncWithHost)
 	const updateContainerStatus = useMutation(api.containers.updateStatus)
 	const deleteContainerFromDb = useMutation(api.containers.deleteContainer)
@@ -215,7 +217,17 @@ export function ContainerView({
 				container.serverHostname || container.server || "localhost"
 			setDeletingContainers((prev) => new Set(prev).add(container.id))
 			try {
-				// Try to delete from Docker host first
+				// 1. Delete from Tailscale first (prevents ghost containers on sync)
+				if (container.tailscaleNodeId) {
+					try {
+						await deleteTailscaleDevice({ nodeId: container.tailscaleNodeId })
+					} catch (tailscaleError) {
+						// Log but don't fail - Tailscale device may already be gone
+						console.warn("Failed to delete Tailscale device:", tailscaleError)
+					}
+				}
+
+				// 2. Try to delete from Docker host
 				try {
 					await deleteContainerCmd.execute(container.name, serverHostname)
 				} catch (dockerError) {
@@ -237,7 +249,7 @@ export function ContainerView({
 					// Container doesn't exist on host, proceed to remove from DB
 				}
 
-				// Delete from database
+				// 3. Delete from database
 				await deleteContainerFromDb({
 					id: container.id as Parameters<typeof deleteContainerFromDb>[0]["id"],
 				})
@@ -258,7 +270,7 @@ export function ContainerView({
 				})
 			}
 		},
-		[deleteContainerCmd, deleteContainerFromDb, toast],
+		[deleteContainerCmd, deleteContainerFromDb, deleteTailscaleDevice, toast],
 	)
 
 	// Force delete removes container from DB without trying Docker delete
@@ -380,8 +392,9 @@ export function ContainerView({
 			`Container "${result.name}" created on ${result.server}`,
 		)
 
-		// Sync to get the new container in the list
-		await syncDevices()
+		// Note: Don't call syncDevices() here - the container is already registered
+		// in Convex by the gateway during creation. Syncing would recreate any
+		// recently deleted containers that still exist in Tailscale.
 	}
 
 	const stoppableCount = selectedContainers.filter(

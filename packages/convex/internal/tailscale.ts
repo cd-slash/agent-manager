@@ -229,6 +229,46 @@ export const getTailscaleContainers = internalQuery({
 	},
 })
 
+// Delete a device from Tailscale API
+export const deleteDeviceFromTailscale = internalAction({
+	args: { nodeId: v.string() },
+	handler: async (ctx, args) => {
+		// Get credentials
+		const credentials = await ctx.runQuery(
+			internal.internal.tailscale.getCredentials,
+		)
+
+		if (!credentials?.tailnetId || !credentials?.apiKey) {
+			console.log("Tailscale credentials not configured, skipping device deletion")
+			return { skipped: true, reason: "no_credentials" }
+		}
+
+		// Delete device from Tailscale API
+		const response = await fetch(
+			`https://api.tailscale.com/api/v2/device/${args.nodeId}`,
+			{
+				method: "DELETE",
+				headers: {
+					Authorization: `Bearer ${credentials.apiKey}`,
+				},
+			},
+		)
+
+		if (!response.ok) {
+			if (response.status === 404) {
+				console.log(`Device ${args.nodeId} not found in Tailscale (already deleted)`)
+				return { deleted: false, reason: "not_found" }
+			}
+			const errorText = await response.text()
+			console.error(`Failed to delete Tailscale device: ${response.status} - ${errorText}`)
+			return { deleted: false, reason: "api_error", error: errorText }
+		}
+
+		console.log(`Deleted device ${args.nodeId} from Tailscale`)
+		return { deleted: true }
+	},
+})
+
 // Sync a single device from Tailscale API by nodeID (triggered by webhooks)
 export const syncDeviceFromApi = internalAction({
 	args: { nodeID: v.string() },
