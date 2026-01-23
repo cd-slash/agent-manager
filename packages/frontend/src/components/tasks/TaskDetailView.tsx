@@ -28,7 +28,7 @@ import {
 	X,
 	XCircle,
 } from "lucide-react"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { AgentChatPanel } from "@/components/chat/AgentChatPanel"
 import { DependencyPickerModal } from "@/components/modals/DependencyPickerModal"
 import { useToast } from "@/components/ToastProvider"
@@ -159,16 +159,90 @@ export function TaskDetailView({
 		)
 	}
 
+	// Track if agent is currently processing
+	const [isAgentProcessing, setIsAgentProcessing] = useState(false)
+	const [isCreatingContainer, setIsCreatingContainer] = useState(false)
+	// Track the current streaming session for real-time updates
+	const [currentSessionId, setCurrentSessionId] = useState<string | null>(null)
+
 	// Fetch chat messages from Convex
 	const chatMessagesData = useQuery(api.chat.listByTask, { taskId }) ?? []
 
-	// Convert Convex chat messages to legacy format
-	const chatHistory: ChatMessage[] = chatMessagesData.map((msg) => ({
-		id: msg._id,
-		sender: msg.sender,
-		text: msg.text,
-		time: formatTime(msg.createdAt),
-	}))
+	// Subscribe to streaming messages for the current session
+	const streamingMessages = useQuery(
+		api.agentMessages.getBySession,
+		currentSessionId ? { sessionId: currentSessionId } : "skip"
+	)
+
+	// Query to watch container pool for task's container
+	const taskContainer = useQuery(
+		api.containerPool.get,
+		task.activeContainerId ? { containerId: task.activeContainerId } : "skip"
+	)
+
+	// Watch streaming messages for completion and extract current streaming text
+	const streamingText = useMemo(() => {
+		if (!streamingMessages || streamingMessages.length === 0) return null
+
+		// Collect assistant text content from streaming messages
+		const textParts: string[] = []
+		let hasResult = false
+		let finalResultText: string | null = null
+
+		for (const msg of streamingMessages) {
+			// Try to parse the raw content to extract meaningful text
+			try {
+				const content = msg.rawContent ? JSON.parse(msg.rawContent) : null
+				if (!content) continue
+
+				// Handle result type - this is the final response
+				if (content.type === "result") {
+					hasResult = true
+					if (content.result) {
+						finalResultText = content.result
+					}
+					continue
+				}
+
+				// Handle assistant messages - extract text from content array
+				if (content.type === "assistant" && content.message?.content) {
+					for (const block of content.message.content) {
+						if (block.type === "text" && block.text) {
+							textParts.push(block.text)
+						}
+					}
+				}
+			} catch {
+				// If parsing fails, skip this message
+			}
+		}
+
+		// Use final result text if available, otherwise use accumulated text
+		const displayText = finalResultText || textParts.join("")
+		return { text: displayText, hasResult }
+	}, [streamingMessages])
+
+	// Convert Convex chat messages to legacy format, including streaming message if active
+	const chatHistory: ChatMessage[] = useMemo(() => {
+		const messages: ChatMessage[] = chatMessagesData.map((msg) => ({
+			id: msg._id,
+			sender: msg.sender,
+			text: msg.text,
+			time: formatTime(msg.createdAt),
+		}))
+
+		// If we have streaming text and it hasn't been added to chat yet, show it
+		if (streamingText?.text && isAgentProcessing) {
+			messages.push({
+				id: "streaming-" + currentSessionId,
+				sender: "ai",
+				text: streamingText.text,
+				time: "streaming...",
+			})
+		}
+
+		return messages
+	}, [chatMessagesData, streamingText, isAgentProcessing, currentSessionId])
 
 	// Mutation to send messages
 	const sendMessage = useMutation(api.chat.sendTaskMessage)
@@ -184,16 +258,6 @@ export function TaskDetailView({
 
 	// Mutation to push auth token to container
 	const pushAuthToken = useMutation(api.containerCommands.pushAuthToken)
-
-	// Query to watch container pool for task's container
-	const taskContainer = useQuery(
-		api.containerPool.get,
-		task.activeContainerId ? { containerId: task.activeContainerId } : "skip"
-	)
-
-	// Track if agent is currently processing
-	const [isAgentProcessing, setIsAgentProcessing] = useState(false)
-	const [isCreatingContainer, setIsCreatingContainer] = useState(false)
 
 	// Convex mutations for dependencies
 	const addDependency = useMutation(api.tasks.addDependency)
@@ -252,8 +316,18 @@ export function TaskDetailView({
 		}
 	}, [task.activeContainerId, pendingMessage])
 
+	// Clear processing state when streaming completes (result message received)
+	useEffect(() => {
+		if (streamingText?.hasResult && isAgentProcessing) {
+			setIsAgentProcessing(false)
+			// Clear session after a brief delay to allow final UI update
+			setTimeout(() => setCurrentSessionId(null), 500)
+		}
+	}, [streamingText?.hasResult, isAgentProcessing])
+
 	const executeWithContainer = async (containerId: string, message: string) => {
 		setIsAgentProcessing(true)
+		setCurrentSessionId(null) // Reset session before starting new one
 		try {
 			// Push auth token first
 			const authToken = "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"
@@ -262,19 +336,24 @@ export function TaskDetailView({
 				token: authToken,
 			})
 
-			await startExecution({
+			const result = await startExecution({
 				containerId,
 				message,
 				model: "claude-3-5-haiku-20241022",
 				taskId: taskId as string,
 				projectId: task.projectId as string,
 			})
+
+			// Track the session for streaming updates
+			if (result?.correlationId) {
+				setCurrentSessionId(result.correlationId)
+			}
 		} catch (error) {
 			console.error("Failed to start agent execution:", error)
 			toast.error("Agent error", "Failed to start agent execution")
-		} finally {
-			setTimeout(() => setIsAgentProcessing(false), 3000)
+			setIsAgentProcessing(false)
 		}
+		// Note: isAgentProcessing will be cleared by the useEffect watching streamingMessages
 	}
 
 	const handleSendMessage = async (text: string) => {
@@ -1315,7 +1394,7 @@ export function TaskDetailView({
 									<AgentChatPanel
 										chatHistory={chatHistory}
 										onSendMessage={handleSendMessage}
-										isLoading={isAgentProcessing}
+										isLoading={isAgentProcessing && !streamingText?.text}
 									/>
 								</div>
 							</div>

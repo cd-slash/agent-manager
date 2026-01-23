@@ -6,6 +6,7 @@ import {
 	query,
 } from "./_generated/server"
 import { api } from "./_generated/api"
+import type { Id } from "./_generated/dataModel"
 import { patchWithTimestamp } from "./internal/updateUtils"
 import { containerStatusValidator, containerTypeValidator } from "./validators"
 
@@ -330,15 +331,24 @@ export const createFromAgent = mutation({
 	handler: async (ctx, args) => {
 		const now = Date.now()
 
-		// Check if container already exists
-		const existing = await ctx.db
+		// Check if container already exists by containerId
+		let existing = await ctx.db
 			.query("containers")
 			.filter((q) => q.eq(q.field("containerId"), args.containerId))
 			.first()
 
+		// Also check by name to prevent duplicates from race conditions with Tailscale sync
+		if (!existing) {
+			existing = await ctx.db
+				.query("containers")
+				.filter((q) => q.eq(q.field("name"), args.name))
+				.first()
+		}
+
 		if (existing) {
-			// Update existing container
+			// Update existing container - ensure containerId is set even if found by name
 			await ctx.db.patch(existing._id, {
+				containerId: args.containerId,
 				name: args.name,
 				serverHostname: args.server,
 				tailscaleHostname: args.hostname,
@@ -346,6 +356,20 @@ export const createFromAgent = mutation({
 				containerType: args.containerType,
 				updatedAt: now,
 			})
+
+			// If this container was created for a task, assign it to that task
+			if (args.taskId) {
+				const taskId = args.taskId as Id<"tasks">
+				const task = await ctx.db.get(taskId)
+				// Only update if task doesn't already have this container assigned
+				if (task && task.activeContainerId !== args.name) {
+					await ctx.db.patch(taskId, {
+						activeContainerId: args.name,
+						updatedAt: now,
+					})
+				}
+			}
+
 			return existing._id
 		}
 
