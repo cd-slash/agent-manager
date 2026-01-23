@@ -859,10 +859,15 @@ if [ -f /workspace/package.json ]; then
 fi
 
 # Start container-daemon if binary exists (survives container restarts)
+# CONVEX_URL and CONTAINER_ID are set in container environment at creation time
 if [ -x /opt/container-daemon/container-daemon ]; then
-  echo "Starting container-daemon..."
-  PORT=4096 /opt/container-daemon/container-daemon &
-  sleep 2
+  if [ -n "\${CONVEX_URL:-}" ]; then
+    echo "Starting container-daemon with Convex connection..."
+    PORT=4096 /opt/container-daemon/container-daemon &
+    sleep 2
+  else
+    echo "Warning: CONVEX_URL not set - container-daemon will not start"
+  fi
 fi
 
 # Expose workspace via Tailscale serve (if workspace is running on port 3000)
@@ -881,11 +886,18 @@ else
 fi`
 
 	// Build environment variables (conditionally include repo/branch if specified)
+	const convexUrl = process.env.CONVEX_URL
 	const envVars = [
 		`TS_AUTHKEY=${tsAuthKey}`,
 		`TS_HOSTNAME=${containerName}`,
 		`TS_WG_PORT=${wgPort}`,
+		`CONTAINER_ID=${containerName}`,
 	]
+
+	// Include CONVEX_URL for container-daemon to connect to Convex
+	if (convexUrl) {
+		envVars.push(`CONVEX_URL=${convexUrl}`)
+	}
 
 	// Only include workspace repo if specified
 	if (repo) {
@@ -1102,24 +1114,15 @@ rm /tmp/container-daemon-binary`
 		}
 
 		// Phase 5: Starting API
+		// CONVEX_URL and CONTAINER_ID are now in container's environment (set at creation)
 		if (buildTracker)
 			await buildTracker.startPhase(containerName, "starting_daemon")
 		console.log(`[gateway] Starting container-daemon...`)
 
-		// Get the Convex URL for the container to connect to
-		const convexUrl = process.env.CONVEX_URL
-		if (!convexUrl) {
-			console.warn("[gateway] CONVEX_URL not set - container will run in REST-only mode")
-		}
-
 		let startLogs = ""
 		try {
-			// Pass CONVEX_URL so container can connect directly to Convex
-			const envVars = convexUrl
-				? `PORT=4096 CONVEX_URL=${convexUrl} CONTAINER_ID=${containerName}`
-				: `PORT=4096 CONTAINER_ID=${containerName}`
-
-			const startCommand = `docker exec -d ${containerName} bash -c '${envVars} /opt/container-daemon/container-daemon &'
+			// Start daemon (env vars inherited from container environment)
+			const startCommand = `docker exec -d ${containerName} bash -c 'PORT=4096 /opt/container-daemon/container-daemon &'
 sleep 2
 docker exec ${containerName} tailscale serve --bg --https=443 http://localhost:3000 2>/dev/null || true`
 
