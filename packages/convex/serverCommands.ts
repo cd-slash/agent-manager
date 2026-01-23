@@ -266,6 +266,24 @@ export const markProcessing = mutation({
 })
 
 /**
+ * Update command payload (used to store generated values like container names)
+ * This ensures retries use the same generated values instead of creating new ones
+ */
+export const updatePayload = mutation({
+	args: {
+		id: v.id("serverCommands"),
+		payload: v.any(),
+	},
+	handler: async (ctx, args) => {
+		const now = Date.now()
+		await ctx.db.patch(args.id, {
+			payload: args.payload,
+			updatedAt: now,
+		})
+	},
+})
+
+/**
  * Mark command as completed with result
  */
 export const complete = mutation({

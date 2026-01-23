@@ -20,6 +20,7 @@ type ServerCommand = Doc<"serverCommands">
 
 interface CommandProcessorDeps {
 	convexSync: ConvexSync | null
+	generateContainerName: () => string
 	createContainerOnServer: (
 		request: CreateContainerRequest,
 		secrets: Record<string, string>,
@@ -208,10 +209,29 @@ export class ConvexCommandProcessor {
 	// ==========================================================================
 
 	private async handleCreateContainer(cmd: ServerCommand): Promise<unknown> {
-		const payload = cmd.payload as CreateContainerRequest
+		let payload = cmd.payload as CreateContainerRequest
+
+		// Generate and store container name if not already set
+		// This ensures retries use the same name instead of creating new containers
+		if (!payload.name) {
+			const generatedName = this.deps.generateContainerName()
+			payload = { ...payload, name: generatedName }
+
+			// Persist the generated name to the command so retries use the same name
+			if (this.convexClient) {
+				await this.convexClient.mutation(api.serverCommands.updatePayload, {
+					id: cmd._id,
+					payload,
+				})
+			}
+
+			console.log(
+				`[commands] Generated container name: ${generatedName}`,
+			)
+		}
 
 		console.log(
-			`[commands] Creating container${payload.repo ? ` for repo: ${payload.repo}` : " (no repo)"}`,
+			`[commands] Creating container "${payload.name}"${payload.repo ? ` for repo: ${payload.repo}` : " (no repo)"}`,
 		)
 
 		// Fetch secrets from Convex (GH creds only needed if cloning a repo)

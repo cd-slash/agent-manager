@@ -1494,6 +1494,7 @@ const taskOrchestrator = CONVEX_URL
 const commandProcessor = CONVEX_URL
 	? new ConvexCommandProcessor(CONVEX_URL, {
 			convexSync,
+			generateContainerName: generateRandomName,
 			createContainerOnServer,
 			stopContainerOnServer,
 			restartContainerOnServer,
