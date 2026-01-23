@@ -34,6 +34,7 @@ import {
 import {
 	useCreateContainer,
 	useDeleteContainer,
+	useRestartContainer,
 	useStopContainer,
 } from "@/hooks/useGatewayCommand"
 import type { Container } from "@/types"
@@ -67,6 +68,9 @@ export function ContainerView({
 	const [stoppingContainers, setStoppingContainers] = useState<Set<string>>(
 		new Set(),
 	)
+	const [startingContainers, setStartingContainers] = useState<Set<string>>(
+		new Set(),
+	)
 	const [deletingContainers, setDeletingContainers] = useState<Set<string>>(
 		new Set(),
 	)
@@ -78,6 +82,7 @@ export function ContainerView({
 
 	// Use Convex-driven gateway commands
 	const stopContainerCmd = useStopContainer()
+	const restartContainerCmd = useRestartContainer()
 	const deleteContainerCmd = useDeleteContainer()
 	const createContainerCmd = useCreateContainer()
 
@@ -128,6 +133,73 @@ export function ContainerView({
 			}
 		},
 		[stopContainerCmd, updateContainerStatus, deleteContainerFromDb, toast],
+	)
+
+	const handleStartContainer = useCallback(
+		async (container: Container) => {
+			if (container.status === "running") {
+				toast.error(
+					"Container already running",
+					"This container is already running",
+				)
+				return
+			}
+			const serverHostname =
+				container.serverHostname || container.server || "localhost"
+			setStartingContainers((prev) => new Set(prev).add(container.id))
+			try {
+				// Update status to restarting
+				await updateContainerStatus({
+					id: container.id as Parameters<typeof updateContainerStatus>[0]["id"],
+					status: "restarting",
+				})
+
+				const result = await restartContainerCmd.execute(
+					container.name,
+					serverHostname,
+				)
+
+				if (result.notFound) {
+					// Container doesn't exist on host - remove from database
+					await deleteContainerFromDb({
+						id: container.id as Parameters<typeof deleteContainerFromDb>[0]["id"],
+					})
+					toast.error(
+						"Container not found",
+						`Container "${container.name}" was not found on host and has been removed`,
+					)
+				} else {
+					// Container was started - update status
+					await updateContainerStatus({
+						id: container.id as Parameters<
+							typeof updateContainerStatus
+						>[0]["id"],
+						status: "running",
+					})
+					toast.success(
+						"Container started",
+						`Container "${container.name}" has been started`,
+					)
+				}
+			} catch (error) {
+				// Revert status on error
+				await updateContainerStatus({
+					id: container.id as Parameters<typeof updateContainerStatus>[0]["id"],
+					status: "stopped",
+				})
+				toast.error(
+					"Failed to start container",
+					error instanceof Error ? error.message : "Unknown error",
+				)
+			} finally {
+				setStartingContainers((prev) => {
+					const next = new Set(prev)
+					next.delete(container.id)
+					return next
+				})
+			}
+		},
+		[restartContainerCmd, updateContainerStatus, deleteContainerFromDb, toast],
 	)
 
 	const handleDeleteContainer = useCallback(
@@ -226,6 +298,14 @@ export function ContainerView({
 		clearSelectionFn?.()
 	}
 
+	const handleBulkStart = async () => {
+		const toStart = selectedContainers.filter((c) => c.status === "stopped")
+		for (const container of toStart) {
+			await handleStartContainer(container)
+		}
+		clearSelectionFn?.()
+	}
+
 	const handleRefresh = async () => {
 		setIsRefreshing(true)
 		try {
@@ -319,26 +399,17 @@ export function ContainerView({
 				</Button>
 			)}
 			{startableCount > 0 && (
-				<Tooltip>
-					<TooltipTrigger asChild>
-						<span>
-							<Button
-								variant="outline"
-								disabled
-								className="h-9 relative cursor-not-allowed"
-							>
-								<Play size={16} className="mr-2" />
-								Start
-								<span className="ml-1.5 inline-flex items-center justify-center rounded bg-foreground/10 text-muted-foreground text-[11px] font-medium min-w-[1.125rem] h-[1.125rem] px-1 tabular-nums">
-									{startableCount}
-								</span>
-							</Button>
-						</span>
-					</TooltipTrigger>
-					<TooltipContent>
-						<p>Starting containers is not yet implemented</p>
-					</TooltipContent>
-				</Tooltip>
+				<Button
+					variant="outline"
+					onClick={handleBulkStart}
+					className="h-9 text-success hover:text-success relative"
+				>
+					<Play size={16} className="mr-2" />
+					Start
+					<span className="ml-1.5 inline-flex items-center justify-center rounded bg-success/15 text-success text-[11px] font-medium min-w-[1.125rem] h-[1.125rem] px-1 tabular-nums">
+						{startableCount}
+					</span>
+				</Button>
 			)}
 			{(stoppableCount > 0 || startableCount > 0) && (
 				<div className="h-6 w-px bg-border mx-1" />
@@ -469,9 +540,14 @@ export function ContainerView({
 												: "Stop"}
 										</DropdownMenuItem>
 									) : (
-										<DropdownMenuItem disabled>
+										<DropdownMenuItem
+											onClick={() => handleStartContainer(container)}
+											disabled={startingContainers.has(container.id)}
+										>
 											<Play size={16} />
-											Start (not available)
+											{startingContainers.has(container.id)
+												? "Starting..."
+												: "Start"}
 										</DropdownMenuItem>
 									)}
 									<DropdownMenuSeparator />
@@ -514,7 +590,9 @@ export function ContainerView({
 			deletingContainers,
 			handleDeleteContainer,
 			handleForceDeleteContainer,
+			handleStartContainer,
 			handleStopContainer,
+			startingContainers,
 			stoppingContainers,
 		],
 	)
