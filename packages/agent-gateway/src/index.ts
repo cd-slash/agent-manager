@@ -583,63 +583,78 @@ const CONTAINER_DAEMON_PKG = new URL("../../container-daemon", import.meta.url)
 	.pathname
 
 /**
- * Get the latest modification time of all source files in a directory
+ * Compute a hash of all source files to detect changes reliably
+ * (mtime-based comparison is unreliable with git)
  */
-async function getLatestSourceMtime(dir: string): Promise<number> {
+async function computeSourceHash(dir: string): Promise<string> {
 	const glob = new Bun.Glob("**/*.ts")
-	let latestMtime = 0
+	const hasher = new Bun.CryptoHasher("md5")
+	const files: string[] = []
 
 	for await (const file of glob.scan({ cwd: dir, absolute: true })) {
+		files.push(file)
+	}
+
+	// Sort for consistent ordering
+	files.sort()
+
+	for (const file of files) {
 		try {
-			const stat = await Bun.file(file).stat()
-			if (stat && stat.mtime.getTime() > latestMtime) {
-				latestMtime = stat.mtime.getTime()
-			}
+			const content = await Bun.file(file).text()
+			hasher.update(content)
 		} catch {
-			// Skip files we can't stat
+			// Skip files we can't read
 		}
 	}
 
-	// Also check package.json for dependency changes
+	// Also include package.json for dependency changes
 	try {
-		const pkgStat = await Bun.file(`${CONTAINER_DAEMON_PKG}/package.json`).stat()
-		if (pkgStat && pkgStat.mtime.getTime() > latestMtime) {
-			latestMtime = pkgStat.mtime.getTime()
-		}
+		const pkgContent = await Bun.file(`${CONTAINER_DAEMON_PKG}/package.json`).text()
+		hasher.update(pkgContent)
 	} catch {
 		// Skip if package.json doesn't exist
 	}
 
-	return latestMtime
+	return hasher.digest("hex")
 }
+
+// Store the hash of the source that was used to build the current binary
+const BINARY_HASH_PATH = `${BINARY_PATH}.hash`
 
 /**
  * Check if the container-daemon binary needs to be rebuilt
+ * Uses content hashing instead of mtime for reliability
  */
 async function shouldRebuildBinary(): Promise<boolean> {
 	const binaryFile = Bun.file(BINARY_PATH)
+	const hashFile = Bun.file(BINARY_HASH_PATH)
 
 	// If binary doesn't exist, we need to build it
 	if (!(await binaryFile.exists())) {
+		console.log("[gateway] Binary not found, will build")
 		return true
 	}
 
-	// Get binary modification time
-	const binaryStat = await binaryFile.stat()
-	if (!binaryStat) {
+	// If hash file doesn't exist, rebuild to create it
+	if (!(await hashFile.exists())) {
+		console.log("[gateway] Binary hash not found, will rebuild")
 		return true
 	}
-	const binaryMtime = binaryStat.mtime.getTime()
 
-	// Get latest source file modification time
-	const sourceMtime = await getLatestSourceMtime(CONTAINER_DAEMON_SRC)
+	// Compare current source hash with stored hash
+	const currentHash = await computeSourceHash(CONTAINER_DAEMON_SRC)
+	const storedHash = (await hashFile.text()).trim()
 
-	// Rebuild if any source file is newer than the binary
-	return sourceMtime > binaryMtime
+	if (currentHash !== storedHash) {
+		console.log("[gateway] Source files changed, will rebuild binary")
+		return true
+	}
+
+	return false
 }
 
 /**
- * Build the container-daemon binary
+ * Build the container-daemon binary and store source hash
  */
 async function buildContainerApiBinary(): Promise<void> {
 	console.log("[gateway] Building container-daemon binary...")
@@ -661,7 +676,11 @@ async function buildContainerApiBinary(): Promise<void> {
 		throw new Error(`Failed to build container-daemon binary: ${stderr}`)
 	}
 
-	console.log("[gateway] Container-api binary built successfully")
+	// Store the hash of source files used for this build
+	const sourceHash = await computeSourceHash(CONTAINER_DAEMON_SRC)
+	await Bun.write(BINARY_HASH_PATH, sourceHash)
+
+	console.log("[gateway] Container-daemon binary built successfully")
 }
 
 /**
