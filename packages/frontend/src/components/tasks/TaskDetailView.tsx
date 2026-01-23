@@ -28,7 +28,7 @@ import {
 	X,
 	XCircle,
 } from "lucide-react"
-import React, { useState, useRef, useEffect } from "react"
+import { useState, useEffect } from "react"
 import { AgentChatPanel } from "@/components/chat/AgentChatPanel"
 import { DependencyPickerModal } from "@/components/modals/DependencyPickerModal"
 import { useToast } from "@/components/ToastProvider"
@@ -242,16 +242,14 @@ export function TaskDetailView({
 	// Store pending message when waiting for container
 	const [pendingMessage, setPendingMessage] = useState<string | null>(null)
 
-	// When task.activeContainerId changes and we have a pending message, send it
-	const activeContainerIdRef = useRef(task.activeContainerId)
+	// When container becomes available and we have a pending message, execute it
+	// Convex automatically syncs task.activeContainerId when the backend sets it
 	useEffect(() => {
-		if (task.activeContainerId && task.activeContainerId !== activeContainerIdRef.current && pendingMessage) {
-			// Container was just assigned, send the pending message
-			activeContainerIdRef.current = task.activeContainerId
+		if (task.activeContainerId && pendingMessage) {
 			executeWithContainer(task.activeContainerId, pendingMessage)
 			setPendingMessage(null)
+			setIsCreatingContainer(false)
 		}
-		activeContainerIdRef.current = task.activeContainerId
 	}, [task.activeContainerId, pendingMessage])
 
 	const executeWithContainer = async (containerId: string, message: string) => {
