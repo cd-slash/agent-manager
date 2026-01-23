@@ -794,13 +794,21 @@ set -euo pipefail
 
 # Determine auth key - file takes precedence (used for restart with fresh key)
 AUTH_KEY="\${TS_AUTHKEY:-}"
+FRESH_KEY=false
 if [ -f /var/run/tailscale-authkey ]; then
   AUTH_KEY=\$(cat /var/run/tailscale-authkey)
   rm -f /var/run/tailscale-authkey  # Single use, remove after reading
+  FRESH_KEY=true
 fi
 
 # Start Tailscale (using statedir for persistent state to support TLS certificates)
 if [ -n "\$AUTH_KEY" ]; then
+  # If using a fresh key (restart), clear old Tailscale state to allow re-registration
+  if [ "\$FRESH_KEY" = "true" ]; then
+    echo "Fresh auth key detected, clearing old Tailscale state..."
+    rm -rf /var/lib/tailscale/*
+  fi
+
   TAILSCALED_ARGS="--statedir=/var/lib/tailscale"
   [ -n "\${TS_WG_PORT:-}" ] && TAILSCALED_ARGS="\$TAILSCALED_ARGS --port=\${TS_WG_PORT}"
   tailscaled \$TAILSCALED_ARGS &
@@ -1327,6 +1335,7 @@ async function restartContainerOnServer(
 	)
 
 	// Script to inject auth key and start the container
+	// Note: docker cp works on stopped containers, docker exec does not
 	const restartScript = `
 CONTAINER_ID=$(docker ps -aq --filter "label=agent-manager.tailscale-hostname=${containerName}" | head -1)
 if [ -z "$CONTAINER_ID" ]; then
@@ -1346,13 +1355,13 @@ if [ "$RUNNING" = "true" ]; then
   exit 0
 fi
 
-# Clear old Tailscale state so it can re-register with the new key
-docker exec "$CONTAINER_ID" rm -rf /var/lib/tailscale/* 2>/dev/null || true
+# Create temp file with new auth key and copy into stopped container
+TEMP_KEY_FILE=$(mktemp)
+echo '${newAuthKey}' > "$TEMP_KEY_FILE"
+docker cp "$TEMP_KEY_FILE" "$CONTAINER_ID:/var/run/tailscale-authkey"
+rm -f "$TEMP_KEY_FILE"
 
-# Inject the new auth key via a file (entrypoint reads this on startup)
-echo '${newAuthKey}' | docker exec -i "$CONTAINER_ID" tee /var/run/tailscale-authkey > /dev/null
-
-# Start the container
+# Start the container (entrypoint will read the auth key file and clear old TS state)
 docker start "$CONTAINER_ID"
 `
 
