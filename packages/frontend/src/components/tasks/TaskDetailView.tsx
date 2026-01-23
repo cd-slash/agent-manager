@@ -28,7 +28,7 @@ import {
 	X,
 	XCircle,
 } from "lucide-react"
-import { useState } from "react"
+import React, { useState, useRef, useEffect } from "react"
 import { AgentChatPanel } from "@/components/chat/AgentChatPanel"
 import { DependencyPickerModal } from "@/components/modals/DependencyPickerModal"
 import { useToast } from "@/components/ToastProvider"
@@ -179,11 +179,21 @@ export function TaskDetailView({
 	// Mutation to update task (for assigning container)
 	const updateTask = useMutation(api.tasks.update)
 
-	// Query for available container
-	const availableContainer = useQuery(api.containerPool.findForTask, { taskId: taskId as string })
+	// Mutation to create a new container
+	const createContainer = useMutation(api.serverCommands.createContainer)
+
+	// Mutation to push auth token to container
+	const pushAuthToken = useMutation(api.containerCommands.pushAuthToken)
+
+	// Query to watch container pool for task's container
+	const taskContainer = useQuery(
+		api.containerPool.get,
+		task.activeContainerId ? { containerId: task.activeContainerId } : "skip"
+	)
 
 	// Track if agent is currently processing
 	const [isAgentProcessing, setIsAgentProcessing] = useState(false)
+	const [isCreatingContainer, setIsCreatingContainer] = useState(false)
 
 	// Convex mutations for dependencies
 	const addDependency = useMutation(api.tasks.addDependency)
@@ -229,6 +239,46 @@ export function TaskDetailView({
 		setActiveTab("pr")
 	}
 
+	// Store pending message when waiting for container
+	const [pendingMessage, setPendingMessage] = useState<string | null>(null)
+
+	// When task.activeContainerId changes and we have a pending message, send it
+	const activeContainerIdRef = useRef(task.activeContainerId)
+	useEffect(() => {
+		if (task.activeContainerId && task.activeContainerId !== activeContainerIdRef.current && pendingMessage) {
+			// Container was just assigned, send the pending message
+			activeContainerIdRef.current = task.activeContainerId
+			executeWithContainer(task.activeContainerId, pendingMessage)
+			setPendingMessage(null)
+		}
+		activeContainerIdRef.current = task.activeContainerId
+	}, [task.activeContainerId, pendingMessage])
+
+	const executeWithContainer = async (containerId: string, message: string) => {
+		setIsAgentProcessing(true)
+		try {
+			// Push auth token first
+			const authToken = "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"
+			await pushAuthToken({
+				containerId,
+				token: authToken,
+			})
+
+			await startExecution({
+				containerId,
+				message,
+				model: "claude-3-5-haiku-20241022",
+				taskId: taskId as string,
+				projectId: task.projectId as string,
+			})
+		} catch (error) {
+			console.error("Failed to start agent execution:", error)
+			toast.error("Agent error", "Failed to start agent execution")
+		} finally {
+			setTimeout(() => setIsAgentProcessing(false), 3000)
+		}
+	}
+
 	const handleSendMessage = async (text: string) => {
 		// Send user message to Convex
 		await sendMessage({
@@ -237,44 +287,34 @@ export function TaskDetailView({
 			sender: "user",
 		})
 
-		// Determine which container to use
-		let containerId = task.activeContainerId
+		// Check if we have a container assigned
+		const containerId = task.activeContainerId
 
-		// If no container assigned, try to find one automatically
-		if (!containerId && availableContainer) {
-			containerId = availableContainer.containerId
-			// Assign the container to this task for future use
-			try {
-				await updateTask({
-					id: taskId,
-					activeContainerId: containerId,
-				})
-			} catch (error) {
-				console.error("Failed to assign container to task:", error)
-			}
-		}
-
-		// Trigger agent execution if we have a container
 		if (containerId) {
+			// Container already assigned, execute directly
+			await executeWithContainer(containerId, text)
+		} else {
+			// No container assigned, create a new one
+			setIsCreatingContainer(true)
 			setIsAgentProcessing(true)
+			setPendingMessage(text)
+			toast.info("Creating container", "Spinning up a new container for this task...")
+
 			try {
-				await startExecution({
-					containerId,
-					message: text,
-					model: "claude-3-5-haiku-20241022",
+				await createContainer({
 					taskId: taskId as string,
 					projectId: task.projectId as string,
+					containerType: "agent",
 				})
+				// Container creation started - the backend will assign activeContainerId
+				// when complete, which will trigger the useEffect above
 			} catch (error) {
-				console.error("Failed to start agent execution:", error)
-				toast.error("Agent error", "Failed to start agent execution")
-			} finally {
-				// For now, clear loading after a delay
-				// TODO: Track actual command completion
-				setTimeout(() => setIsAgentProcessing(false), 3000)
+				console.error("Failed to create container:", error)
+				toast.error("Container error", "Failed to create container for task")
+				setIsAgentProcessing(false)
+				setIsCreatingContainer(false)
+				setPendingMessage(null)
 			}
-		} else {
-			toast.error("No container available", "No containers are available in the pool. Please create or start a container first.")
 		}
 	}
 

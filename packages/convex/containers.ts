@@ -323,8 +323,8 @@ export const createFromAgent = mutation({
 		network: v.union(v.literal("macvlan"), v.literal("bridge")),
 		lanIp: v.optional(v.string()),
 		wgPort: v.optional(v.number()),
-		taskId: v.optional(v.id("tasks")),
-		projectId: v.optional(v.id("projects")),
+		taskId: v.optional(v.string()), // String ID from gateway
+		projectId: v.optional(v.string()), // String ID from gateway
 		containerType: v.optional(containerTypeValidator),
 	},
 	handler: async (ctx, args) => {
@@ -362,6 +362,15 @@ export const createFromAgent = mutation({
 			createdAt: now,
 			updatedAt: now,
 		})
+
+		// If this container was created for a task, assign it to that task
+		if (args.taskId) {
+			const taskId = args.taskId as Id<"tasks">
+			await ctx.db.patch(taskId, {
+				activeContainerId: args.name, // Use the container name as the ID
+				updatedAt: now,
+			})
+		}
 
 		return id
 	},
