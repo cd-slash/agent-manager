@@ -139,6 +139,7 @@ function App() {
 			status: c.status as "running" | "stopped",
 			port: c.port,
 			server: c.serverName ?? "",
+			serverHostname: c.resolvedServerHostname ?? c.serverHostname ?? "localhost",
 		}))
 	}, [containersData])
 

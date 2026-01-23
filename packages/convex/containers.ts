@@ -20,7 +20,16 @@ export const list = query({
 				const server = container.serverId
 					? await ctx.db.get(container.serverId)
 					: null
-				return { ...container, serverName: server?.name ?? null }
+				// Resolve server hostname: use container's serverHostname, or server's tailscaleHostname, or server's IP
+				const resolvedServerHostname = container.serverHostname
+					?? server?.tailscaleHostname
+					?? server?.ip
+					?? "localhost"
+				return {
+					...container,
+					serverName: server?.name ?? null,
+					resolvedServerHostname,
+				}
 			}),
 		)
 		return enriched

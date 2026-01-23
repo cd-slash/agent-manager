@@ -278,10 +278,16 @@ export const syncDeviceFromApi = internalAction({
 
 		// Sync the device
 		const ip = device.addresses?.[0] || ""
+		// For containers, extract short name (Docker container name is the part before first dot)
+		// e.g., "vet-ape-pea.banjo-capella.ts.net" -> "vet-ape-pea"
+		const fullHostname = device.hostname || ""
+		const name = isContainer
+			? (fullHostname.split(".")[0] || device.name || fullHostname)
+			: (device.name || device.hostname)
 		const result = await ctx.runMutation(internal.internal.tailscale.syncDevice, {
 			nodeId: device.id,
 			hostname: device.hostname,
-			name: device.name || device.hostname,
+			name,
 			ip,
 			tags,
 			deviceType: isServer ? "server" : "container",
@@ -363,10 +369,14 @@ export const performFullSync = internalAction({
 		const containerNodeIds = new Set<string>()
 		for (const device of codeAgents) {
 			const ip = device.addresses?.[0] || ""
+			// Extract short name for Docker container name (part before first dot)
+			// e.g., "vet-ape-pea.banjo-capella.ts.net" -> "vet-ape-pea"
+			const fullHostname = device.hostname || ""
+			const shortName = fullHostname.split(".")[0] || device.name || fullHostname
 			await ctx.runMutation(internal.internal.tailscale.syncDevice, {
 				nodeId: device.id,
 				hostname: device.hostname,
-				name: device.name || device.hostname,
+				name: shortName,
 				ip,
 				tags: device.tags || [],
 				deviceType: "container",
