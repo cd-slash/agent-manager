@@ -14,8 +14,7 @@
 		"build": "turbo build",
 		"start": "bun run --filter @agent-manager/backend start",
 		"start:gateway": "bun run --filter @agent-manager/agent-gateway start",
-		"convex:deploy": "bun run --filter @agent-manager/convex deploy",
-		"create-agent": "packages/agent-gateway/bin/create-agent"
+		"convex:deploy": "bun run --filter @agent-manager/convex deploy"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.3.11",

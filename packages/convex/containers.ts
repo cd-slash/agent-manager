@@ -302,7 +302,7 @@ export const getByContainerId = query({
 	},
 })
 
-// Create container from agent-gateway (called when a new container is created via create-agent)
+// Create container record from agent-gateway (called when a new container is created via serverCommands)
 export const createFromAgent = mutation({
 	args: {
 		containerId: v.string(),

@@ -253,9 +253,8 @@ packages/agent-gateway/    # Bun WebSocket server
 │   ├── convex-sync.ts     # Convex integration
 │   ├── claude-auth.ts     # One-time OAuth token setup via PTY
 │   ├── phase-prompts.ts   # Phase prompt templates for all 6 phases
-│   └── task-orchestrator.ts # Task execution orchestration
-└── bin/
-    └── create-agent       # Container creation script
+│   ├── task-orchestrator.ts # Task execution orchestration
+│   └── convex-commands.ts # Server command processing
 
 packages/container-api/    # Runs inside containers
 ├── src/
@@ -542,12 +541,12 @@ The gateway handles these real-time concerns and syncs results to Convex for per
 
 ```
 packages/agent-gateway/
-├── src/
-│   ├── index.ts           # Main server (Bun.serve with WebSocket)
-│   ├── connections.ts     # ConnectionManager class
-│   └── convex-sync.ts     # ConvexSync for persistence
-└── bin/
-    └── create-agent       # Container creation script
+└── src/
+    ├── index.ts           # Main server (Bun.serve with WebSocket)
+    ├── connections.ts     # ConnectionManager class
+    ├── convex-sync.ts     # ConvexSync for persistence
+    ├── convex-commands.ts # Server command processing
+    └── claude-auth.ts     # OAuth flow handling
 ```
 
 ### Connection Flow

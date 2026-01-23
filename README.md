@@ -63,16 +63,6 @@ VITE_CONVEX_URL=https://your-deployment.convex.cloud
 CONVEX_URL=https://your-deployment.convex.cloud
 ```
 
-**Agent containers** (`images/agent/.env`):
-```env
-TS_AUTHKEY=tskey-auth-xxx           # Tailscale auth key
-GH_USERNAME=your-github-username    # GitHub credentials
-GH_TOKEN=ghp_xxx
-MANAGER_WS_URL=ws://gateway.tailnet:3100  # Gateway WebSocket URL
-```
-
-See `images/agent/.env.example` for all available options.
-
 ## Project Structure
 
 ```
@@ -107,8 +97,6 @@ agent-manager/
 │   │   │   ├── index.ts       # Gateway server
 │   │   │   ├── connections.ts # Connection manager
 │   │   │   └── convex-sync.ts # Convex integration
-│   │   ├── bin/
-│   │   │   └── create-agent   # Container creation script
 │   │   └── package.json
 │   │
 │   ├── container-api/         # API running inside containers
@@ -123,13 +111,6 @@ agent-manager/
 │       ├── src/
 │       │   └── index.ts       # WebSocket message types
 │       └── package.json
-│
-├── images/
-│   └── agent/                 # Agent container Docker image
-│       ├── Dockerfile         # Container image definition
-│       ├── docker-compose.yml # Container orchestration
-│       ├── entrypoint.sh      # Container startup script
-│       └── .env.example       # Environment template
 │
 ├── docs/                      # Documentation
 │   ├── ARCHITECTURE.md        # Backend architecture
@@ -161,7 +142,6 @@ bun dev
 | `bun run dev:backend` | Start only the backend |
 | `bun run dev:gateway` | Start only the agent-gateway |
 | `bun run dev:convex` | Start Convex dev server |
-| `bun run create-agent` | Create a new agent container |
 | `bun run start` | Start production backend |
 | `bun run start:gateway` | Start production gateway |
 | `bunx convex dev` | Start Convex development server |
@@ -169,25 +149,18 @@ bun dev
 
 ### Creating Agent Containers
 
-Use the `create-agent` script to spin up new agent containers:
+Agent containers are created through the Convex-driven flow:
 
-```bash
-# Create an agent for a specific repository
-bun run create-agent --repo owner/repo-name
+1. **Via Frontend**: Use the UI to create containers from the Containers page
+2. **Via API**: POST to `/containers/create` on the gateway
+3. **Via Convex**: Create a `serverCommands.createContainer` entry
 
-# With options
-bun run create-agent \
-  --repo owner/repo-name \
-  --branch feature-branch \
-  --name my-agent \
-  --server ws://gateway.tailnet:3100
-```
-
-The script:
+The gateway automatically:
 1. Generates a unique container name (e.g., `proud-blue-falcon`)
-2. Allocates a unique WireGuard port for direct Tailscale connections
-3. Starts the container with the specified repository cloned
-4. Connects to the agent-gateway via WebSocket
+2. Fetches Tailscale config from Convex and generates an ephemeral auth key
+3. Fetches GitHub credentials from Convex secrets
+4. Builds and starts the container with proper environment variables
+5. Registers the container in the `containerPool` for task assignment
 
 ### Database Management
 

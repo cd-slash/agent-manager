@@ -715,36 +715,23 @@ Frontend                    Gateway                     Container
 
 ## Container Architecture
 
-### Docker Image (images/agent/)
+### Docker Image
 
-The container image includes:
+Containers are built dynamically by the gateway using an inline Dockerfile. The image includes:
 
 - **Debian bookworm-slim** base
 - **Tailscale** for mesh networking and SSH access
 - **Bun** runtime for container-api
 - **Claude Code CLI** (`@anthropic-ai/claude-code`)
-- **Git, GitHub CLI** for repository operations
-- **Development tools** (Node.js, tmux, starship)
+- **Git** for repository operations
 
 ### Entrypoint Flow
 
-```bash
-# 1. Start Tailscale daemon
-tailscaled &
-tailscale up --authkey=$TS_AUTHKEY --hostname=$TS_HOSTNAME
+The entrypoint script (embedded in the container at build time):
 
-# 2. Clone workspace repository
-git clone https://$GH_TOKEN@github.com/$WORKSPACE_REPO /workspace
-
-# 3. Setup dotfiles (optional)
-if [ -n "$DOTFILES_REPO" ]; then
-  git clone $DOTFILES_REPO ~/.config/dotfiles
-  stow -d ~/.config/dotfiles -t ~ .
-fi
-
-# 4. Start container-api
-cd /opt/container-api && bun run src/index.ts
-```
+1. **Start Tailscale** with ephemeral auth key (auto-removes when offline)
+2. **Clone workspace** if `WORKSPACE_REPO` is set
+3. **Start container-api** binary (SCP'd after container starts)
 
 ### Container API Endpoints
 
@@ -761,39 +748,37 @@ The Elysia HTTP server inside containers provides:
 
 ## Creating Containers
 
-### Using create-agent Script
+### Convex-Driven Flow
 
-```bash
-# Basic usage
-bun run create-agent --repo owner/repo-name
+Containers are created through the Convex serverCommands system:
 
-# Full options
-bun run create-agent \
-  --repo owner/repo-name \      # Required: GitHub repo to clone
-  --branch feature-branch \      # Optional: Branch to checkout
-  --name my-agent \              # Optional: Custom container name
-  --server ws://gateway:3100     # Optional: Gateway WebSocket URL
-```
+1. **Via Frontend**: Create containers from the UI
+2. **Via Gateway API**: `POST /containers/create`
+3. **Via Convex**: Insert into `serverCommands` with `type: "createContainer"`
 
-### What the Script Does
+### What Happens
 
-1. **Generates unique name** (e.g., `proud-blue-falcon`)
-2. **Allocates WireGuard port** for direct Tailscale connections
-3. **Creates docker-compose override** with environment variables
-4. **Starts container** with `docker compose up`
-5. **Outputs JSON** with container details
+1. **Gateway receives command** via Convex subscription
+2. **Fetches config from Convex**: Tailscale API key, GitHub credentials
+3. **Generates ephemeral Tailscale auth key** via Tailscale API
+4. **Builds container** with inline Dockerfile
+5. **Deploys container-api binary** via SCP
+6. **Starts container-api** with `CONVEX_URL` for direct Convex integration
+7. **Container registers** in `containerPool` and is ready for tasks
 
-### Environment Variables
+### Environment Variables (Set Automatically)
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `TS_AUTHKEY` | Yes | Tailscale authentication key |
-| `GH_USERNAME` | Yes | GitHub username for cloning |
-| `GH_TOKEN` | Yes | GitHub personal access token |
-| `WORKSPACE_REPO` | Yes | Repository to clone (set by script) |
-| `WORKSPACE_BRANCH` | No | Branch to checkout (default: main) |
-| `MANAGER_WS_URL` | No | Gateway WebSocket URL |
-| `DOTFILES_REPO` | No | Dotfiles repository for shell config |
+| Variable | Description |
+|----------|-------------|
+| `TS_AUTHKEY` | Ephemeral Tailscale auth key (generated via API) |
+| `TS_HOSTNAME` | Container hostname |
+| `TS_WG_PORT` | WireGuard port for direct connections |
+| `WORKSPACE_REPO` | Repository to clone (if specified) |
+| `WORKSPACE_BRANCH` | Branch to checkout |
+| `GH_USERNAME` | GitHub username (from Convex secrets) |
+| `GH_TOKEN` | GitHub token (from Convex secrets) |
+| `CONVEX_URL` | Convex deployment URL (for container-api) |
+| `CONTAINER_ID` | Container identifier |
 
 ## Convex Integration
 
