@@ -13,7 +13,7 @@ const PHASE_INFO: Record<string, { name: string; description: string }> = {
 	pending: { name: "Pending", description: "Waiting to start" },
 	building_binary: {
 		name: "Building Binary",
-		description: "Compiling container-api",
+		description: "Compiling container daemon",
 	},
 	building_image: {
 		name: "Building Image",
@@ -25,11 +25,11 @@ const PHASE_INFO: Record<string, { name: string; description: string }> = {
 	},
 	deploying_binary: {
 		name: "Deploying Binary",
-		description: "Copying binary to container",
+		description: "Copying daemon to container",
 	},
-	starting_api: {
-		name: "Starting API",
-		description: "Starting container-api service",
+	starting_daemon: {
+		name: "Starting Daemon",
+		description: "Starting container daemon service",
 	},
 	ready: { name: "Ready", description: "Fully operational" },
 }

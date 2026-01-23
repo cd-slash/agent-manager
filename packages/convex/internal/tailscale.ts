@@ -164,6 +164,35 @@ export const removeDevice = internalMutation({
 	},
 })
 
+// Mark a container as stopped (when it disappears from Tailscale but may still exist on host)
+export const markContainerStopped = internalMutation({
+	args: {
+		nodeId: v.string(),
+	},
+	handler: async (ctx, args) => {
+		const container = await ctx.db
+			.query("containers")
+			.withIndex("by_tailscale_node_id", (q) =>
+				q.eq("tailscaleNodeId", args.nodeId),
+			)
+			.first()
+
+		if (container) {
+			// Only mark as stopped if currently running - don't change already-stopped containers
+			if (container.status === "running") {
+				await ctx.db.patch(container._id, {
+					status: "stopped",
+					updatedAt: Date.now(),
+				})
+				return { updated: true, id: container._id, previousStatus: container.status }
+			}
+			return { updated: false, id: container._id, reason: "already_stopped" }
+		}
+
+		return { updated: false, reason: "not_found" }
+	},
+})
+
 // Mark Tailscale credentials as validated
 export const markCredentialsValidated = internalMutation({
 	args: {},
@@ -361,35 +390,41 @@ export const performFullSync = internalAction({
 			}
 		}
 
-		// Remove stale Tailscale-managed containers not in the API response
+		// Mark stale Tailscale-managed containers as stopped (not deleted)
+		// Containers that disappear from Tailscale are likely stopped, not deleted
+		// The Docker container may still exist on the host and can be started again
 		const existingContainers = await ctx.runQuery(
 			internal.internal.tailscale.getTailscaleContainers,
 		)
+		let containersMarkedStopped = 0
 		for (const container of existingContainers) {
 			if (
 				container.tailscaleNodeId &&
 				!containerNodeIds.has(container.tailscaleNodeId)
 			) {
-				await ctx.runMutation(internal.internal.tailscale.removeDevice, {
+				const result = await ctx.runMutation(internal.internal.tailscale.markContainerStopped, {
 					nodeId: container.tailscaleNodeId,
-					deviceType: "container",
 				})
+				if (result.updated) {
+					containersMarkedStopped++
+				}
 			}
 		}
 
 		// Mark credentials as validated
 		await ctx.runMutation(internal.internal.tailscale.markCredentialsValidated)
 
-		// Also clean up orphaned containers (non-Tailscale containers not in the pool)
+		// Mark orphaned non-Tailscale containers as stopped (not deleted)
+		// These containers may still exist on the host in stopped state
 		const orphanCleanup = await ctx.runMutation(
-			internal.containers.cleanupOrphanedContainersInternal,
+			internal.containers.markOrphanedContainersStoppedInternal,
 		)
 
 		return {
 			serversAdded: hostServers.length,
 			containersAdded: codeAgents.length,
 			totalDevices: devices.length,
-			orphanedContainersRemoved: orphanCleanup.deleted,
+			containersMarkedStopped: containersMarkedStopped + orphanCleanup.updated,
 		}
 	},
 })

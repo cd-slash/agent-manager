@@ -580,7 +580,7 @@ The Agent Manager uses a distributed architecture:
           ▼                    ▼                    ▼
 ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐
 │   Container 1   │  │   Container 2   │  │   Container N   │
-│  container-api  │  │  container-api  │  │  container-api  │
+│  container-daemon  │  │  container-daemon  │  │  container-daemon  │
 │  + Claude CLI   │  │  + Claude CLI   │  │  + Claude CLI   │
 └─────────────────┘  └─────────────────┘  └─────────────────┘
          │                    │                    │
@@ -627,7 +627,7 @@ Central WebSocket server that containers connect to:
 - **HTTP API**: REST endpoints for frontend to interact with containers
 - **ConvexSync**: Writes events to Convex for persistence and real-time updates
 
-### packages/container-api
+### packages/container-daemon
 
 Runs inside each Docker container:
 
@@ -721,7 +721,7 @@ Containers are built dynamically by the gateway using an inline Dockerfile. The 
 
 - **Debian bookworm-slim** base
 - **Tailscale** for mesh networking and SSH access
-- **Bun** runtime for container-api
+- **Bun** runtime for container-daemon
 - **Claude Code CLI** (`@anthropic-ai/claude-code`)
 - **Git** for repository operations
 
@@ -731,20 +731,22 @@ The entrypoint script (embedded in the container at build time):
 
 1. **Start Tailscale** with ephemeral auth key (auto-removes when offline)
 2. **Clone workspace** if `WORKSPACE_REPO` is set
-3. **Start container-api** binary (SCP'd after container starts)
+3. **Start container-daemon** binary (SCP'd after container starts)
 
-### Container API Endpoints
+### Container Daemon
 
-The Elysia HTTP server inside containers provides:
+The container-daemon is a background service that:
+
+1. **Connects to Convex** and registers in the `containerPool`
+2. **Subscribes to commands** via Convex real-time sync (`containerCommands.getForContainer`)
+3. **Executes Claude CLI** commands and streams results back to Convex
+4. **Manages auth tokens** received from Convex secrets
+
+The only HTTP endpoint is `/health` for startup verification:
 
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
-| `/health` | GET | Container health check |
-| `/status` | GET | Current processes and system info |
-| `/exec` | POST | Start local execution (direct, not via gateway) |
-| `/exec/:id` | DELETE | Abort running execution |
-| `/auth/status` | GET | Claude authentication status |
-| `/auth/login` | POST | Start OAuth flow |
+| `/health` | GET | Container health check (used by entrypoint script) |
 
 ## Creating Containers
 
@@ -762,8 +764,8 @@ Containers are created through the Convex serverCommands system:
 2. **Fetches config from Convex**: Tailscale API key, GitHub credentials
 3. **Generates ephemeral Tailscale auth key** via Tailscale API
 4. **Builds container** with inline Dockerfile
-5. **Deploys container-api binary** via SCP
-6. **Starts container-api** with `CONVEX_URL` for direct Convex integration
+5. **Deploys container-daemon binary** via SCP
+6. **Starts container-daemon** with `CONVEX_URL` for direct Convex integration
 7. **Container registers** in `containerPool` and is ready for tasks
 
 ### Environment Variables (Set Automatically)
@@ -777,7 +779,7 @@ Containers are created through the Convex serverCommands system:
 | `WORKSPACE_BRANCH` | Branch to checkout |
 | `GH_USERNAME` | GitHub username (from Convex secrets) |
 | `GH_TOKEN` | GitHub token (from Convex secrets) |
-| `CONVEX_URL` | Convex deployment URL (for container-api) |
+| `CONVEX_URL` | Convex deployment URL (for container-daemon) |
 | `CONTAINER_ID` | Container identifier |
 
 ## Convex Integration
@@ -908,11 +910,11 @@ Container creation progresses through these phases:
 | Order | Phase | Description |
 |-------|-------|-------------|
 | 0 | `pending` | Request received, waiting to start |
-| 1 | `building_binary` | Compiling container-api binary (if needed) |
+| 1 | `building_binary` | Compiling container-daemon binary (if needed) |
 | 2 | `building_image` | Docker build in progress |
 | 3 | `starting_container` | Container starting, Tailscale connecting |
 | 4 | `deploying_binary` | SCP'ing binary to container |
-| 5 | `starting_api` | Starting container-api service |
+| 5 | `starting_daemon` | Starting container-daemon service |
 | 6 | `ready` | Fully operational |
 
 The frontend subscribes to build progress in real-time:
@@ -929,7 +931,7 @@ const phases = useQuery(api.containerBuilds.getPhases, { containerId });
 
 ### Print Mode
 
-The container-api runs Claude Code with `--print` mode for non-interactive streaming:
+The container-daemon runs Claude Code with `--print` mode for non-interactive streaming:
 
 ```bash
 claude --print \
@@ -991,7 +993,7 @@ await processManager.start({
 
 - **Tailscale**: Containers authenticate via ephemeral auth keys
 - **GitHub**: Personal access tokens for repo access
-- **Claude**: OAuth flow handled by container-api
+- **Claude**: OAuth flow handled by container-daemon
 
 ### Network Security
 

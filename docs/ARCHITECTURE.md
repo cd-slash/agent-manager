@@ -256,7 +256,7 @@ packages/agent-gateway/    # Bun WebSocket server
 │   ├── task-orchestrator.ts # Task execution orchestration
 │   └── convex-commands.ts # Server command processing
 
-packages/container-api/    # Runs inside containers
+packages/container-daemon/    # Runs inside containers
 ├── src/
 │   ├── index.ts           # Elysia HTTP server
 │   ├── process-manager.ts # Claude CLI management
@@ -553,7 +553,7 @@ packages/agent-gateway/
 
 ```
 1. Container starts
-   └─▶ Container API connects to gateway WebSocket
+   └─▶ Container Daemon connects to gateway WebSocket
        └─▶ Sends "connect" message with containerId, hostname, capabilities
            └─▶ Gateway registers container in ConnectionManager
                └─▶ Syncs connection status to Convex
@@ -637,7 +637,7 @@ When a user starts a task phase from the frontend, the system orchestrates execu
 │  1. Frontend                 2. Gateway                  3. Container        │
 │  ───────────                 ──────────                  ────────────        │
 │                                                                              │
-│  User clicks              TaskOrchestrator            Container API         │
+│  User clicks              TaskOrchestrator            Container Daemon         │
 │  "Start Phase"            receives request            runs Claude CLI       │
 │       │                         │                           │               │
 │       ▼                         ▼                           ▼               │
@@ -1067,14 +1067,14 @@ agentMessages.getToolCalls({ sessionId })
 agentMessages.getByType({ sessionId, messageType: "error" })
 ```
 
-## Container API Architecture
+## Container Daemon Architecture
 
-The Container API (`packages/container-api`) runs inside each agent container and manages the Claude Code CLI.
+The Container Daemon (`packages/container-daemon`) runs inside each agent container and manages the Claude Code CLI.
 
 ### Components
 
 ```
-packages/container-api/
+packages/container-daemon/
 ├── src/
 │   ├── index.ts              # Elysia HTTP server
 │   ├── process-manager.ts    # Claude CLI process manager

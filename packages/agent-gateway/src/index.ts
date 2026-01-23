@@ -576,10 +576,10 @@ async function generateTailscaleAuthKey(
 }
 
 // Paths for binary building
-const BINARY_PATH = new URL("../container-api-binary", import.meta.url).pathname
-const CONTAINER_API_SRC = new URL("../../container-api/src", import.meta.url)
+const BINARY_PATH = new URL("../container-daemon-binary", import.meta.url).pathname
+const CONTAINER_DAEMON_SRC = new URL("../../container-daemon/src", import.meta.url)
 	.pathname
-const CONTAINER_API_PKG = new URL("../../container-api", import.meta.url)
+const CONTAINER_DAEMON_PKG = new URL("../../container-daemon", import.meta.url)
 	.pathname
 
 /**
@@ -602,7 +602,7 @@ async function getLatestSourceMtime(dir: string): Promise<number> {
 
 	// Also check package.json for dependency changes
 	try {
-		const pkgStat = await Bun.file(`${CONTAINER_API_PKG}/package.json`).stat()
+		const pkgStat = await Bun.file(`${CONTAINER_DAEMON_PKG}/package.json`).stat()
 		if (pkgStat && pkgStat.mtime.getTime() > latestMtime) {
 			latestMtime = pkgStat.mtime.getTime()
 		}
@@ -614,7 +614,7 @@ async function getLatestSourceMtime(dir: string): Promise<number> {
 }
 
 /**
- * Check if the container-api binary needs to be rebuilt
+ * Check if the container-daemon binary needs to be rebuilt
  */
 async function shouldRebuildBinary(): Promise<boolean> {
 	const binaryFile = Bun.file(BINARY_PATH)
@@ -632,23 +632,23 @@ async function shouldRebuildBinary(): Promise<boolean> {
 	const binaryMtime = binaryStat.mtime.getTime()
 
 	// Get latest source file modification time
-	const sourceMtime = await getLatestSourceMtime(CONTAINER_API_SRC)
+	const sourceMtime = await getLatestSourceMtime(CONTAINER_DAEMON_SRC)
 
 	// Rebuild if any source file is newer than the binary
 	return sourceMtime > binaryMtime
 }
 
 /**
- * Build the container-api binary
+ * Build the container-daemon binary
  */
 async function buildContainerApiBinary(): Promise<void> {
-	console.log("[gateway] Building container-api binary...")
+	console.log("[gateway] Building container-daemon binary...")
 
-	const entryPoint = `${CONTAINER_API_PKG}/src/index.ts`
+	const entryPoint = `${CONTAINER_DAEMON_PKG}/src/index.ts`
 	const proc = Bun.spawn(
 		["bun", "build", "--compile", "--outfile", BINARY_PATH, entryPoint],
 		{
-			cwd: CONTAINER_API_PKG,
+			cwd: CONTAINER_DAEMON_PKG,
 			stdout: "pipe",
 			stderr: "pipe",
 		},
@@ -658,14 +658,14 @@ async function buildContainerApiBinary(): Promise<void> {
 	const exitCode = await proc.exited
 
 	if (exitCode !== 0) {
-		throw new Error(`Failed to build container-api binary: ${stderr}`)
+		throw new Error(`Failed to build container-daemon binary: ${stderr}`)
 	}
 
 	console.log("[gateway] Container-api binary built successfully")
 }
 
 /**
- * Ensure the container-api binary is up to date
+ * Ensure the container-daemon binary is up to date
  */
 async function _ensureBinaryUpToDate(): Promise<void> {
 	if (await shouldRebuildBinary()) {
@@ -782,8 +782,8 @@ RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash - && \\
     apt-get install -y nodejs && rm -rf /var/lib/apt/lists/* && \\
     npm install -g @anthropic-ai/claude-code
 
-# Prepare container-api directory (binary SCP'd after container start)
-RUN mkdir -p /opt/container-api
+# Prepare container-daemon directory (binary SCP'd after container start)
+RUN mkdir -p /opt/container-daemon
 
 RUN mkdir -p /workspace
 WORKDIR /workspace`
@@ -792,9 +792,9 @@ WORKDIR /workspace`
 	const entrypoint = `#!/bin/bash
 set -euo pipefail
 
-# Start Tailscale (using --state=mem: for ephemeral nodes that auto-remove when offline)
+# Start Tailscale (using statedir for persistent state to support TLS certificates)
 if [ -n "\${TS_AUTHKEY:-}" ]; then
-  TAILSCALED_ARGS="--state=mem:"
+  TAILSCALED_ARGS="--statedir=/var/lib/tailscale"
   [ -n "\${TS_WG_PORT:-}" ] && TAILSCALED_ARGS="$TAILSCALED_ARGS --port=\${TS_WG_PORT}"
   tailscaled $TAILSCALED_ARGS &
   sleep 2
@@ -812,13 +812,26 @@ if [ -n "\${WORKSPACE_REPO:-}" ] && [ ! -d "/workspace/.git" ]; then
   cd /workspace && [ -f package.json ] && bun install
 fi
 
-# Start container-api if binary exists (survives container restarts)
-if [ -x /opt/container-api/container-api ]; then
-  echo "Starting container-api..."
-  PORT=4096 /opt/container-api/container-api &
+# Start workspace application on port 3000 (prefer dev for hot reloading)
+if [ -f /workspace/package.json ]; then
+  cd /workspace
+  if [ -n "\${WORKSPACE_START_CMD:-}" ]; then
+    echo "Starting workspace with custom command: \${WORKSPACE_START_CMD}"
+    PORT=3000 eval "\${WORKSPACE_START_CMD}" &
+  elif grep -q '"dev"' package.json; then
+    echo "Starting workspace with 'bun run dev'..."
+    PORT=3000 bun run dev &
+  fi
+  sleep 2
+fi
+
+# Start container-daemon if binary exists (survives container restarts)
+if [ -x /opt/container-daemon/container-daemon ]; then
+  echo "Starting container-daemon..."
+  PORT=4096 /opt/container-daemon/container-daemon &
   sleep 2
   # Expose via Tailscale serve (ignore errors if already configured)
-  tailscale serve --bg --http 80 http://localhost:4096 2>/dev/null || true
+  tailscale serve --bg --https=443 http://localhost:3000 2>/dev/null || true
 fi
 
 # Keep container alive - wait for any background process or sleep forever
@@ -968,7 +981,7 @@ rm -rf "$BUILD_DIR" /tmp/compose-${containerName}.yml`
 	// Phase 4: Deploying binary
 	if (buildTracker)
 		await buildTracker.startPhase(containerName, "deploying_binary")
-	console.log(`[gateway] Copying container-api binary...`)
+	console.log(`[gateway] Copying container-daemon binary...`)
 
 	// Check if binary exists
 	let deployLogs = ""
@@ -978,7 +991,7 @@ rm -rf "$BUILD_DIR" /tmp/compose-${containerName}.yml`
 		if (buildTracker)
 			await buildTracker.skipPhase(containerName, "deploying_binary")
 		if (buildTracker)
-			await buildTracker.skipPhase(containerName, "starting_api")
+			await buildTracker.skipPhase(containerName, "starting_daemon")
 	} else {
 		try {
 			if (server === "localhost") {
@@ -987,8 +1000,8 @@ rm -rf "$BUILD_DIR" /tmp/compose-${containerName}.yml`
 					[
 						"bash",
 						"-c",
-						`docker cp "${BINARY_PATH}" ${containerName}:/opt/container-api/container-api && \
-           docker exec ${containerName} chmod +x /opt/container-api/container-api`,
+						`docker cp "${BINARY_PATH}" ${containerName}:/opt/container-daemon/container-daemon && \
+           docker exec ${containerName} chmod +x /opt/container-daemon/container-daemon`,
 					],
 					{ stdout: "pipe", stderr: "pipe" },
 				)
@@ -1002,7 +1015,7 @@ rm -rf "$BUILD_DIR" /tmp/compose-${containerName}.yml`
 			} else {
 				// SCP to server, then docker cp
 				const scpProc = Bun.spawn(
-					["scp", BINARY_PATH, `${sshTarget}:/tmp/container-api-binary`],
+					["scp", BINARY_PATH, `${sshTarget}:/tmp/container-daemon-binary`],
 					{
 						stdout: "pipe",
 						stderr: "pipe",
@@ -1015,9 +1028,9 @@ rm -rf "$BUILD_DIR" /tmp/compose-${containerName}.yml`
 				}
 
 				const copyScript = `set -e
-docker cp /tmp/container-api-binary ${containerName}:/opt/container-api/container-api
-docker exec ${containerName} chmod +x /opt/container-api/container-api
-rm /tmp/container-api-binary`
+docker cp /tmp/container-daemon-binary ${containerName}:/opt/container-daemon/container-daemon
+docker exec ${containerName} chmod +x /opt/container-daemon/container-daemon
+rm /tmp/container-daemon-binary`
 
 				const copyProc = Bun.spawn(["ssh", sshTarget, "bash", "-s"], {
 					stdin: new Blob([copyScript]),
@@ -1052,8 +1065,8 @@ rm /tmp/container-api-binary`
 
 		// Phase 5: Starting API
 		if (buildTracker)
-			await buildTracker.startPhase(containerName, "starting_api")
-		console.log(`[gateway] Starting container-api...`)
+			await buildTracker.startPhase(containerName, "starting_daemon")
+		console.log(`[gateway] Starting container-daemon...`)
 
 		// Get the Convex URL for the container to connect to
 		const convexUrl = process.env.CONVEX_URL
@@ -1068,9 +1081,9 @@ rm /tmp/container-api-binary`
 				? `PORT=4096 CONVEX_URL=${convexUrl} CONTAINER_ID=${containerName}`
 				: `PORT=4096 CONTAINER_ID=${containerName}`
 
-			const startCommand = `docker exec -d ${containerName} bash -c '${envVars} /opt/container-api/container-api &'
+			const startCommand = `docker exec -d ${containerName} bash -c '${envVars} /opt/container-daemon/container-daemon &'
 sleep 2
-docker exec ${containerName} tailscale serve --bg --http 80 http://localhost:4096 2>/dev/null || true`
+docker exec ${containerName} tailscale serve --bg --https=443 http://localhost:3000 2>/dev/null || true`
 
 			const startProc =
 				server === "localhost"
@@ -1092,7 +1105,7 @@ docker exec ${containerName} tailscale serve --bg --http 80 http://localhost:409
 			if (buildTracker)
 				await buildTracker.completePhase(
 					containerName,
-					"starting_api",
+					"starting_daemon",
 					startLogs || "API started successfully",
 				)
 		} catch (error) {
@@ -1100,7 +1113,7 @@ docker exec ${containerName} tailscale serve --bg --http 80 http://localhost:409
 			if (buildTracker)
 				await buildTracker.failBuild(
 					containerName,
-					"starting_api",
+					"starting_daemon",
 					message,
 					startLogs,
 				)

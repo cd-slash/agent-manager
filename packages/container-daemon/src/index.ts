@@ -1,8 +1,10 @@
 /**
- * Container API Server
+ * Container Daemon
  *
- * Connects to Convex to receive commands from the gateway and execute them.
- * Commands include: startExecution, abortExecution, startOAuthFlow, etc.
+ * Background service that runs inside each container to:
+ * - Register in Convex's containerPool
+ * - Subscribe to commands via Convex real-time sync
+ * - Execute Claude CLI commands and stream results back
  *
  * CONVEX_URL is required - the container cannot operate without it.
  */
@@ -22,14 +24,14 @@ const startTime = Date.now()
 
 // Validate required environment variables
 if (!CONVEX_URL) {
-	console.error("[api] FATAL: CONVEX_URL environment variable is required")
-	console.error("[api] The container cannot receive commands without Convex")
+	console.error("[daemon] FATAL: CONVEX_URL environment variable is required")
+	console.error("[daemon] The container cannot receive commands without Convex")
 	process.exit(1)
 }
 
 if (CONTAINER_ID === "unknown") {
-	console.error("[api] FATAL: CONTAINER_ID or TS_HOSTNAME environment variable is required")
-	console.error("[api] The container must have a unique identifier to register in the pool")
+	console.error("[daemon] FATAL: CONTAINER_ID or TS_HOSTNAME environment variable is required")
+	console.error("[daemon] The container must have a unique identifier to register in the pool")
 	process.exit(1)
 }
 
@@ -45,19 +47,19 @@ authManager.startWatching().catch(console.error)
 
 // Log events from managers
 authManager.on("auth:changed", (data) => {
-	console.log("[api] Auth status changed:", data)
+	console.log("[daemon] Auth status changed:", data)
 })
 
 processManager.on("process:started", (data) => {
-	console.log("[api] Process started:", data.processId)
+	console.log("[daemon] Process started:", data.processId)
 })
 
 processManager.on("process:completed", (data) => {
-	console.log("[api] Process completed:", data.processId)
+	console.log("[daemon] Process completed:", data.processId)
 })
 
 processManager.on("process:error", (data) => {
-	console.log("[api] Process error:", data.processId, data.error)
+	console.log("[daemon] Process error:", data.processId, data.error)
 })
 
 // Minimal HTTP server for health checks only
@@ -79,10 +81,10 @@ const app = new Elysia()
 // Start Server
 // ==========================================================================
 app.listen(PORT, async () => {
-	console.log(`[api] Container API server running on port ${PORT}`)
-	console.log(`[api] Container ID: ${CONTAINER_ID}`)
-	console.log(`[api] Hostname: ${HOSTNAME}`)
-	console.log(`[api] Connecting to Convex: ${CONVEX_URL}`)
+	console.log(`[daemon] Container daemon running on port ${PORT}`)
+	console.log(`[daemon] Container ID: ${CONTAINER_ID}`)
+	console.log(`[daemon] Hostname: ${HOSTNAME}`)
+	console.log(`[daemon] Connecting to Convex: ${CONVEX_URL}`)
 
 	convexIntegration = new ConvexIntegration(
 		{
@@ -96,16 +98,16 @@ app.listen(PORT, async () => {
 
 	try {
 		await convexIntegration.connect()
-		console.log("[api] Connected to Convex - ready to receive commands")
+		console.log("[daemon] Connected to Convex - ready to receive commands")
 	} catch (error) {
-		console.error("[api] FATAL: Failed to connect to Convex:", error)
+		console.error("[daemon] FATAL: Failed to connect to Convex:", error)
 		process.exit(1)
 	}
 })
 
 // Graceful shutdown
 process.on("SIGTERM", async () => {
-	console.log("[api] Received SIGTERM, shutting down...")
+	console.log("[daemon] Received SIGTERM, shutting down...")
 	processManager.abortAll()
 	await convexIntegration?.disconnect()
 	await authManager.stopWatching()
@@ -113,7 +115,7 @@ process.on("SIGTERM", async () => {
 })
 
 process.on("SIGINT", async () => {
-	console.log("[api] Received SIGINT, shutting down...")
+	console.log("[daemon] Received SIGINT, shutting down...")
 	processManager.abortAll()
 	await convexIntegration?.disconnect()
 	await authManager.stopWatching()

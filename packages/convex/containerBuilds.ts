@@ -8,7 +8,7 @@ const BUILD_PHASES = [
 	{ phase: "building_image", order: 2 },
 	{ phase: "starting_container", order: 3 },
 	{ phase: "deploying_binary", order: 4 },
-	{ phase: "starting_api", order: 5 },
+	{ phase: "starting_daemon", order: 5 },
 	{ phase: "ready", order: 6 },
 ] as const
 

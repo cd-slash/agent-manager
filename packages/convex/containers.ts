@@ -387,11 +387,13 @@ export const listByType = query({
 // =============================================================================
 
 /**
- * Remove orphaned containers that:
+ * Mark orphaned containers as stopped.
+ * Orphaned containers are those that:
  * - Don't have a tailscaleNodeId (not managed by Tailscale sync)
  * - Are not actively registered in the containerPool
  *
- * This cleans up ghost containers created by the gateway that no longer exist.
+ * Note: We mark as stopped instead of deleting because the Docker container
+ * may still exist on the host and can be started again.
  */
 export const cleanupOrphanedContainers = mutation({
 	args: {},
@@ -403,11 +405,11 @@ export const cleanupOrphanedContainers = mutation({
 		// Get all active container IDs from the pool
 		const activeContainerIds = new Set(poolEntries.map((p) => p.containerId))
 
-		let deleted = 0
-		const deletedContainers: string[] = []
+		let updated = 0
+		const updatedContainers: string[] = []
 
 		for (const container of containers) {
-			// Skip containers managed by Tailscale - they're cleaned up by Tailscale sync
+			// Skip containers managed by Tailscale - they're handled by Tailscale sync
 			if (container.tailscaleNodeId) {
 				continue
 			}
@@ -422,13 +424,22 @@ export const cleanupOrphanedContainers = mutation({
 				continue
 			}
 
-			// This container is orphaned - delete it
-			await ctx.db.delete(container._id)
-			deleted++
-			deletedContainers.push(container.name)
+			// Skip containers that are already stopped
+			if (container.status === "stopped" || container.status === "exited") {
+				continue
+			}
+
+			// This container is orphaned - mark as stopped
+			await ctx.db.patch(container._id, {
+				status: "stopped",
+				updatedAt: now,
+			})
+			updated++
+			updatedContainers.push(container.name)
 		}
 
-		return { deleted, containers: deletedContainers }
+		// Return 'deleted: 0' for backwards compatibility with callers expecting that field
+		return { deleted: 0, updated, containers: updatedContainers }
 	},
 })
 
@@ -437,6 +448,7 @@ export const cleanupOrphanedContainers = mutation({
 // =============================================================================
 
 // Internal mutation to clean up orphaned containers (called from actions like Tailscale sync)
+// NOTE: This is kept for backwards compatibility but now marks as stopped instead of deleting
 export const cleanupOrphanedContainersInternal = internalMutation({
 	args: {},
 	handler: async (ctx) => {
@@ -447,11 +459,11 @@ export const cleanupOrphanedContainersInternal = internalMutation({
 		// Get all active container IDs from the pool
 		const activeContainerIds = new Set(poolEntries.map((p) => p.containerId))
 
-		let deleted = 0
-		const deletedContainers: string[] = []
+		let updated = 0
+		const updatedContainers: string[] = []
 
 		for (const container of containers) {
-			// Skip containers managed by Tailscale - they're cleaned up by Tailscale sync
+			// Skip containers managed by Tailscale - they're handled by Tailscale sync
 			if (container.tailscaleNodeId) {
 				continue
 			}
@@ -466,13 +478,72 @@ export const cleanupOrphanedContainersInternal = internalMutation({
 				continue
 			}
 
-			// This container is orphaned - delete it
-			await ctx.db.delete(container._id)
-			deleted++
-			deletedContainers.push(container.name)
+			// Skip containers that are already stopped
+			if (container.status === "stopped" || container.status === "exited") {
+				continue
+			}
+
+			// This container is orphaned - mark as stopped (not deleted)
+			// The Docker container may still exist on the host
+			await ctx.db.patch(container._id, {
+				status: "stopped",
+				updatedAt: now,
+			})
+			updated++
+			updatedContainers.push(container.name)
 		}
 
-		return { deleted, containers: deletedContainers }
+		// For backwards compatibility, return 'deleted' as 0
+		return { deleted: 0, updated, containers: updatedContainers }
+	},
+})
+
+// Internal mutation to mark orphaned containers as stopped (not deleted)
+// Called from Tailscale sync - containers may still exist on the host in stopped state
+export const markOrphanedContainersStoppedInternal = internalMutation({
+	args: {},
+	handler: async (ctx) => {
+		const now = Date.now()
+		const containers = await ctx.db.query("containers").collect()
+		const poolEntries = await ctx.db.query("containerPool").collect()
+
+		// Get all active container IDs from the pool
+		const activeContainerIds = new Set(poolEntries.map((p) => p.containerId))
+
+		let updated = 0
+		const updatedContainers: string[] = []
+
+		for (const container of containers) {
+			// Skip containers managed by Tailscale - they're handled separately
+			if (container.tailscaleNodeId) {
+				continue
+			}
+
+			// Skip containers that are actively registered in the pool
+			if (activeContainerIds.has(container.containerId)) {
+				continue
+			}
+
+			// Skip containers updated in the last 5 minutes (might be starting up)
+			if (container.updatedAt && now - container.updatedAt < 5 * 60 * 1000) {
+				continue
+			}
+
+			// Skip containers that are already stopped
+			if (container.status === "stopped" || container.status === "exited") {
+				continue
+			}
+
+			// This container is orphaned - mark as stopped
+			await ctx.db.patch(container._id, {
+				status: "stopped",
+				updatedAt: now,
+			})
+			updated++
+			updatedContainers.push(container.name)
+		}
+
+		return { updated, containers: updatedContainers }
 	},
 })
 

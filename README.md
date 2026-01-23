@@ -99,11 +99,11 @@ agent-manager/
 │   │   │   └── convex-sync.ts # Convex integration
 │   │   └── package.json
 │   │
-│   ├── container-api/         # API running inside containers
+│   ├── container-daemon/      # Daemon running inside containers
 │   │   ├── src/
-│   │   │   ├── index.ts       # Elysia HTTP server
+│   │   │   ├── index.ts       # Daemon entry point
 │   │   │   ├── process-manager.ts  # Claude CLI process manager
-│   │   │   ├── manager-connection.ts # Gateway WebSocket client
+│   │   │   ├── convex-integration.ts # Convex connection & commands
 │   │   │   └── auth-manager.ts # OAuth flow handling
 │   │   └── package.json
 │   │

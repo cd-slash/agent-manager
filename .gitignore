@@ -35,4 +35,4 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 .DS_Store
 
 # Compiled binaries
-packages/agent-gateway/container-api-binary
+packages/agent-gateway/container-daemon-binary

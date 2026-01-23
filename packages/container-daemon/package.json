@@ -1,5 +1,5 @@
 {
-	"name": "@agent-manager/container-api",
+	"name": "@agent-manager/container-daemon",
 	"version": "0.1.0",
 	"private": true,
 	"type": "module",
