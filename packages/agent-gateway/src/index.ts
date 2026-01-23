@@ -821,7 +821,13 @@ if [ -x /opt/container-api/container-api ]; then
   tailscale serve --bg --http 80 http://localhost:4096 2>/dev/null || true
 fi
 
-exec "$@"`
+# Keep container alive - wait for any background process or sleep forever
+# This prevents restart loops with single-use Tailscale auth keys
+if [ \$# -gt 0 ]; then
+  exec "\$@"
+else
+  exec sleep infinity
+fi`
 
 	// Build environment variables (conditionally include repo/branch if specified)
 	const envVars = [
@@ -882,7 +888,6 @@ chmod +x "$BUILD_DIR/entrypoint.sh"
 
 echo 'COPY entrypoint.sh /entrypoint.sh' >> "$BUILD_DIR/Dockerfile"
 echo 'ENTRYPOINT ["/usr/bin/tini", "--", "/entrypoint.sh"]' >> "$BUILD_DIR/Dockerfile"
-echo 'CMD ["bash"]' >> "$BUILD_DIR/Dockerfile"
 
 cat > /tmp/compose-${containerName}.yml << 'COMPOSE'
 ${composeYml}
