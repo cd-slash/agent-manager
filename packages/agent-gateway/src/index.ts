@@ -820,16 +820,34 @@ if [ -n "\${WORKSPACE_REPO:-}" ] && [ ! -d "/workspace/.git" ]; then
 fi
 
 # Start workspace application on port 3000 (prefer dev for hot reloading)
+WORKSPACE_STARTED=false
 if [ -f /workspace/package.json ]; then
   cd /workspace
   if [ -n "\${WORKSPACE_START_CMD:-}" ]; then
     echo "Starting workspace with custom command: \${WORKSPACE_START_CMD}"
     PORT=3000 eval "\${WORKSPACE_START_CMD}" &
-  elif grep -q '"dev"' package.json; then
+    WORKSPACE_STARTED=true
+  elif grep -q '"dev"' package.json 2>/dev/null; then
     echo "Starting workspace with 'bun run dev'..."
     PORT=3000 bun run dev &
+    WORKSPACE_STARTED=true
+  elif grep -q '"start"' package.json 2>/dev/null; then
+    echo "Starting workspace with 'bun run start'..."
+    PORT=3000 bun run start &
+    WORKSPACE_STARTED=true
   fi
-  sleep 2
+
+  if [ "\$WORKSPACE_STARTED" = "true" ]; then
+    # Wait for dev server to start (check if port 3000 is listening)
+    echo "Waiting for dev server to start on port 3000..."
+    for i in 1 2 3 4 5 6 7 8 9 10; do
+      if ss -tln | grep -q ':3000 '; then
+        echo "Dev server is listening on port 3000"
+        break
+      fi
+      sleep 1
+    done
+  fi
 fi
 
 # Start container-daemon if binary exists (survives container restarts)
@@ -837,8 +855,13 @@ if [ -x /opt/container-daemon/container-daemon ]; then
   echo "Starting container-daemon..."
   PORT=4096 /opt/container-daemon/container-daemon &
   sleep 2
-  # Expose via Tailscale serve (ignore errors if already configured)
+fi
+
+# Expose workspace via Tailscale serve (if workspace is running on port 3000)
+if [ "\$WORKSPACE_STARTED" = "true" ] && ss -tln | grep -q ':3000 '; then
+  echo "Setting up Tailscale serve to proxy port 3000..."
   tailscale serve --bg --https=443 http://localhost:3000 2>/dev/null || true
+  echo "Tailscale serve configured - workspace accessible via https://\${TS_HOSTNAME}.tail-scale.ts.net"
 fi
 
 # Keep container alive - wait for any background process or sleep forever
