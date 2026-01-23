@@ -151,12 +151,30 @@ export class ConvexIntegration extends EventEmitter<ConvexIntegrationEvents> {
 
 	private subscribeToAuthToken(): void {
 		// Watch for auth token updates in secrets
+		// Support both CLAUDE_CODE_OAUTH_TOKEN (preferred) and legacy ANTHROPIC_AUTH_TOKEN
+		this.client.onUpdate(
+			api.secrets.get,
+			{ key: "CLAUDE_CODE_OAUTH_TOKEN" },
+			async (secret) => {
+				if (secret?.value) {
+					console.log("[convex] Received OAuth token update (CLAUDE_CODE_OAUTH_TOKEN)")
+					try {
+						await this.authManager.setToken(secret.value)
+					} catch (error) {
+						console.error("[convex] Failed to set auth token:", error)
+					}
+				}
+			},
+		)
+		// Also check legacy key on startup
 		this.client.onUpdate(
 			api.secrets.get,
 			{ key: "ANTHROPIC_AUTH_TOKEN" },
 			async (secret) => {
-				if (secret?.value) {
-					console.log("[convex] Received auth token update")
+				// Only use legacy key if new key doesn't exist
+				const newKey = await this.client.query(api.secrets.get, { key: "CLAUDE_CODE_OAUTH_TOKEN" })
+				if (!newKey?.value && secret?.value) {
+					console.log("[convex] Received OAuth token update (legacy ANTHROPIC_AUTH_TOKEN)")
 					try {
 						await this.authManager.setToken(secret.value)
 					} catch (error) {

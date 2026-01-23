@@ -1,13 +1,13 @@
 /**
  * Auth Manager
  *
- * Manages Claude CLI authentication via the ANTHROPIC_AUTH_TOKEN environment variable.
+ * Manages Claude CLI authentication via the CLAUDE_CODE_OAUTH_TOKEN environment variable.
  *
  * IMPORTANT: Authentication state is ONLY controlled via the environment variable.
  * - NEVER read from or write to the credentials file (~/.claude/.credentials.json)
  * - NEVER poll the credentials file for token changes
  * - The ONLY way to change authentication status is via setToken() or removeToken()
- *   which modify the ANTHROPIC_AUTH_TOKEN environment variable
+ *   which modify the CLAUDE_CODE_OAUTH_TOKEN environment variable
  *
  * Token acquisition methods:
  * 1. Interactive OAuth flow: Uses `claude setup-token` TUI to get a new token
@@ -65,7 +65,7 @@ export class AuthManager extends EventEmitter {
 
 	/**
 	 * Get current authentication status
-	 * Checks if ANTHROPIC_AUTH_TOKEN environment variable is set.
+	 * Checks if CLAUDE_CODE_OAUTH_TOKEN environment variable is set.
 	 */
 	async getStatus(): Promise<AuthStatus> {
 		const now = Date.now()
@@ -75,8 +75,8 @@ export class AuthManager extends EventEmitter {
 			return this.cachedStatus
 		}
 
-		// Check if ANTHROPIC_AUTH_TOKEN environment variable is set
-		const token = process.env.ANTHROPIC_AUTH_TOKEN
+		// Check if CLAUDE_CODE_OAUTH_TOKEN environment variable is set
+		const token = process.env.CLAUDE_CODE_OAUTH_TOKEN
 		const isAuthenticated = !!token && token.length > 0
 
 		this.cachedStatus = {
@@ -91,13 +91,13 @@ export class AuthManager extends EventEmitter {
 	/**
 	 * Set OAuth token directly
 	 * This is used when the manager pushes a token to the container.
-	 * Sets the ANTHROPIC_AUTH_TOKEN environment variable.
+	 * Sets the CLAUDE_CODE_OAUTH_TOKEN environment variable.
 	 */
 	async setToken(token: string): Promise<void> {
 		console.log("[auth] Setting OAuth token via environment variable")
 
 		// Set the environment variable
-		process.env.ANTHROPIC_AUTH_TOKEN = token
+		process.env.CLAUDE_CODE_OAUTH_TOKEN = token
 
 		// Invalidate cache and emit change
 		this.cachedStatus = null
@@ -112,13 +112,13 @@ export class AuthManager extends EventEmitter {
 
 	/**
 	 * Remove OAuth token
-	 * Clears the ANTHROPIC_AUTH_TOKEN environment variable.
+	 * Clears the CLAUDE_CODE_OAUTH_TOKEN environment variable.
 	 */
 	async removeToken(): Promise<void> {
 		console.log("[auth] Removing OAuth token")
 
 		// Clear the environment variable
-		delete process.env.ANTHROPIC_AUTH_TOKEN
+		delete process.env.CLAUDE_CODE_OAUTH_TOKEN
 
 		// Invalidate cache and emit change
 		this.cachedStatus = null

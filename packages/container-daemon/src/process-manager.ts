@@ -71,6 +71,7 @@ export class ProcessManager extends EventEmitter {
 		// Build CLI arguments
 		const args = this.buildCliArgs(options)
 		args.push("--output-format", "stream-json")
+		args.push("--verbose") // Required for stream-json with --print
 
 		console.log(
 			`[process] Starting process ${processId}: claude ${args.join(" ")}`,
