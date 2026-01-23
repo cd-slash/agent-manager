@@ -306,6 +306,14 @@ export function ContainerView({
 		clearSelectionFn?.()
 	}
 
+	const handleBulkDelete = async () => {
+		const toDelete = selectedContainers.filter((c) => c.status !== "running")
+		for (const container of toDelete) {
+			await handleDeleteContainer(container)
+		}
+		clearSelectionFn?.()
+	}
+
 	const handleRefresh = async () => {
 		setIsRefreshing(true)
 		try {
@@ -382,6 +390,9 @@ export function ContainerView({
 	const startableCount = selectedContainers.filter(
 		(c) => c.status === "stopped",
 	).length
+	const deletableCount = selectedContainers.filter(
+		(c) => c.status !== "running",
+	).length
 
 	const headerActions = (
 		<div className="flex items-center gap-2 h-9">
@@ -411,7 +422,20 @@ export function ContainerView({
 					</span>
 				</Button>
 			)}
-			{(stoppableCount > 0 || startableCount > 0) && (
+			{deletableCount > 0 && (
+				<Button
+					variant="outline"
+					onClick={handleBulkDelete}
+					className="h-9 text-destructive hover:text-destructive relative"
+				>
+					<Trash2 size={16} className="mr-2" />
+					Delete
+					<span className="ml-1.5 inline-flex items-center justify-center rounded bg-destructive/15 text-destructive text-[11px] font-medium min-w-[1.125rem] h-[1.125rem] px-1 tabular-nums">
+						{deletableCount}
+					</span>
+				</Button>
+			)}
+			{(stoppableCount > 0 || startableCount > 0 || deletableCount > 0) && (
 				<div className="h-6 w-px bg-border mx-1" />
 			)}
 			<Button
