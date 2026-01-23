@@ -176,6 +176,12 @@ export function TaskDetailView({
 	// Mutation to start agent execution
 	const startExecution = useMutation(api.containerCommands.startExecution)
 
+	// Mutation to update task (for assigning container)
+	const updateTask = useMutation(api.tasks.update)
+
+	// Query for available container
+	const availableContainer = useQuery(api.containerPool.findForTask, { taskId: taskId as string })
+
 	// Track if agent is currently processing
 	const [isAgentProcessing, setIsAgentProcessing] = useState(false)
 
@@ -231,12 +237,29 @@ export function TaskDetailView({
 			sender: "user",
 		})
 
-		// If there's an active container, trigger agent execution
-		if (task.activeContainerId) {
+		// Determine which container to use
+		let containerId = task.activeContainerId
+
+		// If no container assigned, try to find one automatically
+		if (!containerId && availableContainer) {
+			containerId = availableContainer.containerId
+			// Assign the container to this task for future use
+			try {
+				await updateTask({
+					id: taskId,
+					activeContainerId: containerId,
+				})
+			} catch (error) {
+				console.error("Failed to assign container to task:", error)
+			}
+		}
+
+		// Trigger agent execution if we have a container
+		if (containerId) {
 			setIsAgentProcessing(true)
 			try {
 				await startExecution({
-					containerId: task.activeContainerId,
+					containerId,
 					message: text,
 					model: "claude-3-5-haiku-20241022",
 					taskId: taskId as string,
@@ -251,7 +274,7 @@ export function TaskDetailView({
 				setTimeout(() => setIsAgentProcessing(false), 3000)
 			}
 		} else {
-			toast.error("No container", "Please assign a container to this task first")
+			toast.error("No container available", "No containers are available in the pool. Please create or start a container first.")
 		}
 	}
 
