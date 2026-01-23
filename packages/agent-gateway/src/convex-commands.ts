@@ -54,6 +54,11 @@ interface CommandProcessorDeps {
 	fetchTailscaleConfig: (
 		convexUrl: string,
 	) => Promise<{ tailnetId?: string; apiKey?: string }>
+	recordContainerCreated?: (
+		result: CreateContainerResult,
+		taskId?: string,
+		projectId?: string,
+	) => Promise<void>
 }
 
 interface CreateContainerRequest {
@@ -211,6 +216,10 @@ export class ConvexCommandProcessor {
 	private async handleCreateContainer(cmd: ServerCommand): Promise<unknown> {
 		let payload = cmd.payload as CreateContainerRequest
 
+		// Get taskId and projectId from command (not just payload)
+		const taskId = cmd.taskId ?? payload.taskId
+		const projectId = cmd.projectId ?? payload.projectId
+
 		// Generate and store container name if not already set
 		// This ensures retries use the same name instead of creating new containers
 		if (!payload.name) {
@@ -231,7 +240,7 @@ export class ConvexCommandProcessor {
 		}
 
 		console.log(
-			`[commands] Creating container "${payload.name}"${payload.repo ? ` for repo: ${payload.repo}` : " (no repo)"}`,
+			`[commands] Creating container "${payload.name}"${payload.repo ? ` for repo: ${payload.repo}` : " (no repo)"}${taskId ? ` for task: ${taskId}` : ""}`,
 		)
 
 		// Fetch secrets from Convex (GH creds only needed if cloning a repo)
@@ -252,6 +261,13 @@ export class ConvexCommandProcessor {
 		)
 
 		console.log(`[commands] Container created: ${result.name}`)
+
+		// Record the container in Convex (this sets task.activeContainerId)
+		if (this.deps.recordContainerCreated) {
+			await this.deps.recordContainerCreated(result, taskId, projectId)
+			console.log(`[commands] Container registered in Convex${taskId ? ` for task ${taskId}` : ""}`)
+		}
+
 		return result
 	}
 

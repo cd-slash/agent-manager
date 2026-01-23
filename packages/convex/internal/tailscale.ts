@@ -91,17 +91,27 @@ export const syncDevice = internalMutation({
 			}
 		} else {
 			// Container (code-agent)
-			const existing = await ctx.db
+			// First check by tailscaleNodeId
+			let existing = await ctx.db
 				.query("containers")
 				.withIndex("by_tailscale_node_id", (q) =>
 					q.eq("tailscaleNodeId", args.nodeId),
 				)
 				.first()
 
+			// Also check by name (container may have been created by createFromAgent without tailscaleNodeId)
+			if (!existing) {
+				existing = await ctx.db
+					.query("containers")
+					.filter((q) => q.eq(q.field("name"), args.name))
+					.first()
+			}
+
 			if (existing) {
-				// Update existing container
+				// Update existing container with Tailscale info
 				await ctx.db.patch(existing._id, {
 					name: args.name,
+					tailscaleNodeId: args.nodeId,
 					tailscaleHostname: args.hostname,
 					tailscaleTags: args.tags,
 					updatedAt: now,

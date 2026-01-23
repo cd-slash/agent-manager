@@ -232,6 +232,7 @@ function App() {
 		// Transform to legacy format
 		const task: Task = {
 			id: selectedTaskDetails._id,
+			projectId: selectedTaskDetails.projectId,
 			title: selectedTaskDetails.title,
 			category: selectedTaskDetails.category,
 			tag: selectedTaskDetails.tag,
@@ -267,6 +268,12 @@ function App() {
 				selectedTaskDetails.dependencies
 					?.filter((d) => d !== null)
 					.map((d) => d._id) ?? [],
+			// Phase tracking
+			currentPhase: selectedTaskDetails.currentPhase,
+			phaseUpdatedAt: selectedTaskDetails.phaseUpdatedAt,
+			activeContainerId: selectedTaskDetails.activeContainerId,
+			implementationPrompt: selectedTaskDetails.implementationPrompt,
+			templateId: selectedTaskDetails.templateId,
 		}
 		return task
 	}, [selectedTaskDetails, selectedTaskPR])

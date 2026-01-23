@@ -1502,6 +1502,10 @@ const commandProcessor = CONVEX_URL
 			listContainersOnServer,
 			fetchSecrets,
 			fetchTailscaleConfig,
+			recordContainerCreated: convexSync
+				? (result, taskId, projectId) =>
+						convexSync.recordContainerCreated(result, taskId, projectId)
+				: undefined,
 		})
 	: null
 
