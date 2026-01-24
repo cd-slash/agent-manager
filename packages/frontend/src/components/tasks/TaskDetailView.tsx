@@ -29,7 +29,7 @@ import {
 	XCircle,
 } from "lucide-react"
 import { useState, useEffect, useMemo } from "react"
-import { AgentChatPanel } from "@/components/chat/AgentChatPanel"
+import { AgentChatPanel, type Provider, type Model } from "@/components/chat/AgentChatPanel"
 import { DependencyPickerModal } from "@/components/modals/DependencyPickerModal"
 import { useCreateContainer } from "@/hooks/useGatewayCommand"
 import { useToast } from "@/components/ToastProvider"
@@ -335,15 +335,23 @@ export function TaskDetailView({
 	// Store pending message when waiting for container
 	const [pendingMessage, setPendingMessage] = useState<string | null>(null)
 
+	// Provider and model state for chat
+	const [selectedProvider, setSelectedProvider] = useState<Provider>("anthropic")
+	const [selectedModel, setSelectedModel] = useState<Model>("sonnet")
+
+	// Fetch ZAI API key for when ZAI provider is selected
+	const zaiApiKey = useQuery(api.secrets.get, { key: "ZAI_API_KEY" })
+
 	// When container becomes available and we have a pending message, execute it
 	// Convex automatically syncs task.activeContainerId when the backend sets it
 	useEffect(() => {
 		if (task.activeContainerId && pendingMessage) {
-			executeWithContainer(task.activeContainerId, pendingMessage)
+			// Use the stored provider and model from state (set before pending message)
+			executeWithContainer(task.activeContainerId, pendingMessage, selectedProvider, selectedModel)
 			setPendingMessage(null)
 			setIsCreatingContainer(false)
 		}
-	}, [task.activeContainerId, pendingMessage])
+	}, [task.activeContainerId, pendingMessage, selectedProvider, selectedModel])
 
 	// Clear processing state when streaming completes (result message received)
 	useEffect(() => {
@@ -354,7 +362,7 @@ export function TaskDetailView({
 		}
 	}, [streamingContent?.hasResult, isAgentProcessing])
 
-	const executeWithContainer = async (containerId: string, message: string) => {
+	const executeWithContainer = async (containerId: string, message: string, provider: Provider, model: Model) => {
 		setIsAgentProcessing(true)
 		setCurrentSessionId(null) // Reset session before starting new one
 		try {
@@ -365,10 +373,33 @@ export function TaskDetailView({
 				token: authToken,
 			})
 
+			// Build environment variables based on provider
+			let envVars: {
+				ANTHROPIC_AUTH_TOKEN?: string
+				ANTHROPIC_BASE_URL?: string
+				API_TIMEOUT_MS?: string
+			} | undefined
+
+			if (provider === "zai") {
+				if (!zaiApiKey?.value) {
+					toast.error("ZAI API Key Missing", "Please configure your ZAI API key in Settings > Providers")
+					setIsAgentProcessing(false)
+					return
+				}
+				envVars = {
+					ANTHROPIC_AUTH_TOKEN: zaiApiKey.value,
+					ANTHROPIC_BASE_URL: "https://api.z.ai/api/anthropic",
+					API_TIMEOUT_MS: "3000000",
+				}
+			}
+			// For anthropic provider, envVars is undefined (use default env)
+
 			const result = await startExecution({
 				containerId,
 				message,
-				model: "claude-3-5-haiku-20241022",
+				model,
+				provider,
+				envVars,
 				taskId: taskId as string,
 				projectId: task.projectId as string,
 			})
@@ -385,7 +416,11 @@ export function TaskDetailView({
 		// Note: isAgentProcessing will be cleared by the useEffect watching streamingMessages
 	}
 
-	const handleSendMessage = async (text: string) => {
+	const handleSendMessage = async (text: string, provider: Provider, model: Model) => {
+		// Update selected provider/model state
+		setSelectedProvider(provider)
+		setSelectedModel(model)
+
 		// Send user message to Convex
 		await sendMessage({
 			taskId,
@@ -398,7 +433,7 @@ export function TaskDetailView({
 
 		if (containerId) {
 			// Container already assigned, execute directly
-			await executeWithContainer(containerId, text)
+			await executeWithContainer(containerId, text, provider, model)
 		} else {
 			// No container assigned, create a new one
 			setIsCreatingContainer(true)
@@ -1413,6 +1448,10 @@ export function TaskDetailView({
 										chatHistory={chatHistory}
 										onSendMessage={handleSendMessage}
 										isLoading={isAgentProcessing && !streamingContent?.parts.length}
+										selectedProvider={selectedProvider}
+										selectedModel={selectedModel}
+										onProviderChange={setSelectedProvider}
+										onModelChange={setSelectedModel}
 									/>
 								</div>
 							</div>

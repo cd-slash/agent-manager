@@ -77,10 +77,33 @@ export class ProcessManager extends EventEmitter {
 			`[process] Starting process ${processId}: claude ${args.join(" ")}`,
 		)
 
+		// Build environment variables - start with current env
+		const processEnv = { ...process.env }
+
+		// Apply custom environment variables from options
+		if (options.envVars) {
+			if (options.envVars.ANTHROPIC_AUTH_TOKEN) {
+				processEnv.ANTHROPIC_AUTH_TOKEN = options.envVars.ANTHROPIC_AUTH_TOKEN
+			} else {
+				// Clear the env var if not set (for Anthropic provider)
+				delete processEnv.ANTHROPIC_AUTH_TOKEN
+			}
+			if (options.envVars.ANTHROPIC_BASE_URL) {
+				processEnv.ANTHROPIC_BASE_URL = options.envVars.ANTHROPIC_BASE_URL
+			} else {
+				delete processEnv.ANTHROPIC_BASE_URL
+			}
+			if (options.envVars.API_TIMEOUT_MS) {
+				processEnv.API_TIMEOUT_MS = options.envVars.API_TIMEOUT_MS
+			} else {
+				delete processEnv.API_TIMEOUT_MS
+			}
+		}
+
 		const proc = spawn("claude", args, {
 			stdio: ["pipe", "pipe", "pipe"],
 			cwd: options.workingDirectory || "/workspace",
-			env: { ...process.env },
+			env: processEnv,
 			signal: abortController.signal,
 		})
 
@@ -193,10 +216,32 @@ export class ProcessManager extends EventEmitter {
 			`[process] Starting sync process ${processId}: claude ${args.join(" ")}`,
 		)
 
+		// Build environment variables - start with current env
+		const processEnv = { ...process.env }
+
+		// Apply custom environment variables from options
+		if (options.envVars) {
+			if (options.envVars.ANTHROPIC_AUTH_TOKEN) {
+				processEnv.ANTHROPIC_AUTH_TOKEN = options.envVars.ANTHROPIC_AUTH_TOKEN
+			} else {
+				delete processEnv.ANTHROPIC_AUTH_TOKEN
+			}
+			if (options.envVars.ANTHROPIC_BASE_URL) {
+				processEnv.ANTHROPIC_BASE_URL = options.envVars.ANTHROPIC_BASE_URL
+			} else {
+				delete processEnv.ANTHROPIC_BASE_URL
+			}
+			if (options.envVars.API_TIMEOUT_MS) {
+				processEnv.API_TIMEOUT_MS = options.envVars.API_TIMEOUT_MS
+			} else {
+				delete processEnv.API_TIMEOUT_MS
+			}
+		}
+
 		const proc = spawn("claude", args, {
 			stdio: ["pipe", "pipe", "pipe"],
 			cwd: options.workingDirectory || "/workspace",
-			env: { ...process.env },
+			env: processEnv,
 			signal: abortController.signal,
 		})
 

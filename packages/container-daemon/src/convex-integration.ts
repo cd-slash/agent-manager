@@ -262,6 +262,12 @@ export class ConvexIntegration extends EventEmitter<ConvexIntegrationEvents> {
 		const payload = command.payload as {
 			message: string
 			model?: string
+			provider?: string
+			envVars?: {
+				ANTHROPIC_AUTH_TOKEN?: string
+				ANTHROPIC_BASE_URL?: string
+				API_TIMEOUT_MS?: string
+			}
 			workingDirectory?: string
 			permissionMode?: string
 			systemPrompt?: string
@@ -301,6 +307,8 @@ export class ConvexIntegration extends EventEmitter<ConvexIntegrationEvents> {
 		for await (const event of this.processManager.executeStream({
 			message: payload.message,
 			model: payload.model,
+			provider: payload.provider,
+			envVars: payload.envVars,
 			workingDirectory: payload.workingDirectory,
 			permissionMode: payload.permissionMode,
 			systemPrompt: payload.systemPrompt,

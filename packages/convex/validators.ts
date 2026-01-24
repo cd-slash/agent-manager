@@ -5,6 +5,7 @@ export const aiProviderTypeValidator = v.union(
 	v.literal("anthropic"),
 	v.literal("openai"),
 	v.literal("google"),
+	v.literal("zai"),
 	v.literal("custom"),
 )
 

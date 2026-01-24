@@ -17,7 +17,6 @@ import {
 import { useEffect, useState } from "react"
 import { useToast } from "@/components/ToastProvider"
 import { Button } from "@/components/ui/button"
-import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
@@ -532,32 +531,20 @@ export function ProviderCard({ provider }: ProviderCardProps) {
 							Models
 						</Label>
 						<div className="space-y-2">
-							{models.map((model) => {
-								const checkboxId = `model-${model.id}`
-								return (
-									<div
-										key={model.id}
-										className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors"
-									>
-										<Checkbox
-											id={checkboxId}
-											checked={model.enabled}
-											onCheckedChange={() => handleModelToggle(model.id)}
-										/>
-										<label
-											htmlFor={checkboxId}
-											className="flex-1 cursor-pointer"
-										>
-											<span className="text-sm text-foreground">
-												{model.name}
-											</span>
-											<span className="text-xs text-muted-foreground ml-2">
-												{model.id}
-											</span>
-										</label>
-									</div>
-								)
-							})}
+							{models.map((model) => (
+								<div
+									key={model.id}
+									className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/50 transition-colors"
+								>
+									<span className="text-sm text-foreground">
+										{model.name}
+									</span>
+									<Switch
+										checked={model.enabled}
+										onCheckedChange={() => handleModelToggle(model.id)}
+									/>
+								</div>
+							))}
 						</div>
 					</div>
 

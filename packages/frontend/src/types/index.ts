@@ -11,7 +11,7 @@ type Doc<T extends string> = { _id: Id<T>; _creationTime: number } & Record<
 >
 
 // AI Provider types
-export type AiProviderType = "anthropic" | "openai" | "google" | "custom"
+export type AiProviderType = "anthropic" | "openai" | "google" | "zai" | "custom"
 export type AuthType = "api_key" | "oauth"
 
 export interface AiModelConfig {

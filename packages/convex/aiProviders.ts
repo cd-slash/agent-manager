@@ -4,7 +4,7 @@ import { action, internalMutation, mutation, query } from "./_generated/server"
 import { aiProviderTypeValidator, authTypeValidator } from "./validators"
 
 // Type definitions
-type AiProviderType = "anthropic" | "openai" | "google" | "custom"
+type AiProviderType = "anthropic" | "openai" | "google" | "zai" | "custom"
 type AuthType = "api_key" | "oauth"
 
 interface AiModelConfig {
@@ -30,45 +30,21 @@ export const BUILTIN_PROVIDERS: BuiltinProvider[] = [
 		enabled: true,
 		authType: "oauth",
 		models: [
-			{
-				id: "claude-sonnet-4-20250514",
-				name: "Claude Sonnet 4",
-				enabled: true,
-			},
-			{ id: "claude-opus-4-20250514", name: "Claude Opus 4", enabled: true },
-			{
-				id: "claude-3-5-sonnet-20241022",
-				name: "Claude 3.5 Sonnet",
-				enabled: true,
-			},
-			{
-				id: "claude-3-5-haiku-20241022",
-				name: "Claude 3.5 Haiku",
-				enabled: true,
-			},
+			{ id: "opus", name: "Opus", enabled: true },
+			{ id: "sonnet", name: "Sonnet", enabled: true },
+			{ id: "haiku", name: "Haiku", enabled: true },
 		],
 	},
 	{
-		name: "OpenAI",
-		type: "openai",
+		name: "ZAI",
+		type: "zai",
 		enabled: false,
 		authType: "api_key",
-		apiKeySecretKey: "OPENAI_API_KEY",
+		apiKeySecretKey: "ZAI_API_KEY",
 		models: [
-			{ id: "gpt-4-turbo", name: "GPT-4 Turbo", enabled: true },
-			{ id: "gpt-4o", name: "GPT-4o", enabled: true },
-			{ id: "gpt-4o-mini", name: "GPT-4o Mini", enabled: true },
-		],
-	},
-	{
-		name: "Google",
-		type: "google",
-		enabled: false,
-		authType: "api_key",
-		apiKeySecretKey: "GOOGLE_API_KEY",
-		models: [
-			{ id: "gemini-1.5-pro", name: "Gemini 1.5 Pro", enabled: true },
-			{ id: "gemini-1.5-flash", name: "Gemini 1.5 Flash", enabled: true },
+			{ id: "opus", name: "Opus", enabled: true },
+			{ id: "sonnet", name: "Sonnet", enabled: true },
+			{ id: "haiku", name: "Haiku", enabled: true },
 		],
 	},
 ]
@@ -452,16 +428,13 @@ export const seedBuiltinProviders = internalMutation({
 				})
 				created.push(provider.name)
 			} else if (existing.isBuiltin) {
-				// Update built-in providers with any new models
-				// Merge existing model settings with new models
-				const existingModelIds = new Set(existing.models.map((m) => m.id))
-				const newModels = provider.models.filter(
-					(m) => !existingModelIds.has(m.id),
-				)
+				// Update built-in providers - replace models with canonical list
+				const modelsMatch = JSON.stringify(existing.models.map(m => m.id).sort()) ===
+					JSON.stringify(provider.models.map(m => m.id).sort())
 
-				if (newModels.length > 0) {
+				if (!modelsMatch) {
 					await ctx.db.patch(existing._id, {
-						models: [...existing.models, ...newModels],
+						models: provider.models,
 						updatedAt: now,
 					})
 					updated.push(provider.name)

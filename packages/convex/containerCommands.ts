@@ -31,6 +31,12 @@ export const startExecution = mutation({
 		containerId: v.string(),
 		message: v.string(),
 		model: v.optional(v.string()),
+		provider: v.optional(v.string()),
+		envVars: v.optional(v.object({
+			ANTHROPIC_AUTH_TOKEN: v.optional(v.string()),
+			ANTHROPIC_BASE_URL: v.optional(v.string()),
+			API_TIMEOUT_MS: v.optional(v.string()),
+		})),
 		workingDirectory: v.optional(v.string()),
 		permissionMode: v.optional(v.string()),
 		systemPrompt: v.optional(v.string()),
@@ -54,6 +60,8 @@ export const startExecution = mutation({
 			payload: {
 				message: args.message,
 				model: args.model,
+				provider: args.provider,
+				envVars: args.envVars,
 				workingDirectory: args.workingDirectory,
 				permissionMode: args.permissionMode,
 				systemPrompt: args.systemPrompt,

@@ -13,6 +13,14 @@ export interface MessageOptions {
 	message: string
 	/** Model to use: haiku, sonnet, or opus */
 	model?: string
+	/** Provider: anthropic or zai */
+	provider?: string
+	/** Environment variables to set for the process */
+	envVars?: {
+		ANTHROPIC_AUTH_TOKEN?: string
+		ANTHROPIC_BASE_URL?: string
+		API_TIMEOUT_MS?: string
+	}
 	/** Session ID to resume a previous conversation */
 	sessionId?: string
 	/** Continue the most recent session */

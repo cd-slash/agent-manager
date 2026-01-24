@@ -60,7 +60,6 @@ export function TaskTemplatesSettings() {
 	const updateTemplate = useMutation(api.taskTemplates.update)
 	const deleteTemplate = useMutation(api.taskTemplates.remove)
 	const setDefaultTemplate = useMutation(api.taskTemplates.setDefault)
-	const seedTemplates = useMutation(api.seed.seedTemplates)
 
 	const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
 	const [editingTemplate, setEditingTemplate] =
@@ -69,22 +68,6 @@ export function TaskTemplatesSettings() {
 		useState<TaskTemplateDoc | null>(null)
 	const [formData, setFormData] = useState<TemplateFormData>(defaultFormData)
 	const [isSaving, setIsSaving] = useState(false)
-	const [isSeeding, setIsSeeding] = useState(false)
-
-	const handleSeedTemplates = async () => {
-		setIsSeeding(true)
-		try {
-			const result = await seedTemplates()
-			toast.success("Templates seeded", result.message)
-		} catch (error) {
-			toast.error(
-				"Seed failed",
-				error instanceof Error ? error.message : "Failed to seed templates",
-			)
-		} finally {
-			setIsSeeding(false)
-		}
-	}
 
 	const handleOpenCreate = () => {
 		setFormData(defaultFormData)
@@ -213,29 +196,10 @@ export function TaskTemplatesSettings() {
 				<h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center">
 					<FileStack size={16} className="mr-2" /> Task Templates
 				</h3>
-				<div className="flex items-center gap-2">
-					{templates.length === 0 && (
-						<Button
-							variant="outline"
-							size="sm"
-							onClick={handleSeedTemplates}
-							disabled={isSeeding}
-						>
-							{isSeeding ? (
-								<>
-									<Loader2 size={14} className="mr-2 animate-spin" />
-									Seeding...
-								</>
-							) : (
-								"Load Built-in Templates"
-							)}
-						</Button>
-					)}
-					<Button variant="outline" size="sm" onClick={handleOpenCreate}>
-						<Plus size={14} className="mr-2" />
-						New Template
-					</Button>
-				</div>
+				<Button variant="outline" size="sm" onClick={handleOpenCreate}>
+					<Plus size={14} className="mr-2" />
+					New Template
+				</Button>
 			</div>
 
 			<div className="bg-surface border border-border rounded-lg p-4">
@@ -251,19 +215,10 @@ export function TaskTemplatesSettings() {
 							size={48}
 							className="mx-auto mb-4 text-muted-foreground opacity-50"
 						/>
-						<p className="text-sm text-muted-foreground mb-4">
-							No templates configured yet.
+						<p className="text-sm text-muted-foreground">
+							No templates configured yet. Run the seed function in the Convex
+							dashboard to initialize built-in templates, or create a new one.
 						</p>
-						<Button onClick={handleSeedTemplates} disabled={isSeeding}>
-							{isSeeding ? (
-								<>
-									<Loader2 size={14} className="mr-2 animate-spin" />
-									Loading...
-								</>
-							) : (
-								"Load Built-in Templates"
-							)}
-						</Button>
 					</div>
 				) : (
 					<div className="space-y-3">

@@ -69,20 +69,51 @@ function renderMessageContent(msg: ChatMessage) {
 	)
 }
 
+export type Provider = "anthropic" | "zai"
+export type Model = "haiku" | "sonnet" | "opus"
+
 interface AgentChatPanelProps {
 	chatHistory?: ChatMessage[]
-	onSendMessage: (text: string) => void
+	onSendMessage: (text: string, provider: Provider, model: Model) => void
 	isLoading?: boolean
+	selectedProvider?: Provider
+	selectedModel?: Model
+	onProviderChange?: (provider: Provider) => void
+	onModelChange?: (model: Model) => void
 }
 
 export function AgentChatPanel({
 	chatHistory,
 	onSendMessage,
 	isLoading = false,
+	selectedProvider: externalProvider,
+	selectedModel: externalModel,
+	onProviderChange,
+	onModelChange,
 }: AgentChatPanelProps) {
 	const [chatInput, setChatInput] = useState("")
-	const [selectedModel, setSelectedModel] = useState("Opus")
-	const [mode, setMode] = useState<"plan" | "edit">("plan")
+	// Use external state if provided, otherwise local state
+	const [internalProvider, setInternalProvider] = useState<Provider>("anthropic")
+	const [internalModel, setInternalModel] = useState<Model>("sonnet")
+
+	const selectedProvider = externalProvider ?? internalProvider
+	const selectedModel = externalModel ?? internalModel
+
+	const handleProviderChange = (provider: Provider) => {
+		if (onProviderChange) {
+			onProviderChange(provider)
+		} else {
+			setInternalProvider(provider)
+		}
+	}
+
+	const handleModelChange = (model: Model) => {
+		if (onModelChange) {
+			onModelChange(model)
+		} else {
+			setInternalModel(model)
+		}
+	}
 	const textareaRef = useRef<HTMLTextAreaElement>(null)
 	const scrollAreaRef = useRef<HTMLDivElement>(null)
 
@@ -107,7 +138,7 @@ export function AgentChatPanel({
 	const handleSend = (e: React.FormEvent) => {
 		e.preventDefault()
 		if (!chatInput.trim()) return
-		onSendMessage(chatInput)
+		onSendMessage(chatInput, selectedProvider, selectedModel)
 		setChatInput("")
 	}
 
@@ -189,65 +220,65 @@ export function AgentChatPanel({
 						<div className="flex items-center bg-background rounded-md border border-border p-[3px] h-7">
 							<button
 								type="button"
-								onClick={() => setMode("plan")}
+								onClick={() => handleProviderChange("anthropic")}
 								className={cn(
 									"px-2.5 h-5 text-xs font-medium rounded transition-colors flex items-center",
-									mode === "plan"
+									selectedProvider === "anthropic"
 										? "bg-surface-elevated text-foreground shadow-sm"
 										: "text-muted-foreground hover:text-foreground",
 								)}
 							>
-								Plan
+								Anthropic
 							</button>
 							<button
 								type="button"
-								onClick={() => setMode("edit")}
+								onClick={() => handleProviderChange("zai")}
 								className={cn(
 									"px-2.5 h-5 text-xs font-medium rounded transition-colors flex items-center",
-									mode === "edit"
+									selectedProvider === "zai"
 										? "bg-surface-elevated text-foreground shadow-sm"
 										: "text-muted-foreground hover:text-foreground",
 								)}
 							>
-								Edit
+								ZAI
 							</button>
 						</div>
 						<div className="flex items-center bg-background rounded-md border border-border p-[3px] h-7">
 							<button
 								type="button"
-								onClick={() => setSelectedModel("Opus")}
+								onClick={() => handleModelChange("haiku")}
 								className={cn(
 									"px-2.5 h-5 text-xs font-medium rounded transition-colors flex items-center",
-									selectedModel === "Opus"
+									selectedModel === "haiku"
+										? "bg-surface-elevated text-foreground shadow-sm"
+										: "text-muted-foreground hover:text-foreground",
+								)}
+							>
+								Haiku
+							</button>
+							<button
+								type="button"
+								onClick={() => handleModelChange("sonnet")}
+								className={cn(
+									"px-2.5 h-5 text-xs font-medium rounded transition-colors flex items-center",
+									selectedModel === "sonnet"
+										? "bg-surface-elevated text-foreground shadow-sm"
+										: "text-muted-foreground hover:text-foreground",
+								)}
+							>
+								Sonnet
+							</button>
+							<button
+								type="button"
+								onClick={() => handleModelChange("opus")}
+								className={cn(
+									"px-2.5 h-5 text-xs font-medium rounded transition-colors flex items-center",
+									selectedModel === "opus"
 										? "bg-surface-elevated text-foreground shadow-sm"
 										: "text-muted-foreground hover:text-foreground",
 								)}
 							>
 								Opus
-							</button>
-							<button
-								type="button"
-								onClick={() => setSelectedModel("Gemini")}
-								className={cn(
-									"px-2.5 h-5 text-xs font-medium rounded transition-colors flex items-center",
-									selectedModel === "Gemini"
-										? "bg-surface-elevated text-foreground shadow-sm"
-										: "text-muted-foreground hover:text-foreground",
-								)}
-							>
-								Gemini
-							</button>
-							<button
-								type="button"
-								onClick={() => setSelectedModel("GPT-5")}
-								className={cn(
-									"px-2.5 h-5 text-xs font-medium rounded transition-colors flex items-center",
-									selectedModel === "GPT-5"
-										? "bg-surface-elevated text-foreground shadow-sm"
-										: "text-muted-foreground hover:text-foreground",
-								)}
-							>
-								GPT-5
 							</button>
 						</div>
 					</div>

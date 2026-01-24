@@ -1,56 +1,14 @@
 import { api } from "@agent-manager/convex/api"
-import { useMutation, useQuery } from "convex/react"
-import { Bot, Plus, RefreshCw } from "lucide-react"
-import { useEffect, useState } from "react"
-import { useToast } from "@/components/ToastProvider"
-import { Button } from "@/components/ui/button"
+import { useQuery } from "convex/react"
+import { Bot, RefreshCw } from "lucide-react"
 import { ProviderCard } from "./ProviderCard"
 
 export function ProvidersSettings() {
-	const toast = useToast()
-	const [isSeeding, setIsSeeding] = useState(false)
-
 	// Fetch providers
 	const providers = useQuery(api.aiProviders.list)
-	const hasBeenSeeded = useQuery(api.aiProviders.hasBeenSeeded)
-
-	// Seed mutation
-	const seedProviders = useMutation(api.seed.seedAiProviders)
-
-	// Auto-seed if no providers exist
-	useEffect(() => {
-		const autoSeed = async () => {
-			if (hasBeenSeeded === false && !isSeeding) {
-				setIsSeeding(true)
-				try {
-					await seedProviders()
-				} catch (error) {
-					console.error("Failed to seed providers:", error)
-				} finally {
-					setIsSeeding(false)
-				}
-			}
-		}
-		autoSeed()
-	}, [hasBeenSeeded, isSeeding, seedProviders])
-
-	const handleManualSeed = async () => {
-		setIsSeeding(true)
-		try {
-			const result = await seedProviders()
-			toast.success("Providers initialized", result.message)
-		} catch (error) {
-			toast.error(
-				"Failed to initialize",
-				error instanceof Error ? error.message : "Unknown error",
-			)
-		} finally {
-			setIsSeeding(false)
-		}
-	}
 
 	// Show loading state
-	if (providers === undefined || hasBeenSeeded === undefined) {
+	if (providers === undefined) {
 		return (
 			<section>
 				<h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center">
@@ -63,7 +21,7 @@ export function ProvidersSettings() {
 		)
 	}
 
-	// Show empty state with seed button if no providers
+	// Show empty state if no providers
 	if (providers.length === 0) {
 		return (
 			<section>
@@ -76,22 +34,8 @@ export function ProvidersSettings() {
 						No AI Providers Configured
 					</h4>
 					<p className="text-sm text-muted-foreground mb-4">
-						Initialize the built-in providers (Anthropic, OpenAI, Google) to get
-						started.
+						Run the seed function in the Convex dashboard to initialize providers.
 					</p>
-					<Button onClick={handleManualSeed} disabled={isSeeding}>
-						{isSeeding ? (
-							<>
-								<RefreshCw size={14} className="mr-2 animate-spin" />
-								Initializing...
-							</>
-						) : (
-							<>
-								<Plus size={14} className="mr-2" />
-								Initialize Providers
-							</>
-						)}
-					</Button>
 				</div>
 			</section>
 		)
