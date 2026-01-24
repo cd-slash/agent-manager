@@ -15,7 +15,7 @@ import { Textarea } from "@/components/ui/textarea"
 interface NewProjectModalProps {
 	isOpen: boolean
 	onClose: () => void
-	onCreate: (project: { name: string; description: string; repo?: string; branch?: string }) => void
+	onCreate: (project: { name: string; description: string; repo: string; branch?: string }) => void
 }
 
 export function NewProjectModal({
@@ -29,11 +29,13 @@ export function NewProjectModal({
 		onCreate({
 			name: project.name,
 			description: project.description,
-			repo: project.repo || undefined,
+			repo: project.repo,
 			branch: project.branch || undefined,
 		})
 		setProject({ name: "", description: "", repo: "", branch: "main" })
 	}
+
+	const isValidRepo = project.repo.includes("/")
 
 	const handleOpenChange = (open: boolean) => {
 		if (!open) {
@@ -80,17 +82,24 @@ export function NewProjectModal({
 						</div>
 						<div className="grid grid-cols-2 gap-4">
 							<div className="space-y-item">
-								<Label>GitHub Repository</Label>
+								<Label>GitHub Repository <span className="text-destructive">*</span></Label>
 								<Input
 									value={project.repo}
 									onChange={(e) =>
 										setProject({ ...project, repo: e.target.value })
 									}
 									placeholder="owner/repo"
+									className={project.repo && !isValidRepo ? "border-destructive" : ""}
 								/>
-								<p className="text-xs text-muted-foreground">
-									Repository to clone when creating containers
-								</p>
+								{project.repo && !isValidRepo ? (
+									<p className="text-xs text-destructive">
+										Must be in format "owner/repo"
+									</p>
+								) : (
+									<p className="text-xs text-muted-foreground">
+										Repository to clone when creating containers
+									</p>
+								)}
 							</div>
 							<div className="space-y-item">
 								<Label>Default Branch</Label>
@@ -108,7 +117,7 @@ export function NewProjectModal({
 						</div>
 						<Button
 							onClick={handleSubmit}
-							disabled={!project.name || !project.description}
+							disabled={!project.name || !project.description || !isValidRepo}
 							className="w-full py-4"
 							size="lg"
 						>

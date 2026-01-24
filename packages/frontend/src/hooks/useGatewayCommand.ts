@@ -124,6 +124,7 @@ export function useCreateContainer() {
 			server?: string
 			taskId?: string
 			projectId?: string
+			containerType?: string
 		}): Promise<{
 			name: string
 			containerId: string

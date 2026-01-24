@@ -31,6 +31,7 @@ import {
 import { useState, useEffect, useMemo } from "react"
 import { AgentChatPanel } from "@/components/chat/AgentChatPanel"
 import { DependencyPickerModal } from "@/components/modals/DependencyPickerModal"
+import { useCreateContainer } from "@/hooks/useGatewayCommand"
 import { useToast } from "@/components/ToastProvider"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -224,8 +225,8 @@ export function TaskDetailView({
 	// Mutation to update task (for assigning container)
 	const updateTask = useMutation(api.tasks.update)
 
-	// Mutation to create a new container
-	const createContainer = useMutation(api.serverCommands.createContainer)
+	// Hook for creating containers with proper error handling
+	const createContainer = useCreateContainer()
 
 	// Mutation to push auth token to container
 	const pushAuthToken = useMutation(api.containerCommands.pushAuthToken)
@@ -349,18 +350,28 @@ export function TaskDetailView({
 			toast.info("Creating container", "Spinning up a new container for this task...")
 
 			try {
-				await createContainer({
+				console.log("[TaskDetailView] Creating container with:", {
+					taskId: taskId,
+					projectId: task.projectId,
+					repo: project?.repo,
+					branch: project?.branch,
+				})
+
+				// Use the hook's execute method which watches for command completion/failure
+				await createContainer.execute({
 					taskId: taskId as string,
 					projectId: task.projectId as string,
 					containerType: "agent",
 					repo: project?.repo,
 					branch: project?.branch,
 				})
-				// Container creation started - the backend will assign activeContainerId
-				// when complete, which will trigger the useEffect above
+				// Container creation succeeded - the backend will assign activeContainerId
+				// which will trigger the useEffect above
 			} catch (error) {
 				console.error("Failed to create container:", error)
-				toast.error("Container error", "Failed to create container for task")
+				// Show the actual error message from the gateway
+				const errorMessage = error instanceof Error ? error.message : "Failed to create container for task"
+				toast.error("Container creation failed", errorMessage)
 				setIsAgentProcessing(false)
 				setIsCreatingContainer(false)
 				setPendingMessage(null)

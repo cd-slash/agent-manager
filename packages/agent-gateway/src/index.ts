@@ -716,6 +716,16 @@ async function createContainerOnServer(
 	const containerName = name || generateRandomName()
 	const wgPort = generateWgPort(containerName)
 
+	// Log container creation request details
+	console.log(`[gateway] Container creation request:`, {
+		containerName,
+		repo: repo || "(none)",
+		branch: branch || "main",
+		server,
+		hasGhUsername: !!secrets.GH_USERNAME,
+		hasGhToken: !!secrets.GH_TOKEN,
+	})
+
 	// Generate ephemeral Tailscale auth key via API
 	if (!tailscaleConfig?.tailnetId || !tailscaleConfig?.apiKey) {
 		throw new Error("Tailscale not configured - set tailnetId and API key in Settings > Tailscale")
@@ -839,11 +849,38 @@ fi
 /usr/sbin/sshd
 
 # Clone workspace
-if [ -n "\${WORKSPACE_REPO:-}" ] && [ ! -d "/workspace/.git" ]; then
-  git clone --depth 1 --branch "\${WORKSPACE_BRANCH:-main}" \\
-    "https://\${GH_USERNAME}:\${GH_TOKEN}@github.com/\${WORKSPACE_REPO}.git" /workspace || \\
-  git clone --depth 1 "https://\${GH_USERNAME}:\${GH_TOKEN}@github.com/\${WORKSPACE_REPO}.git" /workspace
-  cd /workspace && [ -f package.json ] && bun install
+if [ -n "\${WORKSPACE_REPO:-}" ]; then
+  if [ -d "/workspace/.git" ]; then
+    echo "Workspace already cloned, skipping..."
+  else
+    echo "Cloning repo: \${WORKSPACE_REPO} (branch: \${WORKSPACE_BRANCH:-main})..."
+
+    # Remove empty workspace directory so git clone can create it fresh
+    if [ -d "/workspace" ] && [ -z "\$(ls -A /workspace)" ]; then
+      rm -rf /workspace
+    fi
+
+    # Attempt clone with specified branch, fall back to default branch
+    if git clone --depth 1 --branch "\${WORKSPACE_BRANCH:-main}" \\
+        "https://\${GH_USERNAME}:\${GH_TOKEN}@github.com/\${WORKSPACE_REPO}.git" /workspace 2>&1; then
+      echo "Successfully cloned \${WORKSPACE_REPO} (branch: \${WORKSPACE_BRANCH:-main})"
+    elif git clone --depth 1 "https://\${GH_USERNAME}:\${GH_TOKEN}@github.com/\${WORKSPACE_REPO}.git" /workspace 2>&1; then
+      echo "Successfully cloned \${WORKSPACE_REPO} (default branch)"
+    else
+      echo "ERROR: Failed to clone repository \${WORKSPACE_REPO}"
+      echo "Check that GH_USERNAME and GH_TOKEN are set and the repo exists"
+      # Create workspace dir so container can still start
+      mkdir -p /workspace
+    fi
+
+    # Install dependencies if package.json exists
+    if [ -f /workspace/package.json ]; then
+      echo "Installing dependencies with bun..."
+      cd /workspace && bun install
+    fi
+  fi
+else
+  echo "No WORKSPACE_REPO specified, skipping clone..."
 fi
 
 # Start workspace application on port 5173 (prefer dev for hot reloading)

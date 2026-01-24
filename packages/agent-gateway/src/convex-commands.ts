@@ -240,15 +240,29 @@ export class ConvexCommandProcessor {
 		}
 
 		console.log(
-			`[commands] Creating container "${payload.name}"${payload.repo ? ` for repo: ${payload.repo}` : " (no repo)"}${taskId ? ` for task: ${taskId}` : ""}`,
+			`[commands] Creating container "${payload.name}"${payload.repo ? ` for repo: ${payload.repo}@${payload.branch || "main"}` : " (no repo)"}${taskId ? ` for task: ${taskId}` : ""}`,
 		)
 
-		// Fetch secrets from Convex (GH creds only needed if cloning a repo)
+		// Fetch secrets from Convex (GH creds required when cloning a repo)
 		const secretKeys = payload.repo ? ["GH_USERNAME", "GH_TOKEN"] : []
 		const secrets =
 			secretKeys.length > 0
 				? await this.deps.fetchSecrets(this.convexUrl, secretKeys)
 				: {}
+
+		if (payload.repo) {
+			console.log(
+				`[commands] GitHub credentials: username=${secrets.GH_USERNAME ? "set" : "MISSING"}, token=${secrets.GH_TOKEN ? "set" : "MISSING"}`,
+			)
+
+			// Validate GitHub credentials are present when repo is specified
+			if (!secrets.GH_USERNAME || !secrets.GH_TOKEN) {
+				throw new Error(
+					"GitHub credentials required for container creation. " +
+					"Please configure GH_USERNAME and GH_TOKEN in Settings > Secrets.",
+				)
+			}
+		}
 
 		// Fetch Tailscale config for ephemeral auth key generation
 		const tailscaleConfig = await this.deps.fetchTailscaleConfig(this.convexUrl)

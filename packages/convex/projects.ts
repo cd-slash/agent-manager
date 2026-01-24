@@ -70,17 +70,22 @@ export const create = mutation({
 		name: v.string(),
 		description: v.string(),
 		plan: v.optional(v.string()),
-		repo: v.optional(v.string()),
+		repo: v.string(), // Required - used for container cloning
 		branch: v.optional(v.string()),
 	},
 	handler: async (ctx, args) => {
+		// Validate repo format (should be owner/repo)
+		if (!args.repo.includes("/")) {
+			throw new Error("Repository must be in format 'owner/repo'")
+		}
+
 		const now = Date.now()
 		const projectId = await ctx.db.insert("projects", {
 			name: args.name,
 			description: args.description,
 			plan: args.plan,
 			repo: args.repo,
-			branch: args.branch,
+			branch: args.branch || "main",
 			archived: false,
 			createdAt: now,
 			updatedAt: now,
