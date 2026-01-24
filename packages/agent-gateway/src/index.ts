@@ -855,6 +855,9 @@ if [ -n "\${WORKSPACE_REPO:-}" ]; then
   else
     echo "Cloning repo: \${WORKSPACE_REPO} (branch: \${WORKSPACE_BRANCH:-main})..."
 
+    # Change to root first - we can't remove /workspace while standing in it
+    cd /
+
     # Remove empty workspace directory so git clone can create it fresh
     if [ -d "/workspace" ] && [ -z "\$(ls -A /workspace)" ]; then
       rm -rf /workspace
