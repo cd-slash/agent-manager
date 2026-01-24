@@ -1,7 +1,11 @@
+import { api } from "@agent-manager/convex/api"
+import type { Id } from "@agent-manager/convex/dataModel"
 import type { ColumnDef } from "@tanstack/react-table"
+import { useMutation } from "convex/react"
 import { Clock, Edit2, Layout, List, Plus, Trash2 } from "lucide-react"
 import { useMemo, useState } from "react"
 import { GenericListView } from "@/components/layouts/GenericListView"
+import { useToast } from "@/components/ToastProvider"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import {
@@ -25,6 +29,8 @@ export function ProjectListView({
 	const [clearSelectionFn, setClearSelectionFn] = useState<(() => void) | null>(
 		null,
 	)
+	const toast = useToast()
+	const deleteProject = useMutation(api.projects.deleteProject)
 
 	const handleSelectionChange = (
 		rows: Project[],
@@ -34,8 +40,21 @@ export function ProjectListView({
 		setClearSelectionFn(() => clearSelection)
 	}
 
-	const handleDeleteSelected = () => {
-		// TODO: Implement bulk delete
+	const handleDeleteSelected = async () => {
+		try {
+			for (const project of selectedProjects) {
+				await deleteProject({ id: project.id as Id<"projects"> })
+			}
+			toast.success(
+				"Projects deleted",
+				`Successfully deleted ${selectedProjects.length} project${selectedProjects.length > 1 ? "s" : ""}`,
+			)
+		} catch (error) {
+			toast.error(
+				"Delete failed",
+				error instanceof Error ? error.message : "Could not delete projects",
+			)
+		}
 		clearSelectionFn?.()
 	}
 
