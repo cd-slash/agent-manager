@@ -15,7 +15,7 @@ import { Textarea } from "@/components/ui/textarea"
 interface NewProjectModalProps {
 	isOpen: boolean
 	onClose: () => void
-	onCreate: (project: { name: string; description: string }) => void
+	onCreate: (project: { name: string; description: string; repo?: string; branch?: string }) => void
 }
 
 export function NewProjectModal({
@@ -23,11 +23,16 @@ export function NewProjectModal({
 	onClose,
 	onCreate,
 }: NewProjectModalProps) {
-	const [project, setProject] = useState({ name: "", description: "" })
+	const [project, setProject] = useState({ name: "", description: "", repo: "", branch: "main" })
 
 	const handleSubmit = () => {
-		onCreate(project)
-		setProject({ name: "", description: "" })
+		onCreate({
+			name: project.name,
+			description: project.description,
+			repo: project.repo || undefined,
+			branch: project.branch || undefined,
+		})
+		setProject({ name: "", description: "", repo: "", branch: "main" })
 	}
 
 	const handleOpenChange = (open: boolean) => {
@@ -72,6 +77,34 @@ export function NewProjectModal({
 								className="h-32 resize-none"
 								placeholder="Describe features, tech stack, and goals..."
 							/>
+						</div>
+						<div className="grid grid-cols-2 gap-4">
+							<div className="space-y-item">
+								<Label>GitHub Repository</Label>
+								<Input
+									value={project.repo}
+									onChange={(e) =>
+										setProject({ ...project, repo: e.target.value })
+									}
+									placeholder="owner/repo"
+								/>
+								<p className="text-xs text-muted-foreground">
+									Repository to clone when creating containers
+								</p>
+							</div>
+							<div className="space-y-item">
+								<Label>Default Branch</Label>
+								<Input
+									value={project.branch}
+									onChange={(e) =>
+										setProject({ ...project, branch: e.target.value })
+									}
+									placeholder="main"
+								/>
+								<p className="text-xs text-muted-foreground">
+									Branch to use for task containers
+								</p>
+							</div>
 						</div>
 						<Button
 							onClick={handleSubmit}

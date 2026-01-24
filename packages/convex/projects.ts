@@ -70,6 +70,8 @@ export const create = mutation({
 		name: v.string(),
 		description: v.string(),
 		plan: v.optional(v.string()),
+		repo: v.optional(v.string()),
+		branch: v.optional(v.string()),
 	},
 	handler: async (ctx, args) => {
 		const now = Date.now()
@@ -77,6 +79,8 @@ export const create = mutation({
 			name: args.name,
 			description: args.description,
 			plan: args.plan,
+			repo: args.repo,
+			branch: args.branch,
 			archived: false,
 			createdAt: now,
 			updatedAt: now,
@@ -91,6 +95,8 @@ export const update = mutation({
 		id: v.id("projects"),
 		name: v.optional(v.string()),
 		description: v.optional(v.string()),
+		repo: v.optional(v.string()),
+		branch: v.optional(v.string()),
 	},
 	handler: async (ctx, args) => {
 		const { id, ...updates } = args

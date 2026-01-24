@@ -382,6 +382,8 @@ export function TaskDetailView({
 					taskId: taskId as string,
 					projectId: task.projectId as string,
 					containerType: "agent",
+					repo: project?.repo,
+					branch: project?.branch,
 				})
 				// Container creation started - the backend will assign activeContainerId
 				// when complete, which will trigger the useEffect above

@@ -71,6 +71,8 @@ export type ProjectDoc = Doc<"projects"> & {
 	name: string
 	description: string
 	plan?: string
+	repo?: string
+	branch?: string
 	archived: boolean
 	createdAt: number
 	updatedAt: number
@@ -375,6 +377,8 @@ export interface Project {
 	tasks: Task[]
 	projectChatHistory?: ChatMessage[]
 	plan?: string
+	repo?: string
+	branch?: string
 }
 
 export interface Server {

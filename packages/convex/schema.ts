@@ -31,6 +31,9 @@ export default defineSchema({
 		name: v.string(),
 		description: v.string(),
 		plan: v.optional(v.string()),
+		// Repository configuration for container creation
+		repo: v.optional(v.string()), // GitHub repo in format "owner/repo"
+		branch: v.optional(v.string()), // Default branch (e.g., "main")
 		archived: v.boolean(),
 		createdAt: v.number(),
 		updatedAt: v.number(),

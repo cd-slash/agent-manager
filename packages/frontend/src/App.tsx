@@ -159,11 +159,15 @@ function App() {
 	const handleCreateProject = async (projectData: {
 		name: string
 		description: string
+		repo?: string
+		branch?: string
 	}) => {
 		const projectId = await createProject({
 			name: projectData.name,
 			description: projectData.description,
 			plan: "",
+			repo: projectData.repo,
+			branch: projectData.branch,
 		})
 
 		setIsNewProjectModalOpen(false)
