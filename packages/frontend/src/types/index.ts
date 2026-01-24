@@ -318,11 +318,26 @@ export type TaskTemplateDoc = Doc<"taskTemplates"> & {
 // Legacy interfaces for backward compatibility during migration
 // These can be removed once all components are updated to use Convex types
 
+export interface ChatMessagePart {
+	type: "text" | "tool_use"
+	content: string
+	toolName?: string
+	toolInput?: string
+	toolId?: string // For matching tool_use with tool_result
+	result?: {
+		// Attached when tool_result arrives
+		content: string
+		isError: boolean
+	}
+}
+
 export interface ChatMessage {
 	id: string
 	sender: "ai" | "user"
 	text: string
+	parts?: ChatMessagePart[] // Structured content for AI messages
 	time: string
+	isStreaming?: boolean
 }
 
 export interface HistoryEvent {

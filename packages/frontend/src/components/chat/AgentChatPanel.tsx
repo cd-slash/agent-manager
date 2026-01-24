@@ -3,7 +3,71 @@ import { useEffect, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { cn } from "@/lib/utils"
-import type { ChatMessage } from "@/types"
+import type { ChatMessage, ChatMessagePart } from "@/types"
+import { ToolCallCard } from "./ToolCallCard"
+
+// Helper to group consecutive text parts together
+function groupMessageParts(parts: ChatMessagePart[]): ChatMessagePart[] {
+	const grouped: ChatMessagePart[] = []
+	let currentText = ""
+
+	for (const part of parts) {
+		if (part.type === "text") {
+			currentText += (currentText ? " " : "") + part.content
+		} else {
+			if (currentText) {
+				grouped.push({ type: "text", content: currentText })
+				currentText = ""
+			}
+			grouped.push(part)
+		}
+	}
+
+	if (currentText) {
+		grouped.push({ type: "text", content: currentText })
+	}
+
+	return grouped
+}
+
+// Render message content with structured parts
+function renderMessageContent(msg: ChatMessage) {
+	// User messages or messages without parts: plain text
+	if (msg.sender === "user" || !msg.parts || msg.parts.length === 0) {
+		return <span className="whitespace-pre-wrap">{msg.text}</span>
+	}
+
+	// AI messages with structured parts
+	const groupedParts = groupMessageParts(msg.parts)
+
+	return (
+		<div className="space-y-2">
+			{groupedParts.map((group, idx) => {
+				if (group.type === "text") {
+					return (
+						<span key={idx} className="whitespace-pre-wrap block">
+							{group.content}
+						</span>
+					)
+				}
+
+				if (group.type === "tool_use") {
+					return (
+						<ToolCallCard
+							key={idx}
+							toolName={group.toolName!}
+							toolInput={group.toolInput}
+							result={group.result}
+							isStreaming={msg.isStreaming && !group.result}
+						/>
+					)
+				}
+
+				return null
+			})}
+		</div>
+	)
+}
 
 interface AgentChatPanelProps {
 	chatHistory?: ChatMessage[]
@@ -72,7 +136,7 @@ export function AgentChatPanel({
 											: "bg-surface-elevated text-foreground rounded-bl-sm border border-border",
 									)}
 								>
-									{msg.text}
+									{renderMessageContent(msg)}
 								</div>
 								<span className="text-[10px] text-muted-foreground mt-1 px-compact">
 									{msg.time}

@@ -39,6 +39,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import type {
 	ChatMessage,
+	ChatMessagePart,
 	Project,
 	Task,
 	TaskPhase,
@@ -152,72 +153,100 @@ export function TaskDetailView({
 		task.activeContainerId ? { containerId: task.activeContainerId } : "skip"
 	)
 
-	// Watch streaming messages for completion and extract current streaming text
-	const streamingText = useMemo(() => {
+	// Helper functions for formatting tool displays
+	const formatToolDisplay = (name: string, input: unknown): string => {
+		if (input && typeof input === "object") {
+			const inp = input as Record<string, unknown>
+			if ("command" in inp && typeof inp.command === "string")
+				return inp.command.slice(0, 60)
+			if ("file_path" in inp && typeof inp.file_path === "string")
+				return inp.file_path
+			if ("pattern" in inp && typeof inp.pattern === "string") return inp.pattern
+		}
+		return ""
+	}
+
+	const formatToolInput = (input: unknown): string => {
+		if (typeof input === "string") return input
+		if (input && typeof input === "object") {
+			return JSON.stringify(input, null, 2)
+		}
+		return ""
+	}
+
+	// Watch streaming messages for completion and extract structured content
+	const streamingContent = useMemo(() => {
 		if (!streamingMessages || streamingMessages.length === 0) return null
 
-		// Collect content from streaming messages including tool usage
-		const contentParts: string[] = []
+		const parts: ChatMessagePart[] = []
+		const toolResults = new Map<string, { content: string; isError: boolean }>()
 		let hasResult = false
 		let finalResultText: string | null = null
 
+		// First pass: collect tool results
 		for (const msg of streamingMessages) {
-			// Try to parse the raw content to extract meaningful text
 			try {
 				const content = msg.rawContent ? JSON.parse(msg.rawContent) : null
 				if (!content) continue
 
-				// Handle result type - this is the final response
-				if (content.type === "result") {
-					hasResult = true
-					if (content.result) {
-						finalResultText = content.result
-					}
-					continue
-				}
-
-				// Handle assistant messages - extract text and tool use from content array
-				if (content.type === "assistant" && content.message?.content) {
-					for (const block of content.message.content) {
-						if (block.type === "text" && block.text) {
-							contentParts.push(block.text)
-						} else if (block.type === "tool_use") {
-							// Format tool use for display
-							const toolName = block.name || "unknown"
-							const toolInput = block.input
-							// Format the tool call nicely
-							let toolDisplay = `\n[Tool: ${toolName}]`
-							if (toolInput && typeof toolInput === "object") {
-								// Show key parameters for common tools
-								if ("command" in toolInput) {
-									toolDisplay = `\n[Bash: ${toolInput.command}]`
-								} else if ("file_path" in toolInput) {
-									toolDisplay = `\n[${toolName}: ${toolInput.file_path}]`
-								} else if ("pattern" in toolInput) {
-									toolDisplay = `\n[${toolName}: ${toolInput.pattern}]`
-								}
-							}
-							contentParts.push(toolDisplay)
-						}
-					}
-				}
-
-				// Handle tool results
-				if (content.type === "tool_result") {
-					// Optionally show tool result summary
-					const isError = content.is_error
-					if (isError) {
-						contentParts.push("\n[Tool error]")
-					}
+				if (content.type === "tool_result" && content.tool_use_id) {
+					const resultText =
+						content.content?.[0]?.text ||
+						(typeof content.content === "string" ? content.content : null) ||
+						"No output"
+					toolResults.set(content.tool_use_id, {
+						content:
+							typeof resultText === "string"
+								? resultText.slice(0, 500)
+								: "No output", // Truncate long results
+						isError: content.is_error ?? false,
+					})
 				}
 			} catch {
-				// If parsing fails, skip this message
+				// Skip parse errors
 			}
 		}
 
-		// Use final result text if available, otherwise use accumulated content
-		const displayText = finalResultText || contentParts.join("")
-		return { text: displayText, hasResult }
+		// Second pass: build parts with attached results
+		for (const msg of streamingMessages) {
+			try {
+				const content = msg.rawContent ? JSON.parse(msg.rawContent) : null
+				if (!content) continue
+
+				if (content.type === "result") {
+					hasResult = true
+					finalResultText = content.result
+					continue
+				}
+
+				if (content.type === "assistant" && content.message?.content) {
+					for (const block of content.message.content) {
+						if (block.type === "text" && block.text) {
+							parts.push({ type: "text", content: block.text })
+						} else if (block.type === "tool_use") {
+							const toolId = block.id
+							parts.push({
+								type: "tool_use",
+								content: formatToolDisplay(block.name, block.input),
+								toolName: block.name || "unknown",
+								toolInput: formatToolInput(block.input),
+								toolId,
+								result: toolResults.get(toolId), // Attach result if available
+							})
+						}
+					}
+				}
+			} catch {
+				// Skip parse errors
+			}
+		}
+
+		// Add final result as text part if present
+		if (finalResultText) {
+			parts.push({ type: "text", content: finalResultText })
+		}
+
+		return { parts, hasResult }
 	}, [streamingMessages])
 
 	// Convert Convex chat messages to the UI format, adding streaming message if active
@@ -229,18 +258,20 @@ export function TaskDetailView({
 			time: formatTime(msg.createdAt),
 		}))
 
-		// Show streaming text during active processing (before result is saved to chatMessages)
-		if (streamingText?.text && isAgentProcessing && !streamingText.hasResult) {
+		// Show streaming content with structure during active processing
+		if (streamingContent?.parts.length && isAgentProcessing) {
 			messages.push({
 				id: "streaming-" + currentSessionId,
 				sender: "ai",
-				text: streamingText.text,
+				text: "", // Will use parts instead
+				parts: streamingContent.parts,
 				time: "streaming...",
+				isStreaming: !streamingContent.hasResult, // false when complete
 			})
 		}
 
 		return messages
-	}, [chatMessagesData, streamingText, isAgentProcessing, currentSessionId])
+	}, [chatMessagesData, streamingContent, isAgentProcessing, currentSessionId])
 
 	// Mutation to send messages
 	const sendMessage = useMutation(api.chat.sendTaskMessage)
@@ -316,12 +347,12 @@ export function TaskDetailView({
 
 	// Clear processing state when streaming completes (result message received)
 	useEffect(() => {
-		if (streamingText?.hasResult && isAgentProcessing) {
+		if (streamingContent?.hasResult && isAgentProcessing) {
 			setIsAgentProcessing(false)
 			// Clear session after a brief delay to allow final UI update
 			setTimeout(() => setCurrentSessionId(null), 500)
 		}
-	}, [streamingText?.hasResult, isAgentProcessing])
+	}, [streamingContent?.hasResult, isAgentProcessing])
 
 	const executeWithContainer = async (containerId: string, message: string) => {
 		setIsAgentProcessing(true)
@@ -1381,7 +1412,7 @@ export function TaskDetailView({
 									<AgentChatPanel
 										chatHistory={chatHistory}
 										onSendMessage={handleSendMessage}
-										isLoading={isAgentProcessing && !streamingText?.text}
+										isLoading={isAgentProcessing && !streamingContent?.parts.length}
 									/>
 								</div>
 							</div>
