@@ -275,6 +275,27 @@ export class ConvexIntegration extends EventEmitter<ConvexIntegrationEvents> {
 		const correlationId = command.correlationId || crypto.randomUUID()
 		let sequenceNumber = 0
 		let finalResult: string | undefined
+		const accumulatedTextParts: string[] = []
+
+		// taskId can be in payload or on the command itself
+		const taskId = payload.taskId || command.taskId
+		const projectId = payload.projectId || command.projectId
+
+		// Create an agent session to track this execution
+		try {
+			await this.client.mutation(api.agentSessions.create, {
+				sessionId: correlationId,
+				containerId: this.config.containerId,
+				prompt: payload.message,
+				taskId: taskId as Id<"tasks"> | undefined,
+				projectId: projectId as Id<"projects"> | undefined,
+				status: "running",
+				startedAt: Date.now(),
+			})
+			console.log(`[convex] Created agent session: ${correlationId}`)
+		} catch (error) {
+			console.error(`[convex] Failed to create agent session:`, error)
+		}
 
 		// Stream execution results to Convex
 		for await (const event of this.processManager.executeStream({
@@ -290,7 +311,13 @@ export class ConvexIntegration extends EventEmitter<ConvexIntegrationEvents> {
 			// Store each message in Convex
 			if (event.type === "data" && event.data) {
 				// event.data is already a parsed object from the process manager
-				const data = event.data as { type?: string; result?: string }
+				const data = event.data as {
+					type?: string
+					result?: string
+					message?: {
+						content?: Array<{ type: string; text?: string }>
+					}
+				}
 
 				// Store the JSON string in Convex
 				await this.client.mutation(api.agentMessages.create, {
@@ -303,23 +330,46 @@ export class ConvexIntegration extends EventEmitter<ConvexIntegrationEvents> {
 				if (data.type === "result" && data.result) {
 					finalResult = data.result
 				}
+
+				// Also accumulate text from assistant messages as fallback
+				if (data.type === "assistant" && data.message?.content) {
+					for (const block of data.message.content) {
+						if (block.type === "text" && block.text) {
+							accumulatedTextParts.push(block.text)
+						}
+					}
+				}
 			}
 		}
 
-		// If we have a task and a final result, insert it as an AI chat message
-		// taskId can be in payload or on the command itself
-		const taskId = payload.taskId || command.taskId
-		if (taskId && finalResult) {
+		// Determine the best response text
+		// Prefer the explicit result, fall back to accumulated text
+		const responseText = finalResult || accumulatedTextParts.join("")
+
+		// If we have a task and any response, insert it as an AI chat message
+		if (taskId && responseText) {
 			try {
 				await this.client.mutation(api.chat.sendTaskMessage, {
 					taskId: taskId as Id<"tasks">,
-					text: finalResult,
+					text: responseText,
 					sender: "ai",
 				})
 				console.log(`[convex] AI response added to chat for task ${taskId}`)
 			} catch (error) {
 				console.error(`[convex] Failed to add AI chat message:`, error)
 			}
+		}
+
+		// Update the agent session status
+		try {
+			await this.client.mutation(api.agentSessions.updateStatus, {
+				sessionId: correlationId,
+				status: "completed",
+				result: responseText || undefined,
+				completedAt: Date.now(),
+			})
+		} catch (error) {
+			console.error(`[convex] Failed to update agent session status:`, error)
 		}
 
 		return { correlationId, status: "completed" }

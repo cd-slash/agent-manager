@@ -134,13 +134,13 @@ export function TaskDetailView({
 	// Track if agent is currently processing
 	const [isAgentProcessing, setIsAgentProcessing] = useState(false)
 	const [isCreatingContainer, setIsCreatingContainer] = useState(false)
-	// Track the current streaming session for real-time updates
+	// Track the current streaming session - only used during active execution for real-time display
 	const [currentSessionId, setCurrentSessionId] = useState<string | null>(null)
 
-	// Fetch chat messages from Convex
+	// Fetch chat messages from Convex - this is the persistent history
 	const chatMessagesData = useQuery(api.chat.listByTask, { taskId }) ?? []
 
-	// Subscribe to streaming messages for the current session
+	// Subscribe to streaming messages only during active execution
 	const streamingMessages = useQuery(
 		api.agentMessages.getBySession,
 		currentSessionId ? { sessionId: currentSessionId } : "skip"
@@ -156,8 +156,8 @@ export function TaskDetailView({
 	const streamingText = useMemo(() => {
 		if (!streamingMessages || streamingMessages.length === 0) return null
 
-		// Collect assistant text content from streaming messages
-		const textParts: string[] = []
+		// Collect content from streaming messages including tool usage
+		const contentParts: string[] = []
 		let hasResult = false
 		let finalResultText: string | null = null
 
@@ -176,12 +176,38 @@ export function TaskDetailView({
 					continue
 				}
 
-				// Handle assistant messages - extract text from content array
+				// Handle assistant messages - extract text and tool use from content array
 				if (content.type === "assistant" && content.message?.content) {
 					for (const block of content.message.content) {
 						if (block.type === "text" && block.text) {
-							textParts.push(block.text)
+							contentParts.push(block.text)
+						} else if (block.type === "tool_use") {
+							// Format tool use for display
+							const toolName = block.name || "unknown"
+							const toolInput = block.input
+							// Format the tool call nicely
+							let toolDisplay = `\n[Tool: ${toolName}]`
+							if (toolInput && typeof toolInput === "object") {
+								// Show key parameters for common tools
+								if ("command" in toolInput) {
+									toolDisplay = `\n[Bash: ${toolInput.command}]`
+								} else if ("file_path" in toolInput) {
+									toolDisplay = `\n[${toolName}: ${toolInput.file_path}]`
+								} else if ("pattern" in toolInput) {
+									toolDisplay = `\n[${toolName}: ${toolInput.pattern}]`
+								}
+							}
+							contentParts.push(toolDisplay)
 						}
+					}
+				}
+
+				// Handle tool results
+				if (content.type === "tool_result") {
+					// Optionally show tool result summary
+					const isError = content.is_error
+					if (isError) {
+						contentParts.push("\n[Tool error]")
 					}
 				}
 			} catch {
@@ -189,12 +215,12 @@ export function TaskDetailView({
 			}
 		}
 
-		// Use final result text if available, otherwise use accumulated text
-		const displayText = finalResultText || textParts.join("")
+		// Use final result text if available, otherwise use accumulated content
+		const displayText = finalResultText || contentParts.join("")
 		return { text: displayText, hasResult }
 	}, [streamingMessages])
 
-	// Convert Convex chat messages to legacy format, including streaming message if active
+	// Convert Convex chat messages to the UI format, adding streaming message if active
 	const chatHistory: ChatMessage[] = useMemo(() => {
 		const messages: ChatMessage[] = chatMessagesData.map((msg) => ({
 			id: msg._id,
@@ -203,8 +229,8 @@ export function TaskDetailView({
 			time: formatTime(msg.createdAt),
 		}))
 
-		// If we have streaming text and it hasn't been added to chat yet, show it
-		if (streamingText?.text && isAgentProcessing) {
+		// Show streaming text during active processing (before result is saved to chatMessages)
+		if (streamingText?.text && isAgentProcessing && !streamingText.hasResult) {
 			messages.push({
 				id: "streaming-" + currentSessionId,
 				sender: "ai",
