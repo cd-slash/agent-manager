@@ -337,7 +337,7 @@ export function TaskDetailView({
 
 	// Provider and model state for chat
 	const [selectedProvider, setSelectedProvider] = useState<Provider>("anthropic")
-	const [selectedModel, setSelectedModel] = useState<Model>("sonnet")
+	const [selectedModel, setSelectedModel] = useState<Model>("opus")
 
 	// Fetch ZAI API key for when ZAI provider is selected
 	const zaiApiKey = useQuery(api.secrets.get, { key: "ZAI_API_KEY" })

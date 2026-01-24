@@ -94,7 +94,7 @@ export function AgentChatPanel({
 	const [chatInput, setChatInput] = useState("")
 	// Use external state if provided, otherwise local state
 	const [internalProvider, setInternalProvider] = useState<Provider>("anthropic")
-	const [internalModel, setInternalModel] = useState<Model>("sonnet")
+	const [internalModel, setInternalModel] = useState<Model>("opus")
 
 	const selectedProvider = externalProvider ?? internalProvider
 	const selectedModel = externalModel ?? internalModel
