@@ -67,6 +67,8 @@ export function ProjectDetailView({
 		sender: msg.sender,
 		text: msg.text,
 		time: formatTime(msg.createdAt),
+		model: msg.model,
+		provider: msg.provider,
 	}))
 
 	// Mutation to send messages

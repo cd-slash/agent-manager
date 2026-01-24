@@ -35,6 +35,8 @@ export const sendProjectMessage = mutation({
 		projectId: v.id("projects"),
 		text: v.string(),
 		sender: senderValidator,
+		model: v.optional(v.string()),
+		provider: v.optional(v.string()),
 	},
 	handler: async (ctx, args) => {
 		// Verify project exists
@@ -46,6 +48,8 @@ export const sendProjectMessage = mutation({
 			taskId: undefined,
 			sender: args.sender,
 			text: args.text,
+			model: args.model,
+			provider: args.provider,
 			createdAt: Date.now(),
 		})
 
@@ -59,6 +63,8 @@ export const sendTaskMessage = mutation({
 		taskId: v.id("tasks"),
 		text: v.string(),
 		sender: senderValidator,
+		model: v.optional(v.string()),
+		provider: v.optional(v.string()),
 	},
 	handler: async (ctx, args) => {
 		// Verify task exists and get project ID
@@ -70,6 +76,8 @@ export const sendTaskMessage = mutation({
 			taskId: args.taskId,
 			sender: args.sender,
 			text: args.text,
+			model: args.model,
+			provider: args.provider,
 			createdAt: Date.now(),
 		})
 

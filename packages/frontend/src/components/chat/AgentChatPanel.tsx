@@ -209,7 +209,7 @@ export function AgentChatPanel({
 									{renderMessageContent(msg)}
 								</div>
 								<span className="text-[10px] text-muted-foreground mt-1 px-compact">
-									{msg.time}
+									{msg.time}{msg.sender === "ai" && msg.model && ` · ${msg.model}`}
 								</span>
 							</div>
 						))}

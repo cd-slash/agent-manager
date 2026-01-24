@@ -361,6 +361,8 @@ export class ConvexIntegration extends EventEmitter<ConvexIntegrationEvents> {
 					taskId: taskId as Id<"tasks">,
 					text: responseText,
 					sender: "ai",
+					model: payload.model,
+					provider: payload.provider,
 				})
 				console.log(`[convex] AI response added to chat for task ${taskId}`)
 			} catch (error) {

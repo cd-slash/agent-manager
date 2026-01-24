@@ -120,6 +120,9 @@ export type ChatMessageDoc = Doc<"chatMessages"> & {
 	taskId?: Id<"tasks">
 	sender: "ai" | "user"
 	text: string
+	// AI response metadata (only populated for sender: "ai")
+	model?: string
+	provider?: string
 	createdAt: number
 }
 
@@ -338,6 +341,9 @@ export interface ChatMessage {
 	parts?: ChatMessagePart[] // Structured content for AI messages
 	time: string
 	isStreaming?: boolean
+	// AI response metadata (only populated for sender: "ai")
+	model?: string
+	provider?: string
 }
 
 export interface HistoryEvent {

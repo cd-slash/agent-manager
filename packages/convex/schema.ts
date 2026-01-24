@@ -122,6 +122,9 @@ export default defineSchema({
 		taskId: v.optional(v.id("tasks")),
 		sender: v.union(v.literal("ai"), v.literal("user")),
 		text: v.string(),
+		// AI response metadata (only populated for sender: "ai")
+		model: v.optional(v.string()),
+		provider: v.optional(v.string()),
 		createdAt: v.number(),
 	})
 		.index("by_project", ["projectId"])

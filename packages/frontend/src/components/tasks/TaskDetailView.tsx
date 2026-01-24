@@ -259,6 +259,8 @@ export function TaskDetailView({
 			sender: msg.sender,
 			text: msg.text,
 			time: formatTime(msg.createdAt),
+			model: msg.model,
+			provider: msg.provider,
 		}))
 
 		// Show streaming content with structure during active processing

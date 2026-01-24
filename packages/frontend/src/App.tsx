@@ -262,6 +262,8 @@ function App() {
 				sender: ch.sender,
 				text: ch.text,
 				time: formatTime(ch.createdAt),
+				model: ch.model,
+				provider: ch.provider,
 			})),
 			history: selectedTaskDetails.history?.map((h) => ({
 				id: h._id,
