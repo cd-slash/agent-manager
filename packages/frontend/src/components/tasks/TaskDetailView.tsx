@@ -358,15 +358,16 @@ export function TaskDetailView({
 				})
 
 				// Use the hook's execute method which watches for command completion/failure
-				await createContainer.execute({
+				const result = await createContainer.execute({
 					taskId: taskId as string,
 					projectId: task.projectId as string,
 					containerType: "agent",
 					repo: project?.repo,
 					branch: project?.branch,
 				})
-				// Container creation succeeded - the backend will assign activeContainerId
-				// which will trigger the useEffect above
+				// Container creation succeeded - show confirmation toast
+				toast.success("Container created", `Container "${result.name}" is ready`)
+				// The backend will assign activeContainerId which will trigger the useEffect above
 			} catch (error) {
 				console.error("Failed to create container:", error)
 				// Show the actual error message from the gateway
