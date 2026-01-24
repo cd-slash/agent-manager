@@ -25,6 +25,10 @@ interface PhaseTimelineProps {
 	currentPhase?: TaskPhase
 	onPhaseClick?: (phase: TaskPhase) => void
 	compact?: boolean
+	/** Set of phases that are applicable to this task template */
+	applicablePhases?: Set<TaskPhase>
+	/** Name of the task template for tooltip messages */
+	templateName?: string
 }
 
 function getPhaseStatusIcon(status: PhaseStatus, size: number = 14) {
@@ -78,9 +82,17 @@ export function PhaseTimeline({
 	currentPhase,
 	onPhaseClick,
 	compact = false,
+	applicablePhases,
+	templateName,
 }: PhaseTimelineProps) {
 	// Create a map of phase to its record
 	const phaseMap = new Map(phases.map((p) => [p.phase, p]))
+
+	// Helper to check if a phase is applicable
+	const isPhaseApplicable = (phase: TaskPhase): boolean => {
+		if (!applicablePhases) return true
+		return applicablePhases.has(phase)
+	}
 
 	// Get ordered phases with their records
 	const orderedPhases = PHASE_ORDER.map((phase) => ({
@@ -94,6 +106,7 @@ export function PhaseTimeline({
 				{orderedPhases.map(({ phase, record }, index) => {
 					const status = record?.status || "pending"
 					const isActive = phase === currentPhase
+					const isApplicable = isPhaseApplicable(phase)
 
 					return (
 						<div key={phase} className="flex items-center">
@@ -101,26 +114,35 @@ export function PhaseTimeline({
 								<TooltipTrigger asChild>
 									<button
 										type="button"
-										onClick={() => onPhaseClick?.(phase)}
+										onClick={() => isApplicable && onPhaseClick?.(phase)}
 										className={cn(
 											"flex items-center justify-center w-6 h-6 rounded-full border-2 transition-all",
 											getPhaseStatusColor(status),
 											isActive &&
 												"ring-2 ring-primary ring-offset-2 ring-offset-background",
-											onPhaseClick && "cursor-pointer hover:scale-110",
+											isApplicable && onPhaseClick && "cursor-pointer hover:scale-110",
+											!isApplicable && "opacity-40 cursor-default",
 										)}
 									>
 										{getPhaseStatusIcon(status, 12)}
 									</button>
 								</TooltipTrigger>
 								<TooltipContent side="bottom">
-									<p className="font-medium">{PHASE_DISPLAY_NAMES[phase]}</p>
-									<p className="text-xs text-muted-foreground capitalize">
-										{status.replace("_", " ")}
-									</p>
-									{record?.model && (
+									{isApplicable ? (
+										<>
+											<p className="font-medium">{PHASE_DISPLAY_NAMES[phase]}</p>
+											<p className="text-xs text-muted-foreground capitalize">
+												{status.replace("_", " ")}
+											</p>
+											{record?.model && (
+												<p className="text-xs text-muted-foreground">
+													{record.model}
+												</p>
+											)}
+										</>
+									) : (
 										<p className="text-xs text-muted-foreground">
-											{record.model}
+											{PHASE_DISPLAY_NAMES[phase]} is not applicable to {templateName || "this task type"}
 										</p>
 									)}
 								</TooltipContent>
@@ -148,6 +170,7 @@ export function PhaseTimeline({
 			{orderedPhases.map(({ phase, record }, index) => {
 				const status = record?.status || "pending"
 				const isActive = phase === currentPhase
+				const isApplicable = isPhaseApplicable(phase)
 
 				return (
 					<div key={phase} className="flex items-center flex-1 last:flex-none">
@@ -155,11 +178,12 @@ export function PhaseTimeline({
 							<TooltipTrigger asChild>
 								<button
 									type="button"
-									onClick={() => onPhaseClick?.(phase)}
+									onClick={() => isApplicable && onPhaseClick?.(phase)}
 									className={cn(
 										"flex flex-col items-center gap-1.5 px-2 py-1.5 rounded-lg transition-all min-w-[80px]",
-										onPhaseClick && "cursor-pointer hover:bg-surface",
+										isApplicable && onPhaseClick && "cursor-pointer hover:bg-surface",
 										isActive && "bg-surface",
+										!isApplicable && "opacity-40 cursor-default",
 									)}
 								>
 									<div
@@ -188,37 +212,43 @@ export function PhaseTimeline({
 								</button>
 							</TooltipTrigger>
 							<TooltipContent side="bottom">
-								<div className="space-y-1">
-									<p className="font-medium">{PHASE_DISPLAY_NAMES[phase]}</p>
-									<p className="text-xs text-muted-foreground capitalize">
-										Status: {status.replace("_", " ")}
+								{isApplicable ? (
+									<div className="space-y-1">
+										<p className="font-medium">{PHASE_DISPLAY_NAMES[phase]}</p>
+										<p className="text-xs text-muted-foreground capitalize">
+											Status: {status.replace("_", " ")}
+										</p>
+										{record?.model && (
+											<p className="text-xs text-muted-foreground">
+												Model: {record.model}
+											</p>
+										)}
+										{record?.totalCostUsd !== undefined && (
+											<p className="text-xs text-muted-foreground">
+												Cost: ${record.totalCostUsd.toFixed(4)}
+											</p>
+										)}
+										{record?.numTurns !== undefined && (
+											<p className="text-xs text-muted-foreground">
+												Turns: {record.numTurns}
+											</p>
+										)}
+										{record?.startedAt && (
+											<p className="text-xs text-muted-foreground">
+												Started: {new Date(record.startedAt).toLocaleString()}
+											</p>
+										)}
+										{record?.completedAt && (
+											<p className="text-xs text-muted-foreground">
+												Completed: {new Date(record.completedAt).toLocaleString()}
+											</p>
+										)}
+									</div>
+								) : (
+									<p className="text-xs text-muted-foreground">
+										{PHASE_DISPLAY_NAMES[phase]} is not applicable to {templateName || "this task type"}
 									</p>
-									{record?.model && (
-										<p className="text-xs text-muted-foreground">
-											Model: {record.model}
-										</p>
-									)}
-									{record?.totalCostUsd !== undefined && (
-										<p className="text-xs text-muted-foreground">
-											Cost: ${record.totalCostUsd.toFixed(4)}
-										</p>
-									)}
-									{record?.numTurns !== undefined && (
-										<p className="text-xs text-muted-foreground">
-											Turns: {record.numTurns}
-										</p>
-									)}
-									{record?.startedAt && (
-										<p className="text-xs text-muted-foreground">
-											Started: {new Date(record.startedAt).toLocaleString()}
-										</p>
-									)}
-									{record?.completedAt && (
-										<p className="text-xs text-muted-foreground">
-											Completed: {new Date(record.completedAt).toLocaleString()}
-										</p>
-									)}
-								</div>
+								)}
 							</TooltipContent>
 						</Tooltip>
 						{index < orderedPhases.length - 1 && (

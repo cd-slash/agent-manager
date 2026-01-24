@@ -1,7 +1,6 @@
 import { MessageSquare, Send } from "lucide-react"
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState, useCallback } from "react"
 import { Button } from "@/components/ui/button"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { cn } from "@/lib/utils"
 import type { ChatMessage, ChatMessagePart } from "@/types"
 import { ToolCallCard } from "./ToolCallCard"
@@ -115,7 +114,11 @@ export function AgentChatPanel({
 		}
 	}
 	const textareaRef = useRef<HTMLTextAreaElement>(null)
-	const scrollAreaRef = useRef<HTMLDivElement>(null)
+	const scrollContainerRef = useRef<HTMLDivElement>(null)
+	// Track whether user has scrolled away from bottom (disables auto-scroll)
+	const [userHasScrolled, setUserHasScrolled] = useState(false)
+	// Track if we're programmatically scrolling
+	const isProgrammaticScroll = useRef(false)
 
 	useEffect(() => {
 		const textarea = textareaRef.current
@@ -125,15 +128,47 @@ export function AgentChatPanel({
 		}
 	}, [chatInput])
 
-	// Auto-scroll to bottom when new messages arrive or loading state changes
-	useEffect(() => {
-		if (scrollAreaRef.current) {
-			const scrollContainer = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]')
-			if (scrollContainer) {
-				scrollContainer.scrollTop = scrollContainer.scrollHeight
-			}
+	// Check if user is at the bottom of the scroll container
+	const isAtBottom = useCallback(() => {
+		const container = scrollContainerRef.current
+		if (!container) return true
+		const threshold = 50 // pixels from bottom to consider "at bottom"
+		return container.scrollHeight - container.scrollTop - container.clientHeight < threshold
+	}, [])
+
+	// Scroll to bottom programmatically
+	const scrollToBottom = useCallback(() => {
+		const container = scrollContainerRef.current
+		if (!container) return
+		isProgrammaticScroll.current = true
+		container.scrollTop = container.scrollHeight
+		// Reset programmatic flag after scroll settles
+		requestAnimationFrame(() => {
+			isProgrammaticScroll.current = false
+		})
+	}, [])
+
+	// Handle scroll events to detect user scroll
+	const handleScroll = useCallback(() => {
+		// Ignore programmatic scrolls
+		if (isProgrammaticScroll.current) return
+
+		if (isAtBottom()) {
+			// User scrolled back to bottom, re-enable auto-scroll
+			setUserHasScrolled(false)
+		} else {
+			// User scrolled away from bottom, disable auto-scroll
+			setUserHasScrolled(true)
 		}
-	}, [chatHistory?.length, isLoading])
+	}, [isAtBottom])
+
+	// Auto-scroll to bottom when new messages arrive or loading state changes
+	// Only if user hasn't manually scrolled away
+	useEffect(() => {
+		if (!userHasScrolled) {
+			scrollToBottom()
+		}
+	}, [chatHistory?.length, isLoading, userHasScrolled, scrollToBottom])
 
 	const handleSend = (e: React.FormEvent) => {
 		e.preventDefault()
@@ -149,7 +184,11 @@ export function AgentChatPanel({
 				Agent Chat
 			</h3>
 			<div className="bg-surface border border-border rounded-lg flex flex-col flex-1 overflow-hidden">
-				<ScrollArea className="flex-1 p-4" ref={scrollAreaRef}>
+				<div
+					ref={scrollContainerRef}
+					onScroll={handleScroll}
+					className="flex-1 p-4 scrollbar-styled scrollbar-no-margin"
+				>
 					<div className="space-y-4">
 						{chatHistory?.map((msg) => (
 							<div
@@ -189,7 +228,7 @@ export function AgentChatPanel({
 							</div>
 						)}
 					</div>
-				</ScrollArea>
+				</div>
 
 				<div className="p-4 border-t border-border space-y-3">
 					<form onSubmit={handleSend} className="relative">

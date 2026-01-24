@@ -98,6 +98,9 @@ export function TaskDetailView({
 	// Fetch task phases from Convex
 	const phases = useQuery(api.taskPhases.listByTask, { taskId }) ?? []
 
+	// Fetch task template for this task
+	const taskTemplate = useQuery(api.taskTemplates.getForTask, { taskId })
+
 	// Fetch PR data for this task
 	const pullRequest = useQuery(api.pullRequests.getByTask, { taskId })
 
@@ -555,6 +558,8 @@ export function TaskDetailView({
 															currentPhase={
 																task.currentPhase as TaskPhase | undefined
 															}
+															applicablePhases={applicablePhases}
+															templateName={taskTemplate?.name}
 															onPhaseClick={(phase) => {
 																const phaseToTab: Record<TaskPhase, string> = {
 																	requirements: "requirements",
