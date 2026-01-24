@@ -15,6 +15,7 @@ import {
 	type FilterConfig,
 	GenericListView,
 } from "@/components/layouts/GenericListView"
+import { EditTaskModal } from "@/components/modals/EditTaskModal"
 import { useToast } from "@/components/ToastProvider"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -62,6 +63,7 @@ export function AllTasksView({
 		null,
 	)
 	const [deletingTasks, setDeletingTasks] = useState<Set<string>>(new Set())
+	const [editingTask, setEditingTask] = useState<TaskWithProject | null>(null)
 
 	const handleDeleteTask = useCallback(
 		async (task: TaskWithProject) => {
@@ -249,9 +251,7 @@ export function AllTasksView({
 									onClick={(e) => e.stopPropagation()}
 								>
 									<DropdownMenuItem
-										onClick={() => {
-											// TODO: Implement edit
-										}}
+										onClick={() => setEditingTask(task)}
 									>
 										<Edit2 size={16} />
 										Edit
@@ -304,25 +304,32 @@ export function AllTasksView({
 	)
 
 	return (
-		<GenericListView
-			columns={columns}
-			data={allTasks}
-			onRowClick={(task) => onTaskClick(task, task.projectId)}
-			enableRowSelection
-			includeSelectionColumn
-			enableSearch
-			searchPlaceholder="Search tasks..."
-			searchFields={["title"]}
-			filters={filters}
-			headerActions={headerActions}
-			onSelectionChange={handleSelectionChange}
-			emptyMessage={
-				allTasks.length === 0
-					? "No tasks found. Create a project to get started!"
-					: "No tasks match your filters."
-			}
-			getRowId={(row) => `${row.projectId}-${row.id}`}
-			className="p-page"
-		/>
+		<>
+			<GenericListView
+				columns={columns}
+				data={allTasks}
+				onRowClick={(task) => onTaskClick(task, task.projectId)}
+				enableRowSelection
+				includeSelectionColumn
+				enableSearch
+				searchPlaceholder="Search tasks..."
+				searchFields={["title"]}
+				filters={filters}
+				headerActions={headerActions}
+				onSelectionChange={handleSelectionChange}
+				emptyMessage={
+					allTasks.length === 0
+						? "No tasks found. Create a project to get started!"
+						: "No tasks match your filters."
+				}
+				getRowId={(row) => `${row.projectId}-${row.id}`}
+				className="p-page"
+			/>
+			<EditTaskModal
+				isOpen={editingTask !== null}
+				onClose={() => setEditingTask(null)}
+				task={editingTask}
+			/>
+		</>
 	)
 }

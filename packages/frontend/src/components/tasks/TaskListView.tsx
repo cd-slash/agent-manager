@@ -15,6 +15,7 @@ import {
 	type FilterConfig,
 	GenericListView,
 } from "@/components/layouts/GenericListView"
+import { EditTaskModal } from "@/components/modals/EditTaskModal"
 import { useToast } from "@/components/ToastProvider"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -45,6 +46,7 @@ export function TaskListView({
 		null,
 	)
 	const [deletingTasks, setDeletingTasks] = useState<Set<string>>(new Set())
+	const [editingTask, setEditingTask] = useState<Task | null>(null)
 
 	const handleDeleteTask = useCallback(
 		async (task: Task) => {
@@ -202,9 +204,7 @@ export function TaskListView({
 									onClick={(e) => e.stopPropagation()}
 								>
 									<DropdownMenuItem
-										onClick={() => {
-											// TODO: Implement edit
-										}}
+										onClick={() => setEditingTask(task)}
 									>
 										<Edit2 size={16} />
 										Edit
@@ -259,20 +259,27 @@ export function TaskListView({
 	)
 
 	return (
-		<GenericListView
-			columns={columns}
-			data={tasks}
-			onRowClick={onTaskClick}
-			enableRowSelection
-			includeSelectionColumn
-			enableSearch
-			searchPlaceholder="Search tasks..."
-			searchFields={["title"]}
-			filters={filters}
-			headerActions={headerActions}
-			onSelectionChange={handleSelectionChange}
-			emptyMessage="No tasks found. Add one to get started!"
-			getRowId={(row) => row.id.toString()}
-		/>
+		<>
+			<GenericListView
+				columns={columns}
+				data={tasks}
+				onRowClick={onTaskClick}
+				enableRowSelection
+				includeSelectionColumn
+				enableSearch
+				searchPlaceholder="Search tasks..."
+				searchFields={["title"]}
+				filters={filters}
+				headerActions={headerActions}
+				onSelectionChange={handleSelectionChange}
+				emptyMessage="No tasks found. Add one to get started!"
+				getRowId={(row) => row.id.toString()}
+			/>
+			<EditTaskModal
+				isOpen={editingTask !== null}
+				onClose={() => setEditingTask(null)}
+				task={editingTask}
+			/>
+		</>
 	)
 }

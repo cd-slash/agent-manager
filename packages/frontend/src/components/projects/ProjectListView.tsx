@@ -5,6 +5,7 @@ import { useMutation } from "convex/react"
 import { Clock, Edit2, Layout, List, Plus, Trash2 } from "lucide-react"
 import { useMemo, useState } from "react"
 import { GenericListView } from "@/components/layouts/GenericListView"
+import { EditProjectModal } from "@/components/modals/EditProjectModal"
 import { useToast } from "@/components/ToastProvider"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
@@ -13,6 +14,20 @@ import {
 	HeaderSelectionButton,
 } from "@/components/ui/table-actions"
 import type { Project } from "@/types"
+
+// Format timestamp to relative time
+const formatTime = (timestamp: number): string => {
+	const now = Date.now()
+	const diff = now - timestamp
+	const minutes = Math.floor(diff / 60000)
+	const hours = Math.floor(diff / 3600000)
+	const days = Math.floor(diff / 86400000)
+
+	if (minutes < 1) return "Just now"
+	if (minutes < 60) return `${minutes}m ago`
+	if (hours < 24) return `${hours}h ago`
+	return `${days}d ago`
+}
 
 interface ProjectListViewProps {
 	projects: Project[]
@@ -29,6 +44,7 @@ export function ProjectListView({
 	const [clearSelectionFn, setClearSelectionFn] = useState<(() => void) | null>(
 		null,
 	)
+	const [isEditModalOpen, setIsEditModalOpen] = useState(false)
 	const toast = useToast()
 	const deleteProject = useMutation(api.projects.deleteProject)
 
@@ -116,12 +132,15 @@ export function ProjectListView({
 			{
 				id: "updated",
 				header: "Updated",
-				cell: () => (
-					<div className="flex items-center text-muted-foreground text-xs">
-						<Clock size={14} className="mr-1.5 text-muted-foreground" />
-						2h ago
-					</div>
-				),
+				cell: ({ row }) => {
+					const updatedAt = row.original.updatedAt
+					return (
+						<div className="flex items-center text-muted-foreground text-xs">
+							<Clock size={14} className="mr-1.5 text-muted-foreground" />
+							{updatedAt ? formatTime(updatedAt) : "—"}
+						</div>
+					)
+				},
 			},
 		],
 		[],
@@ -137,9 +156,7 @@ export function ProjectListView({
 						icon={<Edit2 size={16} />}
 						label="Edit"
 						count={selectedCount}
-						onClick={() => {
-							// TODO: Implement bulk edit
-						}}
+						onClick={() => setIsEditModalOpen(true)}
 					/>
 					<HeaderSelectionButton
 						icon={<Trash2 size={16} />}
@@ -159,19 +176,29 @@ export function ProjectListView({
 	)
 
 	return (
-		<GenericListView
-			columns={columns}
-			data={projects}
-			onRowClick={onSelectProject}
-			enableRowSelection
-			includeSelectionColumn
-			enableSearch
-			searchPlaceholder="Search projects..."
-			searchFields={["name", "description"]}
-			headerActions={headerActions}
-			onSelectionChange={handleSelectionChange}
-			getRowId={(row) => row.id.toString()}
-			className="p-page"
-		/>
+		<>
+			<GenericListView
+				columns={columns}
+				data={projects}
+				onRowClick={onSelectProject}
+				enableRowSelection
+				includeSelectionColumn
+				enableSearch
+				searchPlaceholder="Search projects..."
+				searchFields={["name", "description"]}
+				headerActions={headerActions}
+				onSelectionChange={handleSelectionChange}
+				getRowId={(row) => row.id.toString()}
+				className="p-page"
+			/>
+			<EditProjectModal
+				isOpen={isEditModalOpen}
+				onClose={() => {
+					setIsEditModalOpen(false)
+					clearSelectionFn?.()
+				}}
+				projects={selectedProjects}
+			/>
+		</>
 	)
 }

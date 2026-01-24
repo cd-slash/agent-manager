@@ -18,6 +18,7 @@ import {
 	GenericListView,
 } from "@/components/layouts/GenericListView"
 import { CreateContainerModal } from "@/components/modals/CreateContainerModal"
+import { TerminalInfoModal } from "@/components/modals/TerminalInfoModal"
 import { useToast } from "@/components/ToastProvider"
 import { Button } from "@/components/ui/button"
 import {
@@ -62,6 +63,8 @@ export function ContainerView({
 }: ContainerViewProps) {
 	const [isRefreshing, setIsRefreshing] = useState(false)
 	const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+	const [isTerminalModalOpen, setIsTerminalModalOpen] = useState(false)
+	const [terminalContainer, setTerminalContainer] = useState<Container | null>(null)
 	const [selectedContainers, setSelectedContainers] = useState<Container[]>([])
 	const [clearSelectionFn, setClearSelectionFn] = useState<(() => void) | null>(
 		null,
@@ -560,7 +563,8 @@ export function ContainerView({
 								>
 									<DropdownMenuItem
 										onClick={() => {
-											// TODO: Implement open terminal
+											setTerminalContainer(container)
+											setIsTerminalModalOpen(true)
 										}}
 									>
 										<Terminal size={16} />
@@ -664,6 +668,14 @@ export function ContainerView({
 				isOpen={isCreateModalOpen}
 				onClose={() => setIsCreateModalOpen(false)}
 				onCreate={handleCreateContainer}
+			/>
+			<TerminalInfoModal
+				isOpen={isTerminalModalOpen}
+				onClose={() => {
+					setIsTerminalModalOpen(false)
+					setTerminalContainer(null)
+				}}
+				containers={terminalContainer ? [terminalContainer] : []}
 			/>
 		</>
 	)

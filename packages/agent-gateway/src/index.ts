@@ -2030,11 +2030,24 @@ async function handleHttpRequest(req: Request): Promise<Response> {
 			)
 		}
 
-		// TODO: Send abort message to container
-		// connections.sendToContainer(execution.containerId, "exec:abort", { processId: ? });
+		// Send abort message to container
+		const sent = connections.sendToContainer(
+			execution.containerId,
+			"exec:abort",
+			{ correlationId },
+			correlationId,
+		)
+
+		if (sent) {
+			// Remove from active executions
+			activeExecutions.delete(correlationId)
+			console.log(`[gateway] Abort sent to container ${execution.containerId} for correlation ${correlationId}`)
+		} else {
+			console.warn(`[gateway] Failed to send abort to container ${execution.containerId}`)
+		}
 
 		return Response.json(
-			{ status: "abort_requested" },
+			{ status: "abort_requested", sent },
 			{ headers: corsHeaders },
 		)
 	}

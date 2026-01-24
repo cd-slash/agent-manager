@@ -379,6 +379,8 @@ export interface Project {
 	plan?: string
 	repo?: string
 	branch?: string
+	createdAt?: number
+	updatedAt?: number
 }
 
 export interface Server {

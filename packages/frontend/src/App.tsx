@@ -112,6 +112,10 @@ function App() {
 				tasks: projectTasks,
 				projectChatHistory: [],
 				plan: p.plan,
+				repo: p.repo,
+				branch: p.branch,
+				createdAt: p.createdAt,
+				updatedAt: p.updatedAt,
 			} as Project
 		})
 	}, [projectsData, allTasksData])

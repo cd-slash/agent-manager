@@ -68,53 +68,17 @@ interface TaskDetailViewProps {
 	onUpdate: (task: Task) => void
 }
 
-// Mock Data
-const mockDiffs = [
-	{
-		filename: "src/utils/cart.js",
-		lines: [
-			{ line: 24, type: "same", text: "  const calculateTotal = (items) => {" },
-			{
-				line: 25,
-				type: "remove",
-				text: "    return items.reduce((acc, item) => acc + item.price, 0);",
-			},
-			{
-				line: 26,
-				type: "add",
-				text: "    return items.reduce((acc, item) => acc + (item.price * item.qty), 0);",
-			},
-			{ line: 27, type: "same", text: "  };" },
-		],
-	},
-	{
-		filename: "src/components/Checkout.jsx",
-		lines: [
-			{ line: 12, type: "same", text: "  return (" },
-			{
-				line: 13,
-				type: "add",
-				text: '    <div className="total-price">{calculateTotal(cart)}</div>',
-			},
-			{ line: 14, type: "same", text: "    <button>Pay Now</button>" },
-		],
-	},
-]
-
-const aiIssues = [
-	{
-		id: 1,
-		severity: "high",
-		title: "Potential SQL Injection",
-		desc: "Input sanitization missing on line 45.",
-	},
-	{
-		id: 2,
-		severity: "low",
-		title: "Unused Variable",
-		desc: 'Variable "tempData" is declared but never used.',
-	},
-]
+// Type for PR issues from Convex
+interface PrIssue {
+	_id: string
+	severity: "error" | "warning" | "info"
+	title: string
+	description: string
+	filePath: string
+	lineNumber?: number
+	suggestion?: string
+	resolved: boolean
+}
 
 export function TaskDetailView({
 	task,
@@ -122,9 +86,7 @@ export function TaskDetailView({
 	onUpdate,
 }: TaskDetailViewProps) {
 	const [activeTab, setActiveTab] = useState("status")
-	const [openFiles, setOpenFiles] = useState<Record<string, boolean>>({
-		"src/utils/cart.js": true,
-	})
+	const [openFiles, setOpenFiles] = useState<Record<string, boolean>>({})
 	const [showDependencyPicker, setShowDependencyPicker] = useState(false)
 	const toast = useToast()
 
@@ -133,6 +95,15 @@ export function TaskDetailView({
 
 	// Fetch task phases from Convex
 	const phases = useQuery(api.taskPhases.listByTask, { taskId }) ?? []
+
+	// Fetch PR data for this task
+	const pullRequest = useQuery(api.pullRequests.getByTask, { taskId })
+
+	// Fetch PR issues if we have a PR
+	const prIssues = useQuery(
+		api.pullRequests.listIssues,
+		pullRequest?._id ? { pullRequestId: pullRequest._id } : "skip",
+	) as PrIssue[] | undefined
 
 	// Set of phases that are applicable to this task (from the template)
 	const applicablePhases = new Set(phases.map((p) => p.phase))
@@ -952,37 +923,51 @@ export function TaskDetailView({
 													Detected Issues
 												</h3>
 												<div className="space-y-3">
-													{aiIssues.map((issue) => (
-														<div
-															key={issue.id}
-															className="bg-surface/50 border border-border rounded-lg p-4 flex items-start"
-														>
+													{prIssues && prIssues.length > 0 ? (
+														prIssues.filter(issue => !issue.resolved).map((issue) => (
 															<div
-																className={`mt-0.5 mr-3 flex-shrink-0 ${
-																	issue.severity === "high"
-																		? "text-red-400"
-																		: "text-amber-400"
-																}`}
+																key={issue._id}
+																className="bg-surface/50 border border-border rounded-lg p-4 flex items-start"
 															>
-																<AlertTriangle size={18} />
+																<div
+																	className={`mt-0.5 mr-3 flex-shrink-0 ${
+																		issue.severity === "error"
+																			? "text-red-400"
+																			: issue.severity === "warning"
+																				? "text-amber-400"
+																				: "text-blue-400"
+																	}`}
+																>
+																	<AlertTriangle size={18} />
+																</div>
+																<div className="flex-1 min-w-0">
+																	<h4 className="text-foreground font-medium text-sm">
+																		{issue.title}
+																	</h4>
+																	<p className="text-muted-foreground text-sm mt-1">
+																		{issue.description}
+																	</p>
+																	{issue.filePath && (
+																		<p className="text-xs text-muted-foreground mt-1 font-mono">
+																			{issue.filePath}{issue.lineNumber ? `:${issue.lineNumber}` : ""}
+																		</p>
+																	)}
+																</div>
+																<Button
+																	variant="outline"
+																	size="sm"
+																	className="ml-3 shrink-0"
+																>
+																	Auto-fix
+																</Button>
 															</div>
-															<div>
-																<h4 className="text-foreground font-medium text-sm">
-																	{issue.title}
-																</h4>
-																<p className="text-muted-foreground text-sm mt-1">
-																	{issue.desc}
-																</p>
-															</div>
-															<Button
-																variant="outline"
-																size="sm"
-																className="ml-auto"
-															>
-																Auto-fix
-															</Button>
+														))
+													) : (
+														<div className="text-center py-8 text-muted-foreground">
+															<CheckCircle2 size={32} className="mx-auto mb-2 text-green-500" />
+															<p className="text-sm">No issues detected</p>
 														</div>
-													))}
+													)}
 												</div>
 											</div>
 										</div>
@@ -1310,84 +1295,46 @@ export function TaskDetailView({
 
 									<TabsContent value="diff" className="!mt-0">
 										<div className="space-y-4">
-											{mockDiffs.map((file) => (
-												<div
-													key={file.filename}
-													className="bg-background rounded-lg border border-border overflow-hidden"
-												>
-													<button
-														type="button"
-														onClick={() => toggleFile(file.filename)}
-														className="w-full flex items-center justify-between p-3 bg-surface/50 hover:bg-surface transition-colors border-b border-border"
-													>
-														<div className="flex items-center space-x-2 text-sm font-mono text-foreground">
-															{openFiles[file.filename] ? (
-																<ChevronDown size={16} />
-															) : (
-																<ChevronRight size={16} />
-															)}
-															<span>{file.filename}</span>
-														</div>
-														<span className="text-xs text-muted-foreground">
-															4 changes
-														</span>
-													</button>
-													{openFiles[file.filename] && (
-														<div className="font-mono text-sm leading-6">
-															{file.lines.map((line) => (
-																<div
-																	key={line.line}
-																	className={`flex ${
-																		line.type === "add"
-																			? "bg-green-500/10"
-																			: line.type === "remove"
-																				? "bg-red-500/10"
-																				: ""
-																	}`}
-																>
-																	<div className="w-10 text-muted-foreground text-right pr-3 select-none border-r border-border/50 bg-surface/30">
-																		{line.line}
-																	</div>
-																	<div className="w-6 text-muted-foreground text-center select-none">
-																		{line.type === "add"
-																			? "+"
-																			: line.type === "remove"
-																				? "-"
-																				: ""}
-																	</div>
-																	<div
-																		className={`flex-1 pr-4 whitespace-pre ${
-																			line.type === "add"
-																				? "text-green-300"
-																				: line.type === "remove"
-																					? "text-red-300"
-																					: "text-muted-foreground"
-																		}`}
-																	>
-																		{line.text}
-																	</div>
-																</div>
-															))}
-														</div>
-													)}
-												</div>
-											))}
-											<div className="mt-4 flex justify-end">
-												{task.prCreated ? (
-													<Button
-														variant="outline"
-														onClick={() => setActiveTab("pr")}
-													>
-														<GitPullRequest size={16} className="mr-2" /> View
-														PR #{task.prNumber}
-													</Button>
-												) : (
+											{pullRequest ? (
+												<>
+													<div className="bg-surface border border-border rounded-lg p-6 text-center">
+														<GitPullRequest size={32} className="mx-auto mb-3 text-muted-foreground" />
+														<h3 className="text-lg font-medium text-foreground mb-2">
+															View Diff on GitHub
+														</h3>
+														<p className="text-sm text-muted-foreground mb-4">
+															PR #{pullRequest.prNumber} - {pullRequest.title}
+														</p>
+														{pullRequest.url && (
+															<Button
+																variant="outline"
+																onClick={() => window.open(pullRequest.url, "_blank")}
+															>
+																<Globe size={16} className="mr-2" />
+																Open on GitHub
+															</Button>
+														)}
+													</div>
+													<div className="text-xs text-muted-foreground text-center">
+														Branch: <code className="bg-surface px-1.5 py-0.5 rounded">{pullRequest.branch}</code>
+														{" → "}
+														<code className="bg-surface px-1.5 py-0.5 rounded">{pullRequest.baseBranch}</code>
+													</div>
+												</>
+											) : (
+												<div className="bg-surface border border-border rounded-lg p-8 text-center">
+													<FileText size={32} className="mx-auto mb-3 text-muted-foreground" />
+													<h3 className="text-lg font-medium text-foreground mb-2">
+														No Changes Yet
+													</h3>
+													<p className="text-sm text-muted-foreground mb-4">
+														Code changes will appear here once the implementation phase begins.
+													</p>
 													<Button onClick={handleCreatePR}>
-														<GitPullRequest size={16} className="mr-2" /> Create
-														PR
+														<GitPullRequest size={16} className="mr-2" /> Create PR
 													</Button>
-												)}
-											</div>
+												</div>
+											)}
 										</div>
 									</TabsContent>
 								</div>

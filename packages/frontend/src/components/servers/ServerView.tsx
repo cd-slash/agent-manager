@@ -7,6 +7,8 @@ import {
 	type FilterConfig,
 	GenericListView,
 } from "@/components/layouts/GenericListView"
+import { LogsModal } from "@/components/modals/LogsModal"
+import { TerminalInfoModal } from "@/components/modals/TerminalInfoModal"
 import { useToast } from "@/components/ToastProvider"
 import { Button } from "@/components/ui/button"
 import { StatusBadge } from "@/components/ui/status-badge"
@@ -36,9 +38,11 @@ const statusFilters: FilterConfig[] = [
 export function ServerView({ servers, onSelectServer }: ServerViewProps) {
 	const [isRefreshing, setIsRefreshing] = useState(false)
 	const [selectedServers, setSelectedServers] = useState<ServerType[]>([])
-	const [_clearSelectionFn, setClearSelectionFn] = useState<
+	const [clearSelectionFn, setClearSelectionFn] = useState<
 		(() => void) | null
 	>(null)
+	const [isTerminalModalOpen, setIsTerminalModalOpen] = useState(false)
+	const [isLogsModalOpen, setIsLogsModalOpen] = useState(false)
 	const syncDevices = useAction(api.tailscale.syncDevices)
 	const toast = useToast()
 
@@ -158,17 +162,13 @@ export function ServerView({ servers, onSelectServer }: ServerViewProps) {
 						icon={<Terminal size={16} />}
 						label="Terminal"
 						count={selectedCount}
-						onClick={() => {
-							// TODO: Implement open terminal
-						}}
+						onClick={() => setIsTerminalModalOpen(true)}
 					/>
 					<HeaderSelectionButton
 						icon={<FileText size={16} />}
-						label="Logs"
+						label="Metrics"
 						count={selectedCount}
-						onClick={() => {
-							// TODO: Implement view logs
-						}}
+						onClick={() => setIsLogsModalOpen(true)}
 					/>
 					<HeaderDivider />
 				</>
@@ -193,20 +193,38 @@ export function ServerView({ servers, onSelectServer }: ServerViewProps) {
 	)
 
 	return (
-		<GenericListView
-			columns={columns}
-			data={servers}
-			onRowClick={(server) => onSelectServer(server.id)}
-			enableRowSelection
-			includeSelectionColumn
-			enableSearch
-			searchPlaceholder="Search servers..."
-			searchFields={["name", "ip", "region"]}
-			filters={statusFilters}
-			headerActions={headerActions}
-			onSelectionChange={handleSelectionChange}
-			getRowId={(row) => row.id.toString()}
-			className="p-page"
-		/>
+		<>
+			<GenericListView
+				columns={columns}
+				data={servers}
+				onRowClick={(server) => onSelectServer(server.id)}
+				enableRowSelection
+				includeSelectionColumn
+				enableSearch
+				searchPlaceholder="Search servers..."
+				searchFields={["name", "ip", "region"]}
+				filters={statusFilters}
+				headerActions={headerActions}
+				onSelectionChange={handleSelectionChange}
+				getRowId={(row) => row.id.toString()}
+				className="p-page"
+			/>
+			<TerminalInfoModal
+				isOpen={isTerminalModalOpen}
+				onClose={() => {
+					setIsTerminalModalOpen(false)
+					clearSelectionFn?.()
+				}}
+				servers={selectedServers}
+			/>
+			<LogsModal
+				isOpen={isLogsModalOpen}
+				onClose={() => {
+					setIsLogsModalOpen(false)
+					clearSelectionFn?.()
+				}}
+				servers={selectedServers}
+			/>
+		</>
 	)
 }

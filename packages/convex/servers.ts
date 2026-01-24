@@ -58,6 +58,21 @@ export const listByStatus = query({
 	},
 })
 
+// Get latest metrics for a server
+export const getMetrics = query({
+	args: { serverId: v.id("servers") },
+	handler: async (ctx, args) => {
+		const metrics = await ctx.db
+			.query("serverMetrics")
+			.withIndex("by_server_and_timestamp", (q) =>
+				q.eq("serverId", args.serverId),
+			)
+			.order("desc")
+			.first()
+		return metrics
+	},
+})
+
 // Get metrics history for a server
 export const getMetricsHistory = query({
 	args: {
