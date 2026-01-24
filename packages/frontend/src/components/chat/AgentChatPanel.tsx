@@ -92,7 +92,7 @@ export function AgentChatPanel({
 			textarea.style.height = "auto"
 			textarea.style.height = `${textarea.scrollHeight}px`
 		}
-	}, [])
+	}, [chatInput])
 
 	// Auto-scroll to bottom when new messages arrive or loading state changes
 	useEffect(() => {
