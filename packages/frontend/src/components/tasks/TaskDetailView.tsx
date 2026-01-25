@@ -195,6 +195,10 @@ export function TaskDetailView({
 		return ""
 	}
 
+	// Track the message count when streaming started to detect new messages
+	// Defined early so it can be used in chatHistory useMemo
+	const messageCountBeforeStreaming = useRef<number | null>(null)
+
 	// Watch streaming messages for completion and extract structured content
 	const streamingContent = useMemo(() => {
 		if (!streamingMessages || streamingMessages.length === 0) return null
@@ -285,7 +289,15 @@ export function TaskDetailView({
 		// Use currentSessionId (not isAgentProcessing) to keep showing content until
 		// the session is fully cleared, preventing a gap when transitioning from
 		// streaming to the persisted message
-		if (streamingContent?.parts.length && currentSessionId) {
+		//
+		// IMPORTANT: Don't show streaming message if the persisted AI message has already
+		// arrived in chatMessagesData. This prevents duplicate messages in the UI.
+		const baselineCount = messageCountBeforeStreaming.current
+		const hasPersistedAiMessage = baselineCount !== null &&
+			chatMessagesData.length > baselineCount &&
+			chatMessagesData.some((msg, idx) => idx >= baselineCount && msg.sender === "ai")
+
+		if (streamingContent?.parts.length && currentSessionId && !hasPersistedAiMessage) {
 			messages.push({
 				id: "streaming-" + currentSessionId,
 				sender: "ai",
@@ -386,9 +398,6 @@ export function TaskDetailView({
 			setActiveSessionId(task.activeSessionId ?? null)
 		}
 	}, [task.activeSessionId])
-
-	// Track the message count when streaming started to detect new messages
-	const messageCountBeforeStreaming = useRef<number | null>(null)
 
 	// Set the baseline message count when streaming starts
 	useEffect(() => {
