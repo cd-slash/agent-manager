@@ -140,6 +140,10 @@ export function TaskDetailView({
 	const [isCreatingContainer, setIsCreatingContainer] = useState(false)
 	// Track the current streaming session - only used during active execution for real-time display
 	const [currentSessionId, setCurrentSessionId] = useState<string | null>(null)
+	// Track Claude's session ID for resumption (persisted to task)
+	const [activeSessionId, setActiveSessionId] = useState<string | null>(
+		task.activeSessionId ?? null
+	)
 
 	// Fetch chat messages from Convex - this is the persistent history
 	const chatMessagesData = useQuery(api.chat.listByTask, { taskId }) ?? []
@@ -352,11 +356,19 @@ export function TaskDetailView({
 	useEffect(() => {
 		if (task.activeContainerId && pendingMessage) {
 			// Use the stored provider and model from state (set before pending message)
-			executeWithContainer(task.activeContainerId, pendingMessage, selectedProvider, selectedModel)
+			// New container means new session (no sessionId to resume)
+			executeWithContainer(task.activeContainerId, pendingMessage, selectedProvider, selectedModel, null)
 			setPendingMessage(null)
 			setIsCreatingContainer(false)
 		}
 	}, [task.activeContainerId, pendingMessage, selectedProvider, selectedModel])
+
+	// Sync activeSessionId from task when it changes (e.g., from backend update)
+	useEffect(() => {
+		if (task.activeSessionId !== activeSessionId) {
+			setActiveSessionId(task.activeSessionId ?? null)
+		}
+	}, [task.activeSessionId])
 
 	// Clear processing state when streaming completes (result message received)
 	useEffect(() => {
@@ -367,7 +379,7 @@ export function TaskDetailView({
 		}
 	}, [streamingContent?.hasResult, isAgentProcessing])
 
-	const executeWithContainer = async (containerId: string, message: string, provider: Provider, model: Model) => {
+	const executeWithContainer = async (containerId: string, message: string, provider: Provider, model: Model, sessionIdToResume?: string | null) => {
 		setIsAgentProcessing(true)
 		setCurrentSessionId(null) // Reset session before starting new one
 		try {
@@ -407,6 +419,7 @@ export function TaskDetailView({
 				envVars,
 				taskId: taskId as string,
 				projectId: task.projectId as string,
+				sessionId: sessionIdToResume ?? undefined, // Resume Claude session if provided
 			})
 
 			// Track the session for streaming updates
@@ -419,6 +432,20 @@ export function TaskDetailView({
 			setIsAgentProcessing(false)
 		}
 		// Note: isAgentProcessing will be cleared by the useEffect watching streamingMessages
+	}
+
+	// Mutation to clear session for starting fresh
+	const clearActiveSession = useMutation(api.tasks.clearActiveSession)
+
+	const handleNewSession = async () => {
+		try {
+			await clearActiveSession({ taskId })
+			setActiveSessionId(null)
+			toast.info("Session cleared", "Next message will start a fresh conversation")
+		} catch (error) {
+			console.error("Failed to clear session:", error)
+			toast.error("Error", "Failed to clear session")
+		}
 	}
 
 	const handleSendMessage = async (text: string, provider: Provider, model: Model) => {
@@ -436,8 +463,21 @@ export function TaskDetailView({
 		// Check if we have a container assigned
 		const containerId = task.activeContainerId
 
-		if (containerId) {
-			// Container already assigned, execute directly
+		// If we have an active session, we MUST use the same container
+		if (activeSessionId && task.activeContainerId) {
+			// Verify container is available
+			if (!taskContainer || taskContainer.status === "offline") {
+				toast.error(
+					"Session container unavailable",
+					"The container for this session is offline. Click 'New Session' to start fresh."
+				)
+				setIsAgentProcessing(false)
+				return
+			}
+			// Resume session on the same container
+			await executeWithContainer(task.activeContainerId, text, provider, model, activeSessionId)
+		} else if (containerId) {
+			// Container exists but no session - start new session
 			await executeWithContainer(containerId, text, provider, model)
 		} else {
 			// No container assigned, create a new one
@@ -1459,6 +1499,8 @@ export function TaskDetailView({
 										selectedModel={selectedModel}
 										onProviderChange={setSelectedProvider}
 										onModelChange={setSelectedModel}
+										sessionId={activeSessionId}
+										onNewSession={handleNewSession}
 									/>
 								</div>
 							</div>

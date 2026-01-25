@@ -74,6 +74,8 @@ export default defineSchema({
 		currentPhase: v.optional(taskPhaseValidator),
 		phaseUpdatedAt: v.optional(v.number()),
 		activeContainerId: v.optional(v.string()),
+		// Session tracking for chat resumption (requires same container)
+		activeSessionId: v.optional(v.string()),
 		// Planning outputs
 		implementationPrompt: v.optional(v.string()),
 		createdAt: v.number(),
@@ -125,10 +127,13 @@ export default defineSchema({
 		// AI response metadata (only populated for sender: "ai")
 		model: v.optional(v.string()),
 		provider: v.optional(v.string()),
+		// Claude session ID for this message exchange (for session resumption)
+		sessionId: v.optional(v.string()),
 		createdAt: v.number(),
 	})
 		.index("by_project", ["projectId"])
-		.index("by_task", ["taskId"]),
+		.index("by_task", ["taskId"])
+		.index("by_session", ["sessionId"]),
 
 	// History events - audit trail
 	historyEvents: defineTable({

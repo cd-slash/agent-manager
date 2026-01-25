@@ -214,6 +214,7 @@ export const update = mutation({
 		tag: v.optional(v.string()),
 		complexity: v.optional(v.string()),
 		activeContainerId: v.optional(v.string()),
+		activeSessionId: v.optional(v.string()),
 	},
 	handler: async (ctx, args) => {
 		const { id, ...updates } = args
@@ -221,6 +222,42 @@ export const update = mutation({
 		if (!existing) throw new Error("Task not found")
 
 		await patchWithTimestamp(ctx.db, id, updates)
+	},
+})
+
+// Set active session for chat resumption
+// Session is tied to a specific container - must use same container to resume
+export const setActiveSession = mutation({
+	args: {
+		taskId: v.id("tasks"),
+		sessionId: v.string(),
+		containerId: v.string(),
+	},
+	handler: async (ctx, args) => {
+		const task = await ctx.db.get(args.taskId)
+		if (!task) throw new Error("Task not found")
+
+		await ctx.db.patch(args.taskId, {
+			activeSessionId: args.sessionId,
+			activeContainerId: args.containerId,
+			updatedAt: Date.now(),
+		})
+	},
+})
+
+// Clear active session (for starting fresh)
+export const clearActiveSession = mutation({
+	args: {
+		taskId: v.id("tasks"),
+	},
+	handler: async (ctx, args) => {
+		const task = await ctx.db.get(args.taskId)
+		if (!task) throw new Error("Task not found")
+
+		await ctx.db.patch(args.taskId, {
+			activeSessionId: undefined,
+			updatedAt: Date.now(),
+		})
 	},
 })
 

@@ -411,3 +411,37 @@ export const listByStatus = query({
 			.collect()
 	},
 })
+
+// Update agent session ID for a phase (for session resumption tracking)
+export const updateAgentSession = mutation({
+	args: {
+		taskId: v.id("tasks"),
+		phase: taskPhaseValidator,
+		agentSessionId: v.string(),
+		containerId: v.optional(v.string()),
+	},
+	handler: async (ctx, args) => {
+		const phaseDoc = await ctx.db
+			.query("taskPhases")
+			.withIndex("by_task_and_phase", (q) =>
+				q.eq("taskId", args.taskId).eq("phase", args.phase),
+			)
+			.first()
+
+		if (phaseDoc) {
+			await ctx.db.patch(phaseDoc._id, {
+				agentSessionId: args.agentSessionId,
+				containerId: args.containerId,
+			})
+
+			// Also update the task's active session for chat resumption
+			await ctx.db.patch(args.taskId, {
+				activeSessionId: args.agentSessionId,
+				activeContainerId: args.containerId,
+				updatedAt: Date.now(),
+			})
+		}
+
+		return phaseDoc?._id
+	},
+})

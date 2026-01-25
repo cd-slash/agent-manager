@@ -91,6 +91,8 @@ export type TaskDoc = Doc<"tasks"> & {
 	currentPhase?: TaskPhase
 	phaseUpdatedAt?: number
 	activeContainerId?: string
+	// Session tracking for chat resumption (requires same container)
+	activeSessionId?: string
 	// Template
 	templateId?: Id<"taskTemplates">
 	// Planning outputs
@@ -386,6 +388,8 @@ export interface Task {
 	currentPhase?: TaskPhase
 	phaseUpdatedAt?: number
 	activeContainerId?: string
+	// Session tracking for chat resumption (requires same container)
+	activeSessionId?: string
 	implementationPrompt?: string
 	// Template
 	templateId?: string

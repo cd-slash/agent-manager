@@ -65,6 +65,7 @@ export const sendTaskMessage = mutation({
 		sender: senderValidator,
 		model: v.optional(v.string()),
 		provider: v.optional(v.string()),
+		sessionId: v.optional(v.string()),
 	},
 	handler: async (ctx, args) => {
 		// Verify task exists and get project ID
@@ -78,6 +79,7 @@ export const sendTaskMessage = mutation({
 			text: args.text,
 			model: args.model,
 			provider: args.provider,
+			sessionId: args.sessionId,
 			createdAt: Date.now(),
 		})
 

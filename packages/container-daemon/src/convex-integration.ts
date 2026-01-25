@@ -282,6 +282,7 @@ export class ConvexIntegration extends EventEmitter<ConvexIntegrationEvents> {
 		let sequenceNumber = 0
 		let finalResult: string | undefined
 		const accumulatedTextParts: string[] = []
+		let claudeSessionId: string | undefined // Claude's session ID for resumption
 
 		// taskId can be in payload or on the command itself
 		const taskId = payload.taskId || command.taskId
@@ -322,6 +323,7 @@ export class ConvexIntegration extends EventEmitter<ConvexIntegrationEvents> {
 				const data = event.data as {
 					type?: string
 					result?: string
+					session_id?: string
 					message?: {
 						content?: Array<{ type: string; text?: string }>
 					}
@@ -333,6 +335,12 @@ export class ConvexIntegration extends EventEmitter<ConvexIntegrationEvents> {
 					content: JSON.stringify(data),
 					sequenceNumber: sequenceNumber++,
 				})
+
+				// Extract Claude's session ID from system message (for resumption)
+				if (data.type === "system" && data.session_id) {
+					claudeSessionId = data.session_id
+					console.log(`[convex] Claude session ID: ${claudeSessionId}`)
+				}
 
 				// Extract the final result text from the result event
 				if (data.type === "result" && data.result) {
@@ -363,10 +371,25 @@ export class ConvexIntegration extends EventEmitter<ConvexIntegrationEvents> {
 					sender: "ai",
 					model: payload.model,
 					provider: payload.provider,
+					sessionId: claudeSessionId, // Include Claude session ID
 				})
 				console.log(`[convex] AI response added to chat for task ${taskId}`)
 			} catch (error) {
 				console.error(`[convex] Failed to add AI chat message:`, error)
+			}
+		}
+
+		// Update the task's active session for resumption
+		if (taskId && claudeSessionId) {
+			try {
+				await this.client.mutation(api.tasks.setActiveSession, {
+					taskId: taskId as Id<"tasks">,
+					sessionId: claudeSessionId,
+					containerId: this.config.containerId,
+				})
+				console.log(`[convex] Task session updated: ${claudeSessionId}`)
+			} catch (error) {
+				console.error(`[convex] Failed to update task session:`, error)
 			}
 		}
 
@@ -382,7 +405,7 @@ export class ConvexIntegration extends EventEmitter<ConvexIntegrationEvents> {
 			console.error(`[convex] Failed to update agent session status:`, error)
 		}
 
-		return { correlationId, status: "completed" }
+		return { correlationId, claudeSessionId, status: "completed" }
 	}
 
 	private async handleStartPhaseExecution(command: ContainerCommand): Promise<unknown> {

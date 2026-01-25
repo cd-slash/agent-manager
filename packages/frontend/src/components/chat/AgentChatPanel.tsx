@@ -1,4 +1,4 @@
-import { MessageSquare, Send } from "lucide-react"
+import { MessageSquare, RefreshCw, Send } from "lucide-react"
 import { useEffect, useRef, useState, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -79,6 +79,8 @@ interface AgentChatPanelProps {
 	selectedModel?: Model
 	onProviderChange?: (provider: Provider) => void
 	onModelChange?: (model: Model) => void
+	sessionId?: string | null
+	onNewSession?: () => void
 }
 
 export function AgentChatPanel({
@@ -89,6 +91,8 @@ export function AgentChatPanel({
 	selectedModel: externalModel,
 	onProviderChange,
 	onModelChange,
+	sessionId,
+	onNewSession,
 }: AgentChatPanelProps) {
 	const [chatInput, setChatInput] = useState("")
 	// Use external state if provided, otherwise local state
@@ -179,10 +183,30 @@ export function AgentChatPanel({
 
 	return (
 		<div className="flex flex-col h-full">
-			<h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center">
-				<MessageSquare size={16} className="mr-2" />
-				Agent Chat
-			</h3>
+			<div className="flex items-center justify-between mb-3">
+				<h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center">
+					<MessageSquare size={16} className="mr-2" />
+					Agent Chat
+				</h3>
+				{sessionId && (
+					<div className="flex items-center gap-2">
+						<span className="text-[10px] text-muted-foreground font-mono">
+							Session: {sessionId.slice(0, 8)}...
+						</span>
+						{onNewSession && (
+							<Button
+								variant="ghost"
+								size="icon-sm"
+								className="h-5 w-5"
+								onClick={onNewSession}
+								title="Start new session"
+							>
+								<RefreshCw size={12} />
+							</Button>
+						)}
+					</div>
+				)}
+			</div>
 			<div className="bg-surface border border-border rounded-lg flex flex-col flex-1 overflow-hidden">
 				<div
 					ref={scrollContainerRef}

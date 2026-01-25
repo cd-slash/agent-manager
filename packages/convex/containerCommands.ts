@@ -47,6 +47,7 @@ export const startExecution = mutation({
 		taskId: v.optional(v.string()),
 		projectId: v.optional(v.string()),
 		priority: v.optional(commandPriorityValidator),
+		sessionId: v.optional(v.string()), // Claude session ID for resumption
 	},
 	handler: async (ctx, args) => {
 		const now = Date.now()
@@ -69,6 +70,7 @@ export const startExecution = mutation({
 				allowedTools: args.allowedTools,
 				disallowedTools: args.disallowedTools,
 				maxBudget: args.maxBudget,
+				sessionId: args.sessionId,
 			},
 			correlationId,
 			taskId: args.taskId,
