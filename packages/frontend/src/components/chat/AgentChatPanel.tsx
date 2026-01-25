@@ -117,6 +117,9 @@ function renderMessageContent(msg: ChatMessage) {
 	// AI messages with structured parts
 	const groupedParts = groupMessageParts(msg.parts)
 
+	// Debug: log parts info
+	console.log("[AgentChatPanel] Message parts:", msg.parts.length, "Grouped:", groupedParts.length, groupedParts.map(g => g.type))
+
 	return (
 		<div className="space-y-2">
 			{groupedParts.map((group, idx) => {
@@ -265,7 +268,7 @@ export function AgentChatPanel({
 				<div
 					ref={scrollContainerRef}
 					onScroll={handleScroll}
-					className="flex-1 p-4 scrollbar-styled scrollbar-no-margin overflow-x-hidden"
+					className="flex-1 p-4 scrollbar-styled scrollbar-no-margin overflow-x-hidden overflow-y-auto"
 				>
 					<div className="space-y-4">
 						{chatHistory?.map((msg) => (

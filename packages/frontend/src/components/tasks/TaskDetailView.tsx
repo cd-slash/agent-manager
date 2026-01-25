@@ -278,6 +278,9 @@ export function TaskDetailView({
 			parts.push({ type: "text", content: finalResultText })
 		}
 
+		// Debug: log streaming content
+		console.log("[TaskDetailView] streamingContent - parts:", parts.length, "hasResult:", hasResult, "types:", parts.map(p => p.type))
+
 		return { parts, hasResult }
 	}, [streamingMessages])
 
@@ -631,11 +634,11 @@ export function TaskDetailView({
 	}
 
 	return (
-		<div className="flex flex-col h-full bg-background animate-in fade-in duration-300">
+		<div className="flex flex-col h-full bg-background animate-in fade-in duration-300 overflow-hidden">
 			<div className="flex-1 flex overflow-hidden">
-				<div className="flex-1 overflow-y-auto min-w-0">
-					<div className="px-page pt-section shrink-0">
-						<Tabs value={activeTab} onValueChange={setActiveTab}>
+				<div className="flex-1 flex flex-col overflow-hidden min-w-0">
+					<div className="p-page flex-1 flex flex-col overflow-hidden">
+						<Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col flex-1 min-h-0">
 							<TabsList className="w-full justify-start">
 								<TabsTrigger value="chat" className="flex items-center">
 									<MessageSquare size={14} className="mr-1.5" />
@@ -713,10 +716,10 @@ export function TaskDetailView({
 								</TabsTrigger>
 							</TabsList>
 
-							<TabsContent value="chat" className="!mt-0 pt-6">
-								<div className="flex gap-6 h-[calc(100vh-12rem)]">
+							<TabsContent value="chat" className="!mt-0 pt-section flex-1 flex flex-col min-h-0">
+								<div className="flex gap-6 flex-1 min-h-0">
 									{/* Phase sidebar */}
-									<div className="w-48 shrink-0 bg-surface border border-border rounded-lg overflow-hidden">
+									<div className="w-48 shrink-0 self-start bg-surface border border-border rounded-lg overflow-hidden">
 										<div className="p-3 border-b border-border">
 											<h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Phases</h4>
 										</div>
@@ -781,7 +784,7 @@ export function TaskDetailView({
 									</div>
 
 									{/* Chat panel - takes remaining space */}
-									<div className="flex-1 min-w-0">
+									<div className="flex-1 min-w-0 min-h-0 h-full">
 										<AgentChatPanel
 											chatHistory={chatHistory}
 											onSendMessage={handleSendMessage}
@@ -798,9 +801,7 @@ export function TaskDetailView({
 								</div>
 							</TabsContent>
 
-							<div className="py-6">
-								<div className="min-w-0">
-									<TabsContent value="status" className="!mt-0">
+							<TabsContent value="status" className="!mt-0 flex-1 overflow-y-auto min-h-0 pt-section">
 										<div className="space-y-8">
 											{phases.length > 0 && (
 												<section>
@@ -866,9 +867,9 @@ export function TaskDetailView({
 												</div>
 											</section>
 										</div>
-									</TabsContent>
+							</TabsContent>
 
-									<TabsContent value="requirements" className="!mt-0">
+							<TabsContent value="requirements" className="!mt-0 flex-1 overflow-y-auto min-h-0 pt-section">
 										<div className="space-y-8">
 											<section>
 												<h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center">
@@ -1059,28 +1060,28 @@ export function TaskDetailView({
 												</div>
 											</section>
 										</div>
-									</TabsContent>
+							</TabsContent>
 
-									<TabsContent value="planning" className="!mt-0">
-										<PlanningTab
-											taskId={taskId}
-											planningPhase={getPhaseByName("planning")}
-											acceptanceCriteria={task.acceptanceCriteria || []}
-											tests={task.tests || []}
-											implementationPrompt={task.implementationPrompt}
-											activeContainerId={task.activeContainerId}
-										/>
-									</TabsContent>
+							<TabsContent value="planning" className="!mt-0 flex-1 overflow-y-auto min-h-0 pt-section">
+								<PlanningTab
+									taskId={taskId}
+									planningPhase={getPhaseByName("planning")}
+									acceptanceCriteria={task.acceptanceCriteria || []}
+									tests={task.tests || []}
+									implementationPrompt={task.implementationPrompt}
+									activeContainerId={task.activeContainerId}
+								/>
+							</TabsContent>
 
-									<TabsContent value="implementation" className="!mt-0">
-										<ImplementationTab
-											taskId={taskId}
-											implementationPhase={getPhaseByName("implementation")}
-											activeContainerId={task.activeContainerId}
-										/>
-									</TabsContent>
+							<TabsContent value="implementation" className="!mt-0 flex-1 overflow-y-auto min-h-0 pt-section">
+								<ImplementationTab
+									taskId={taskId}
+									implementationPhase={getPhaseByName("implementation")}
+									activeContainerId={task.activeContainerId}
+								/>
+							</TabsContent>
 
-									<TabsContent value="pr" className="!mt-0">
+							<TabsContent value="pr" className="!mt-0 flex-1 overflow-y-auto min-h-0 pt-section">
 										{!task.prCreated ? (
 											<div className="flex flex-col items-center justify-center h-64 text-muted-foreground bg-surface/30 border border-border rounded-lg border-dashed">
 												<GitPullRequest size={48} className="mb-4 opacity-50" />
@@ -1221,9 +1222,9 @@ export function TaskDetailView({
 												</div>
 											</div>
 										)}
-									</TabsContent>
+							</TabsContent>
 
-									<TabsContent value="ai-review" className="!mt-0">
+							<TabsContent value="ai-review" className="!mt-0 flex-1 overflow-y-auto min-h-0 pt-section">
 										<div className="space-y-6">
 											<div className="bg-blue-950/30 border border-blue-900/50 rounded-lg p-5 text-blue-100 flex items-start space-x-4">
 												<Bot
@@ -1336,17 +1337,17 @@ export function TaskDetailView({
 												</div>
 											</div>
 										</div>
-									</TabsContent>
+							</TabsContent>
 
-									<TabsContent value="remediation" className="!mt-0">
-										<RemediationTab
-											taskId={taskId}
-											remediationPhase={getPhaseByName("remediation")}
-											activeContainerId={task.activeContainerId}
-										/>
-									</TabsContent>
+							<TabsContent value="remediation" className="!mt-0 flex-1 overflow-y-auto min-h-0 pt-section">
+								<RemediationTab
+									taskId={taskId}
+									remediationPhase={getPhaseByName("remediation")}
+									activeContainerId={task.activeContainerId}
+								/>
+							</TabsContent>
 
-									<TabsContent value="human-review" className="!mt-0">
+							<TabsContent value="human-review" className="!mt-0 flex-1 overflow-y-auto min-h-0 pt-section">
 										<div className="space-y-6">
 											<div className="bg-surface border border-border rounded-lg p-6">
 												<div className="flex items-center justify-between mb-6">
@@ -1427,9 +1428,9 @@ export function TaskDetailView({
 												</div>
 											</div>
 										</div>
-									</TabsContent>
+							</TabsContent>
 
-									<TabsContent value="merge" className="!mt-0">
+							<TabsContent value="merge" className="!mt-0 flex-1 overflow-y-auto min-h-0 pt-section">
 										<div className="space-y-6">
 											<div className="bg-surface border border-border rounded-lg p-6">
 												<div className="flex items-center justify-between mb-6">
@@ -1656,9 +1657,9 @@ export function TaskDetailView({
 												</div>
 											</div>
 										</div>
-									</TabsContent>
+							</TabsContent>
 
-									<TabsContent value="diff" className="!mt-0">
+							<TabsContent value="diff" className="!mt-0 flex-1 overflow-y-auto min-h-0 pt-section">
 										<div className="space-y-4">
 											{pullRequest ? (
 												<>
@@ -1701,9 +1702,7 @@ export function TaskDetailView({
 												</div>
 											)}
 										</div>
-									</TabsContent>
-								</div>
-							</div>
+							</TabsContent>
 						</Tabs>
 					</div>
 				</div>
