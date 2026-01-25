@@ -199,6 +199,10 @@ export function TaskDetailView({
 	// Defined early so it can be used in chatHistory useMemo
 	const messageCountBeforeStreaming = useRef<number | null>(null)
 
+	// Cache streaming parts so they persist when the streaming message transitions to persisted
+	// Store by message _id to apply parts to the correct persisted message
+	const cachedPartsForMessage = useRef<{ messageId: string | null; parts: ChatMessagePart[] }>({ messageId: null, parts: [] })
+
 	// Watch streaming messages for completion and extract structured content
 	const streamingContent = useMemo(() => {
 		if (!streamingMessages || streamingMessages.length === 0) return null
@@ -248,6 +252,9 @@ export function TaskDetailView({
 					for (const block of content.message.content) {
 						if (block.type === "text" && block.text) {
 							parts.push({ type: "text", content: block.text })
+						} else if (block.type === "thinking" && block.thinking) {
+							// Parse thinking blocks from Claude's extended thinking feature
+							parts.push({ type: "thinking", content: block.thinking })
 						} else if (block.type === "tool_use") {
 							const toolId = block.id
 							parts.push({
@@ -274,16 +281,61 @@ export function TaskDetailView({
 		return { parts, hasResult }
 	}, [streamingMessages])
 
+	// Cache streaming parts when complete so they can be applied to the persisted message
+	// Also cache when the streaming message ID changes (new message arrived)
+	useEffect(() => {
+		if (currentSessionId && streamingContent?.hasResult && streamingContent.parts.length > 0) {
+			// Find the last AI message after the baseline to associate parts with
+			const baselineCount = messageCountBeforeStreaming.current
+			if (baselineCount !== null) {
+				const lastAiMessage = chatMessagesData.find((msg, idx) => idx >= baselineCount && msg.sender === "ai")
+				if (lastAiMessage) {
+					cachedPartsForMessage.current = {
+						messageId: lastAiMessage._id,
+						parts: streamingContent.parts,
+					}
+				}
+			}
+		}
+	}, [currentSessionId, streamingContent?.hasResult, streamingContent?.parts, chatMessagesData])
+
 	// Convert Convex chat messages to the UI format, adding streaming message if active
 	const chatHistory: ChatMessage[] = useMemo(() => {
-		const messages: ChatMessage[] = chatMessagesData.map((msg) => ({
-			id: msg._id,
-			sender: msg.sender,
-			text: msg.text,
-			time: formatTime(msg.createdAt),
-			model: msg.model,
-			provider: msg.provider,
-		}))
+		// First, determine if we have a newly persisted AI message that needs parts
+		const baselineCount = messageCountBeforeStreaming.current
+		const newAiMessage = baselineCount !== null
+			? chatMessagesData.find((msg, idx) => idx >= baselineCount && msg.sender === "ai")
+			: null
+
+		// If we have streaming content with parts and a new AI message, use streaming parts for it
+		// This handles the transition before the useEffect caches the parts
+		const partsForNewMessage = newAiMessage && streamingContent?.parts.length
+			? streamingContent.parts
+			: null
+
+		const messages: ChatMessage[] = chatMessagesData.map((msg) => {
+			// For AI messages, check if we have cached parts for this specific message
+			// Also check if this is the new AI message that should get streaming parts
+			const cached = cachedPartsForMessage.current
+			let parts: ChatMessagePart[] | undefined
+
+			if (msg._id === newAiMessage?._id && partsForNewMessage) {
+				parts = partsForNewMessage
+			} else if (cached.messageId === msg._id && cached.parts.length > 0) {
+				parts = cached.parts
+			}
+
+			return {
+				id: msg._id,
+				sender: msg.sender,
+				text: msg.text,
+				// Apply cached parts to AI messages that don't have native parts
+				parts: msg.sender === "ai" && parts ? parts : undefined,
+				time: formatTime(msg.createdAt),
+				model: msg.model,
+				provider: msg.provider,
+			}
+		})
 
 		// Show streaming content with structure during active processing
 		// Use currentSessionId (not isAgentProcessing) to keep showing content until
@@ -292,10 +344,8 @@ export function TaskDetailView({
 		//
 		// IMPORTANT: Don't show streaming message if the persisted AI message has already
 		// arrived in chatMessagesData. This prevents duplicate messages in the UI.
-		const baselineCount = messageCountBeforeStreaming.current
-		const hasPersistedAiMessage = baselineCount !== null &&
-			chatMessagesData.length > baselineCount &&
-			chatMessagesData.some((msg, idx) => idx >= baselineCount && msg.sender === "ai")
+		// Use the newAiMessage we already computed above
+		const hasPersistedAiMessage = newAiMessage !== null
 
 		if (streamingContent?.parts.length && currentSessionId && !hasPersistedAiMessage) {
 			messages.push({

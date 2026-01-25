@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import type { ChatMessage, ChatMessagePart } from "@/types"
-import { ToolCallCard } from "./ToolCallCard"
+import { ToolCallGroup } from "./ToolCallGroup"
 
 // Agent status during message processing
 export type AgentStatus = "idle" | "waiting_for_container" | "starting_container" | "container_ready" | "thinking"
@@ -19,26 +19,42 @@ const statusLabels: Record<AgentStatus, string> = {
 	thinking: "Agent thinking...",
 }
 
-// Helper to group consecutive text parts together
-function groupMessageParts(parts: ChatMessagePart[]): ChatMessagePart[] {
-	const grouped: ChatMessagePart[] = []
-	let currentText = ""
+// Group message parts: consecutive text parts merged, tool_use and thinking grouped together
+type GroupedPart =
+	| { type: "text"; content: string }
+	| { type: "tool_group"; parts: ChatMessagePart[] }
 
-	for (const part of parts) {
-		if (part.type === "text") {
-			currentText += (currentText ? " " : "") + part.content
-		} else {
-			if (currentText) {
-				grouped.push({ type: "text", content: currentText })
-				currentText = ""
-			}
-			grouped.push(part)
+function groupMessageParts(parts: ChatMessagePart[]): GroupedPart[] {
+	const grouped: GroupedPart[] = []
+	let currentText = ""
+	let currentToolGroup: ChatMessagePart[] = []
+
+	const flushText = () => {
+		if (currentText) {
+			grouped.push({ type: "text", content: currentText })
+			currentText = ""
 		}
 	}
 
-	if (currentText) {
-		grouped.push({ type: "text", content: currentText })
+	const flushToolGroup = () => {
+		if (currentToolGroup.length > 0) {
+			grouped.push({ type: "tool_group", parts: [...currentToolGroup] })
+			currentToolGroup = []
+		}
 	}
+
+	for (const part of parts) {
+		if (part.type === "text") {
+			flushToolGroup()
+			currentText += (currentText ? " " : "") + part.content
+		} else if (part.type === "tool_use" || part.type === "thinking") {
+			flushText()
+			currentToolGroup.push(part)
+		}
+	}
+
+	flushText()
+	flushToolGroup()
 
 	return grouped
 }
@@ -112,14 +128,12 @@ function renderMessageContent(msg: ChatMessage) {
 					)
 				}
 
-				if (group.type === "tool_use") {
+				if (group.type === "tool_group") {
 					return (
-						<ToolCallCard
+						<ToolCallGroup
 							key={idx}
-							toolName={group.toolName!}
-							toolInput={group.toolInput}
-							result={group.result}
-							isStreaming={msg.isStreaming && !group.result}
+							parts={group.parts}
+							isStreaming={msg.isStreaming}
 						/>
 					)
 				}
@@ -251,14 +265,14 @@ export function AgentChatPanel({
 				<div
 					ref={scrollContainerRef}
 					onScroll={handleScroll}
-					className="flex-1 p-4 scrollbar-styled scrollbar-no-margin"
+					className="flex-1 p-4 scrollbar-styled scrollbar-no-margin overflow-x-hidden"
 				>
 					<div className="space-y-4">
 						{chatHistory?.map((msg) => (
 							<div
 								key={msg.id}
 								className={cn(
-									"flex flex-col",
+									"flex flex-col min-w-0",
 									msg.sender === "user" ? "items-end" : "items-start",
 								)}
 							>
@@ -267,7 +281,7 @@ export function AgentChatPanel({
 										{renderMessageContent(msg)}
 									</div>
 								) : (
-									<div className="w-full text-sm text-foreground">
+									<div className="w-full text-sm text-foreground min-w-0 overflow-hidden">
 										{renderMessageContent(msg)}
 									</div>
 								)}

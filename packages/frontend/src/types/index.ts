@@ -125,6 +125,8 @@ export type ChatMessageDoc = Doc<"chatMessages"> & {
 	// AI response metadata (only populated for sender: "ai")
 	model?: string
 	provider?: string
+	// Claude session ID for this message exchange (for session resumption)
+	sessionId?: string
 	createdAt: number
 }
 
@@ -324,7 +326,7 @@ export type TaskTemplateDoc = Doc<"taskTemplates"> & {
 // These can be removed once all components are updated to use Convex types
 
 export interface ChatMessagePart {
-	type: "text" | "tool_use"
+	type: "text" | "tool_use" | "thinking"
 	content: string
 	toolName?: string
 	toolInput?: string
