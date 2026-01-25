@@ -285,16 +285,15 @@ export function AgentChatPanel({
 									msg.sender === "user" ? "items-end" : "items-start",
 								)}
 							>
-								<div
-									className={cn(
-										"max-w-[85%] rounded-lg p-component text-sm shadow-sm",
-										msg.sender === "user"
-											? "bg-primary text-primary-foreground rounded-br-sm"
-											: "bg-surface-elevated text-foreground rounded-bl-sm border border-border",
-									)}
-								>
-									{renderMessageContent(msg)}
-								</div>
+								{msg.sender === "user" ? (
+									<div className="max-w-[85%] rounded-lg rounded-br-sm p-component text-sm shadow-sm bg-primary text-primary-foreground">
+										{renderMessageContent(msg)}
+									</div>
+								) : (
+									<div className="w-full text-sm text-foreground">
+										{renderMessageContent(msg)}
+									</div>
+								)}
 								<span className="text-[10px] text-muted-foreground mt-1 px-compact">
 									{msg.time}{msg.sender === "ai" && msg.model && ` · ${msg.model}`}
 								</span>
@@ -302,12 +301,10 @@ export function AgentChatPanel({
 						))}
 						{isLoading && (
 							<div className="flex flex-col items-start">
-								<div className="bg-surface-elevated text-foreground rounded-lg rounded-bl-sm border border-border p-component text-sm shadow-sm">
-									<div className="flex items-center space-x-1">
-										<div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
-										<div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
-										<div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
-									</div>
+								<div className="flex items-center space-x-1 py-1">
+									<div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+									<div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+									<div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
 								</div>
 								<span className="text-[10px] text-muted-foreground mt-1 px-compact">
 									{statusLabels[agentStatus] || statusLabels.thinking}
