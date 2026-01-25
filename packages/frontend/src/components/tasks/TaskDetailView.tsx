@@ -465,14 +465,6 @@ export function TaskDetailView({
 			}
 			// For anthropic provider, envVars is undefined (use default env)
 
-			console.log("[TaskDetailView] Starting execution with:", {
-				provider,
-				model,
-				hasEnvVars: !!envVars,
-				envVarsKeys: envVars ? Object.keys(envVars) : [],
-				baseUrl: envVars?.ANTHROPIC_BASE_URL,
-			})
-
 			const result = await startExecution({
 				containerId,
 				message,

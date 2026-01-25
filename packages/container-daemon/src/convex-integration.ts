@@ -278,9 +278,6 @@ export class ConvexIntegration extends EventEmitter<ConvexIntegrationEvents> {
 			projectId?: string
 		}
 
-		// Debug: log the provider and envVars received from Convex
-		console.log(`[convex] handleStartExecution - provider: ${payload.provider}, hasEnvVars: ${!!payload.envVars}, baseUrl: ${payload.envVars?.ANTHROPIC_BASE_URL || "not set"}`)
-
 		const correlationId = command.correlationId || crypto.randomUUID()
 		let sequenceNumber = 0
 		let finalResult: string | undefined
