@@ -80,9 +80,15 @@ export class ProcessManager extends EventEmitter {
 		// Build environment variables - start with current env
 		const processEnv = { ...process.env }
 
+		// Debug: log incoming options
+		console.log(`[process] executeStream called - provider: ${options.provider}, hasEnvVars: ${!!options.envVars}`)
+
 		// Apply custom environment variables from options
 		if (options.envVars) {
-			console.log(`[process] Using custom envVars - base URL: ${options.envVars.ANTHROPIC_BASE_URL || "default"}`)
+			console.log(`[process] Applying custom envVars:`)
+			console.log(`[process]   - ANTHROPIC_BASE_URL: ${options.envVars.ANTHROPIC_BASE_URL || "not set"}`)
+			console.log(`[process]   - ANTHROPIC_AUTH_TOKEN: ${options.envVars.ANTHROPIC_AUTH_TOKEN ? "set (hidden)" : "not set"}`)
+			console.log(`[process]   - Clearing CLAUDE_CODE_OAUTH_TOKEN: ${!!options.envVars.ANTHROPIC_AUTH_TOKEN}`)
 			if (options.envVars.ANTHROPIC_AUTH_TOKEN) {
 				processEnv.ANTHROPIC_AUTH_TOKEN = options.envVars.ANTHROPIC_AUTH_TOKEN
 				// Clear CLAUDE_CODE_OAUTH_TOKEN when using a custom auth token (e.g., ZAI provider)
@@ -103,7 +109,15 @@ export class ProcessManager extends EventEmitter {
 			} else {
 				delete processEnv.API_TIMEOUT_MS
 			}
+		} else {
+			console.log(`[process] No custom envVars - using default Anthropic auth`)
 		}
+
+		// Debug: log final environment state for Claude
+		console.log(`[process] Final env for Claude:`)
+		console.log(`[process]   - ANTHROPIC_BASE_URL: ${processEnv.ANTHROPIC_BASE_URL || "not set (default)"}`)
+		console.log(`[process]   - ANTHROPIC_AUTH_TOKEN: ${processEnv.ANTHROPIC_AUTH_TOKEN ? "set" : "not set"}`)
+		console.log(`[process]   - CLAUDE_CODE_OAUTH_TOKEN: ${processEnv.CLAUDE_CODE_OAUTH_TOKEN ? "set" : "not set"}`)
 
 		const proc = spawn("claude", args, {
 			stdio: ["pipe", "pipe", "pipe"],
