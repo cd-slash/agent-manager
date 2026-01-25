@@ -10,7 +10,7 @@ type ToastType = "success" | "error" | "warning" | "info"
 interface ToastOptions {
 	type?: ToastType
 	title: string
-	message?: string
+	message?: string | React.ReactNode
 	duration?: number
 	persist?: boolean
 }
@@ -19,22 +19,22 @@ interface ToastContextValue {
 	toast: (options: ToastOptions) => string | number
 	success: (
 		title: string,
-		message?: string,
+		message?: string | React.ReactNode,
 		options?: Partial<ToastOptions>,
 	) => string | number
 	error: (
 		title: string,
-		message?: string,
+		message?: string | React.ReactNode,
 		options?: Partial<ToastOptions>,
 	) => string | number
 	warning: (
 		title: string,
-		message?: string,
+		message?: string | React.ReactNode,
 		options?: Partial<ToastOptions>,
 	) => string | number
 	info: (
 		title: string,
-		message?: string,
+		message?: string | React.ReactNode,
 		options?: Partial<ToastOptions>,
 	) => string | number
 	dismiss: (id: string | number) => void
@@ -71,8 +71,8 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 					break
 			}
 
-			// Persist to Convex if requested
-			if (persist) {
+			// Persist to Convex if requested (only for string messages)
+			if (persist && typeof message === "string") {
 				createNotification({
 					type,
 					title,
@@ -86,25 +86,25 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 	)
 
 	const success = useCallback(
-		(title: string, message?: string, options?: Partial<ToastOptions>) =>
+		(title: string, message?: string | React.ReactNode, options?: Partial<ToastOptions>) =>
 			toast({ type: "success", title, message, ...options }),
 		[toast],
 	)
 
 	const error = useCallback(
-		(title: string, message?: string, options?: Partial<ToastOptions>) =>
+		(title: string, message?: string | React.ReactNode, options?: Partial<ToastOptions>) =>
 			toast({ type: "error", title, message, ...options }),
 		[toast],
 	)
 
 	const warning = useCallback(
-		(title: string, message?: string, options?: Partial<ToastOptions>) =>
+		(title: string, message?: string | React.ReactNode, options?: Partial<ToastOptions>) =>
 			toast({ type: "warning", title, message, ...options }),
 		[toast],
 	)
 
 	const info = useCallback(
-		(title: string, message?: string, options?: Partial<ToastOptions>) =>
+		(title: string, message?: string | React.ReactNode, options?: Partial<ToastOptions>) =>
 			toast({ type: "info", title, message, ...options }),
 		[toast],
 	)

@@ -1,9 +1,22 @@
 import { MessageSquare, RefreshCw, Send } from "lucide-react"
 import { useEffect, useRef, useState, useCallback } from "react"
+import ReactMarkdown from "react-markdown"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import type { ChatMessage, ChatMessagePart } from "@/types"
 import { ToolCallCard } from "./ToolCallCard"
+
+// Agent status during message processing
+export type AgentStatus = "idle" | "waiting_for_container" | "starting_container" | "container_ready" | "thinking"
+
+// Status message labels
+const statusLabels: Record<AgentStatus, string> = {
+	idle: "",
+	waiting_for_container: "Waiting for container...",
+	starting_container: "Starting container...",
+	container_ready: "Container ready",
+	thinking: "Agent thinking...",
+}
 
 // Helper to group consecutive text parts together
 function groupMessageParts(parts: ChatMessagePart[]): ChatMessagePart[] {
@@ -29,11 +42,59 @@ function groupMessageParts(parts: ChatMessagePart[]): ChatMessagePart[] {
 	return grouped
 }
 
+// Markdown component styling
+function MarkdownContent({ content }: { content: string }) {
+	return (
+		<ReactMarkdown
+			components={{
+				p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+				h1: ({ children }) => <h1 className="text-lg font-bold mb-2 mt-3 first:mt-0">{children}</h1>,
+				h2: ({ children }) => <h2 className="text-base font-bold mb-2 mt-3 first:mt-0">{children}</h2>,
+				h3: ({ children }) => <h3 className="text-sm font-bold mb-1 mt-2 first:mt-0">{children}</h3>,
+				ul: ({ children }) => <ul className="list-disc list-inside mb-2 space-y-1">{children}</ul>,
+				ol: ({ children }) => <ol className="list-decimal list-inside mb-2 space-y-1">{children}</ol>,
+				li: ({ children }) => <li className="text-sm">{children}</li>,
+				code: ({ className, children }) => {
+					const isInline = !className
+					if (isInline) {
+						return <code className="bg-background px-1 py-0.5 rounded text-xs font-mono">{children}</code>
+					}
+					return (
+						<code className="block bg-background p-2 rounded text-xs font-mono overflow-x-auto my-2">
+							{children}
+						</code>
+					)
+				},
+				pre: ({ children }) => <pre className="bg-background p-2 rounded overflow-x-auto my-2">{children}</pre>,
+				strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+				em: ({ children }) => <em className="italic">{children}</em>,
+				a: ({ href, children }) => (
+					<a href={href} className="text-feature-blue hover:underline" target="_blank" rel="noopener noreferrer">
+						{children}
+					</a>
+				),
+				blockquote: ({ children }) => (
+					<blockquote className="border-l-2 border-muted pl-3 my-2 text-muted-foreground italic">
+						{children}
+					</blockquote>
+				),
+			}}
+		>
+			{content}
+		</ReactMarkdown>
+	)
+}
+
 // Render message content with structured parts
 function renderMessageContent(msg: ChatMessage) {
-	// User messages or messages without parts: plain text
-	if (msg.sender === "user" || !msg.parts || msg.parts.length === 0) {
+	// User messages: plain text (no markdown parsing needed)
+	if (msg.sender === "user") {
 		return <span className="whitespace-pre-wrap">{msg.text}</span>
+	}
+
+	// AI messages without parts: render as markdown
+	if (!msg.parts || msg.parts.length === 0) {
+		return <MarkdownContent content={msg.text} />
 	}
 
 	// AI messages with structured parts
@@ -44,9 +105,9 @@ function renderMessageContent(msg: ChatMessage) {
 			{groupedParts.map((group, idx) => {
 				if (group.type === "text") {
 					return (
-						<span key={idx} className="whitespace-pre-wrap block">
-							{group.content}
-						</span>
+						<div key={idx} className="block">
+							<MarkdownContent content={group.content} />
+						</div>
 					)
 				}
 
@@ -75,6 +136,7 @@ interface AgentChatPanelProps {
 	chatHistory?: ChatMessage[]
 	onSendMessage: (text: string, provider: Provider, model: Model) => void
 	isLoading?: boolean
+	agentStatus?: AgentStatus
 	selectedProvider?: Provider
 	selectedModel?: Model
 	onProviderChange?: (provider: Provider) => void
@@ -87,6 +149,7 @@ export function AgentChatPanel({
 	chatHistory,
 	onSendMessage,
 	isLoading = false,
+	agentStatus = "idle",
 	selectedProvider: externalProvider,
 	selectedModel: externalModel,
 	onProviderChange,
@@ -247,7 +310,7 @@ export function AgentChatPanel({
 									</div>
 								</div>
 								<span className="text-[10px] text-muted-foreground mt-1 px-compact">
-									Agent thinking...
+									{statusLabels[agentStatus] || statusLabels.thinking}
 								</span>
 							</div>
 						)}

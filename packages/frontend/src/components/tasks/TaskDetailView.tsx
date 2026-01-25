@@ -29,7 +29,7 @@ import {
 	XCircle,
 } from "lucide-react"
 import { useState, useEffect, useMemo } from "react"
-import { AgentChatPanel, type Provider, type Model } from "@/components/chat/AgentChatPanel"
+import { AgentChatPanel, type Provider, type Model, type AgentStatus } from "@/components/chat/AgentChatPanel"
 import { DependencyPickerModal } from "@/components/modals/DependencyPickerModal"
 import { useCreateContainer } from "@/hooks/useGatewayCommand"
 import { useToast } from "@/components/ToastProvider"
@@ -159,6 +159,15 @@ export function TaskDetailView({
 		api.containerPool.get,
 		task.activeContainerId ? { containerId: task.activeContainerId } : "skip"
 	)
+
+	// Compute agent status based on current state
+	const agentStatus: AgentStatus = useMemo(() => {
+		if (!isAgentProcessing) return "idle"
+		if (isCreatingContainer && !task.activeContainerId) return "waiting_for_container"
+		if (isCreatingContainer && task.activeContainerId && taskContainer?.status !== "online") return "starting_container"
+		if (isCreatingContainer && taskContainer?.status === "online") return "container_ready"
+		return "thinking"
+	}, [isAgentProcessing, isCreatingContainer, task.activeContainerId, taskContainer?.status])
 
 	// Helper functions for formatting tool displays
 	const formatToolDisplay = (name: string, input: unknown): string => {
@@ -503,7 +512,7 @@ export function TaskDetailView({
 					branch: project?.branch,
 				})
 				// Container creation succeeded - show confirmation toast
-				toast.success("Container created", `Container "${result.name}" is ready`)
+				toast.success("Container created", <>Container <code className="bg-background px-1 py-0.5 rounded text-xs font-mono">{result.name}</code> is ready</>)
 				// The backend will assign activeContainerId which will trigger the useEffect above
 			} catch (error) {
 				console.error("Failed to create container:", error)
@@ -1495,6 +1504,7 @@ export function TaskDetailView({
 										chatHistory={chatHistory}
 										onSendMessage={handleSendMessage}
 										isLoading={isAgentProcessing && !streamingContent?.parts.length}
+										agentStatus={agentStatus}
 										selectedProvider={selectedProvider}
 										selectedModel={selectedModel}
 										onProviderChange={setSelectedProvider}
