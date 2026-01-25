@@ -84,14 +84,13 @@ export class ProcessManager extends EventEmitter {
 		if (options.envVars) {
 			console.log(`[process] Using custom envVars - base URL: ${options.envVars.ANTHROPIC_BASE_URL || "default"}`)
 			if (options.envVars.ANTHROPIC_AUTH_TOKEN) {
-				processEnv.ANTHROPIC_AUTH_TOKEN = options.envVars.ANTHROPIC_AUTH_TOKEN
-				// Clear CLAUDE_CODE_OAUTH_TOKEN when using a custom auth token (e.g., ZAI provider)
+				// Claude CLI expects ANTHROPIC_API_KEY for API key authentication
+				processEnv.ANTHROPIC_API_KEY = options.envVars.ANTHROPIC_AUTH_TOKEN
+				// Clear CLAUDE_CODE_OAUTH_TOKEN when using API key auth (e.g., ZAI provider)
 				// Claude CLI prioritizes CLAUDE_CODE_OAUTH_TOKEN, so we need to remove it
-				// to ensure the custom ANTHROPIC_AUTH_TOKEN and ANTHROPIC_BASE_URL are used
 				delete processEnv.CLAUDE_CODE_OAUTH_TOKEN
 			} else {
-				// Clear the env var if not set (for Anthropic provider)
-				delete processEnv.ANTHROPIC_AUTH_TOKEN
+				delete processEnv.ANTHROPIC_API_KEY
 			}
 			if (options.envVars.ANTHROPIC_BASE_URL) {
 				processEnv.ANTHROPIC_BASE_URL = options.envVars.ANTHROPIC_BASE_URL
@@ -227,9 +226,12 @@ export class ProcessManager extends EventEmitter {
 		// Apply custom environment variables from options
 		if (options.envVars) {
 			if (options.envVars.ANTHROPIC_AUTH_TOKEN) {
-				processEnv.ANTHROPIC_AUTH_TOKEN = options.envVars.ANTHROPIC_AUTH_TOKEN
+				// Claude CLI expects ANTHROPIC_API_KEY for API key authentication
+				processEnv.ANTHROPIC_API_KEY = options.envVars.ANTHROPIC_AUTH_TOKEN
+				// Clear CLAUDE_CODE_OAUTH_TOKEN when using API key auth
+				delete processEnv.CLAUDE_CODE_OAUTH_TOKEN
 			} else {
-				delete processEnv.ANTHROPIC_AUTH_TOKEN
+				delete processEnv.ANTHROPIC_API_KEY
 			}
 			if (options.envVars.ANTHROPIC_BASE_URL) {
 				processEnv.ANTHROPIC_BASE_URL = options.envVars.ANTHROPIC_BASE_URL
