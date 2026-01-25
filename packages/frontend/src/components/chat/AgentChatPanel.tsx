@@ -1,6 +1,7 @@
 import { MessageSquare, RefreshCw, Send } from "lucide-react"
 import { useEffect, useRef, useState, useCallback } from "react"
 import ReactMarkdown from "react-markdown"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import type { ChatMessage, ChatMessagePart } from "@/types"
@@ -270,9 +271,16 @@ export function AgentChatPanel({
 										{renderMessageContent(msg)}
 									</div>
 								)}
-								<span className="text-[10px] text-muted-foreground mt-1 px-compact">
-									{msg.time}{msg.sender === "ai" && msg.model && ` · ${msg.model}`}
-								</span>
+								<div className="flex items-center gap-1.5 mt-1.5">
+									<Badge variant="outline" className="text-[10px] font-normal py-0 px-1.5">
+										{msg.time}
+									</Badge>
+									{msg.sender === "ai" && msg.model && (
+										<Badge variant="outline" className="text-[10px] font-normal py-0 px-1.5">
+											{msg.model}
+										</Badge>
+									)}
+								</div>
 							</div>
 						))}
 						{isLoading && (
