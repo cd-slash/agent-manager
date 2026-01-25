@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect } from "react"
+import { useState, useMemo } from "react"
 import { ChevronRight, ChevronDown, Terminal, Check, X } from "lucide-react"
 import {
 	Collapsible,
@@ -40,64 +40,16 @@ function parseStringValue(value: unknown): string {
 	return String(value)
 }
 
-// Expandable key-value row component (renders as grid row via display:contents)
-function ExpandableValue({ label, value, resetKey }: { label: string; value: string; resetKey: number }) {
-	const [isExpanded, setIsExpanded] = useState(false)
-	const [isTruncated, setIsTruncated] = useState(false)
-	const textRef = useRef<HTMLSpanElement>(null)
-
-	// Reset expanded state when resetKey changes (parent collapsed)
-	useEffect(() => {
-		setIsExpanded(false)
-	}, [resetKey])
-
-	// Check if text is truncated
-	useEffect(() => {
-		const checkTruncation = () => {
-			if (textRef.current) {
-				setIsTruncated(textRef.current.scrollWidth > textRef.current.clientWidth)
-			}
-		}
-		checkTruncation()
-		// Recheck on window resize
-		window.addEventListener("resize", checkTruncation)
-		return () => window.removeEventListener("resize", checkTruncation)
-	}, [value, isExpanded])
-
-	// Check if value has newlines (always needs expansion if so)
-	const hasNewlines = value.includes("\n")
-	const showExpandButton = !isExpanded && (isTruncated || hasNewlines)
-
+// Key-value row component (renders as grid row)
+function KeyValueRow({ label, value }: { label: string; value: string }) {
 	return (
 		<>
 			{/* Key column */}
 			<span className="text-muted-foreground py-0.5 pr-2">{label}:</span>
 			{/* Value column */}
-			<div className="py-0.5 min-w-0">
-				{isExpanded ? (
-					<span className="text-foreground whitespace-pre-wrap break-words">
-						{value}
-					</span>
-				) : (
-					<div className="flex items-center gap-1 min-w-0">
-						<span
-							ref={textRef}
-							className="text-foreground truncate flex-1 min-w-0 whitespace-nowrap"
-						>
-							{hasNewlines ? value.split("\n")[0] : value}
-						</span>
-						{showExpandButton && (
-							<button
-								type="button"
-								onClick={() => setIsExpanded(true)}
-								className="text-primary hover:underline shrink-0"
-							>
-								show more
-							</button>
-						)}
-					</div>
-				)}
-			</div>
+			<span className="text-foreground py-0.5 whitespace-pre-wrap break-words">
+				{value}
+			</span>
 		</>
 	)
 }
@@ -116,16 +68,6 @@ export function ToolCallCard({
 	isStreaming,
 }: ToolCallCardProps) {
 	const [isOpen, setIsOpen] = useState(false)
-	// Increment this when closing to reset all ExpandableValue components
-	const [resetKey, setResetKey] = useState(0)
-
-	const handleOpenChange = (open: boolean) => {
-		setIsOpen(open)
-		if (!open) {
-			// Reset all expanded values when closing
-			setResetKey((k) => k + 1)
-		}
-	}
 
 	// Parse tool input as JSON if possible
 	const parsedInput = useMemo(() => {
@@ -142,7 +84,7 @@ export function ToolCallCard({
 	}, [toolInput])
 
 	return (
-		<Collapsible open={isOpen} onOpenChange={handleOpenChange}>
+		<Collapsible open={isOpen} onOpenChange={setIsOpen}>
 			<CollapsibleTrigger asChild>
 				<button
 					type="button"
@@ -178,11 +120,10 @@ export function ToolCallCard({
 							{parsedInput ? (
 								<div className="grid grid-cols-[auto_1fr] items-start">
 									{Object.entries(parsedInput).map(([key, value]) => (
-										<ExpandableValue
+										<KeyValueRow
 											key={key}
 											label={formatKeyName(key)}
 											value={parseStringValue(value)}
-											resetKey={resetKey}
 										/>
 									))}
 								</div>
