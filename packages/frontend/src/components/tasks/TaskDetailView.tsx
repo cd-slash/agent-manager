@@ -37,6 +37,11 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
+import {
+	Tooltip,
+	TooltipContent,
+	TooltipTrigger,
+} from "@/components/ui/tooltip"
 import type {
 	ChatMessage,
 	ChatMessagePart,
@@ -87,7 +92,7 @@ export function TaskDetailView({
 	project,
 	onUpdate,
 }: TaskDetailViewProps) {
-	const [activeTab, setActiveTab] = useState("status")
+	const [activeTab, setActiveTab] = useState("chat")
 	const [openFiles, setOpenFiles] = useState<Record<string, boolean>>({})
 	const [showDependencyPicker, setShowDependencyPicker] = useState(false)
 	const toast = useToast()
@@ -533,68 +538,169 @@ export function TaskDetailView({
 					<div className="px-page pt-section shrink-0">
 						<Tabs value={activeTab} onValueChange={setActiveTab}>
 							<TabsList className="w-full justify-start">
+								<TabsTrigger value="chat" className="flex items-center">
+									<MessageSquare size={14} className="mr-1.5" />
+									Chat
+								</TabsTrigger>
 								<TabsTrigger value="status" className="flex items-center">
 									<Activity size={14} className="mr-1.5" />
 									Status
 								</TabsTrigger>
-								<TabsTrigger
-									value="requirements"
-									className={getTabClassName("requirements")}
-								>
-									<ClipboardList size={14} className="mr-1.5" />
-									Requirements
-								</TabsTrigger>
-								<TabsTrigger
-									value="planning"
-									className={getTabClassName("planning")}
-								>
-									<FileText size={14} className="mr-1.5" />
-									Planning
-								</TabsTrigger>
-								<TabsTrigger
-									value="implementation"
-									className={getTabClassName("implementation")}
-								>
-									<Terminal size={14} className="mr-1.5" />
-									Implementation
-								</TabsTrigger>
+								{/* Phase tabs with tooltips for non-applicable phases */}
+								{([
+									{ value: "requirements", phase: "requirements" as TaskPhase, label: "Requirements", icon: ClipboardList },
+									{ value: "planning", phase: "planning" as TaskPhase, label: "Planning", icon: FileText },
+									{ value: "implementation", phase: "implementation" as TaskPhase, label: "Implementation", icon: Terminal },
+								]).map(({ value, phase, label, icon: Icon }) => {
+									const isApplicable = isPhaseApplicable(phase)
+									return (
+										<Tooltip key={value}>
+											<TooltipTrigger asChild>
+												<span>
+													<TabsTrigger
+														value={value}
+														disabled={!isApplicable}
+														className={getTabClassName(phase)}
+													>
+														<Icon size={14} className="mr-1.5" />
+														{label}
+													</TabsTrigger>
+												</span>
+											</TooltipTrigger>
+											{!isApplicable && (
+												<TooltipContent side="bottom">
+													<p className="text-xs">{label} is not applicable to {taskTemplate?.name || "this task type"}</p>
+												</TooltipContent>
+											)}
+										</Tooltip>
+									)
+								})}
 								<TabsTrigger value="pr" className="flex items-center">
 									<GitPullRequest size={14} className="mr-1.5" />
 									Pull Request
 								</TabsTrigger>
-								<TabsTrigger
-									value="ai-review"
-									className={getTabClassName("ai_review")}
-								>
-									<Bot size={14} className="mr-1.5" />
-									AI Review
-								</TabsTrigger>
-								<TabsTrigger
-									value="remediation"
-									className={getTabClassName("remediation")}
-								>
-									<Wrench size={14} className="mr-1.5" />
-									Remediation
-								</TabsTrigger>
-								<TabsTrigger
-									value="human-review"
-									className={getTabClassName("human_review")}
-								>
-									<UserCheck size={14} className="mr-1.5" />
-									Human Review
-								</TabsTrigger>
-								<TabsTrigger value="merge" className={getTabClassName("merge")}>
-									<GitMerge size={14} className="mr-1.5" />
-									Merge
-								</TabsTrigger>
+								{([
+									{ value: "ai-review", phase: "ai_review" as TaskPhase, label: "AI Review", icon: Bot },
+									{ value: "remediation", phase: "remediation" as TaskPhase, label: "Remediation", icon: Wrench },
+									{ value: "human-review", phase: "human_review" as TaskPhase, label: "Human Review", icon: UserCheck },
+									{ value: "merge", phase: "merge" as TaskPhase, label: "Merge", icon: GitMerge },
+								]).map(({ value, phase, label, icon: Icon }) => {
+									const isApplicable = isPhaseApplicable(phase)
+									return (
+										<Tooltip key={value}>
+											<TooltipTrigger asChild>
+												<span>
+													<TabsTrigger
+														value={value}
+														disabled={!isApplicable}
+														className={getTabClassName(phase)}
+													>
+														<Icon size={14} className="mr-1.5" />
+														{label}
+													</TabsTrigger>
+												</span>
+											</TooltipTrigger>
+											{!isApplicable && (
+												<TooltipContent side="bottom">
+													<p className="text-xs">{label} is not applicable to {taskTemplate?.name || "this task type"}</p>
+												</TooltipContent>
+											)}
+										</Tooltip>
+									)
+								})}
 								<TabsTrigger value="diff" className="flex items-center">
 									<GitPullRequest size={14} className="mr-1.5" />
 									Diff
 								</TabsTrigger>
 							</TabsList>
 
-							<div className="py-6 flex gap-page items-start">
-								<div className="flex-1 min-w-0">
+							<TabsContent value="chat" className="!mt-0 pt-6">
+								<div className="flex gap-6 h-[calc(100vh-12rem)]">
+									{/* Phase sidebar */}
+									<div className="w-48 shrink-0 bg-surface border border-border rounded-lg overflow-hidden">
+										<div className="p-3 border-b border-border">
+											<h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Phases</h4>
+										</div>
+										<div className="p-2 space-y-1">
+											{([
+												{ phase: "requirements" as TaskPhase, label: "Requirements", icon: ClipboardList },
+												{ phase: "planning" as TaskPhase, label: "Planning", icon: FileText },
+												{ phase: "implementation" as TaskPhase, label: "Implementation", icon: Terminal },
+												{ phase: "ai_review" as TaskPhase, label: "AI Review", icon: Bot },
+												{ phase: "remediation" as TaskPhase, label: "Remediation", icon: Wrench },
+												{ phase: "human_review" as TaskPhase, label: "Human Review", icon: UserCheck },
+												{ phase: "merge" as TaskPhase, label: "Merge", icon: GitMerge },
+											]).map(({ phase, label, icon: Icon }) => {
+												const phaseDoc = getPhaseByName(phase)
+												const isActive = task.currentPhase === phase
+												const isApplicable = isPhaseApplicable(phase)
+												// Phase is "reached" if it has started (not pending) or is completed/failed/skipped
+												const hasBeenReached = phaseDoc && phaseDoc.status !== "pending"
+												const isEnabled = isActive || hasBeenReached
+
+												// Determine tooltip message
+												let tooltipMessage: string | null = null
+												if (!isApplicable) {
+													tooltipMessage = `${label} is not applicable to ${taskTemplate?.name || "this task type"}`
+												} else if (!isEnabled) {
+													tooltipMessage = `Task has not yet progressed to ${label}`
+												}
+
+												return (
+													<Tooltip key={phase}>
+														<TooltipTrigger asChild>
+															<button
+																type="button"
+																onClick={() => isEnabled && setActiveTab(phase === "ai_review" ? "ai-review" : phase === "human_review" ? "human-review" : phase)}
+																className={`w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors ${
+																	isActive
+																		? "bg-primary/10 text-primary"
+																		: isEnabled
+																			? "text-foreground hover:bg-surface-elevated"
+																			: "text-muted-foreground/50"
+																}`}
+															>
+																<Icon size={14} />
+																<span className="truncate">{label}</span>
+																{phaseDoc?.status === "completed" && (
+																	<CheckCircle2 size={12} className="ml-auto text-green-500" />
+																)}
+																{phaseDoc?.status === "in_progress" && (
+																	<div className="ml-auto w-2 h-2 rounded-full bg-feature-blue animate-pulse" />
+																)}
+															</button>
+														</TooltipTrigger>
+														{tooltipMessage && (
+															<TooltipContent side="right">
+																<p className="text-xs">{tooltipMessage}</p>
+															</TooltipContent>
+														)}
+													</Tooltip>
+												)
+											})}
+										</div>
+									</div>
+
+									{/* Chat panel - takes remaining space */}
+									<div className="flex-1 min-w-0">
+										<AgentChatPanel
+											chatHistory={chatHistory}
+											onSendMessage={handleSendMessage}
+											isLoading={isAgentProcessing && !streamingContent?.parts.length}
+											agentStatus={agentStatus}
+											selectedProvider={selectedProvider}
+											selectedModel={selectedModel}
+											onProviderChange={setSelectedProvider}
+											onModelChange={setSelectedModel}
+											sessionId={activeSessionId}
+											onNewSession={handleNewSession}
+										/>
+									</div>
+								</div>
+							</TabsContent>
+
+							<div className="py-6">
+								<div className="min-w-0">
 									<TabsContent value="status" className="!mt-0">
 										<div className="space-y-8">
 											{phases.length > 0 && (
@@ -1497,21 +1603,6 @@ export function TaskDetailView({
 											)}
 										</div>
 									</TabsContent>
-								</div>
-
-								<div className="w-1/3 shrink-0 sticky top-0 self-start h-[calc(100vh-12rem)]">
-									<AgentChatPanel
-										chatHistory={chatHistory}
-										onSendMessage={handleSendMessage}
-										isLoading={isAgentProcessing && !streamingContent?.parts.length}
-										agentStatus={agentStatus}
-										selectedProvider={selectedProvider}
-										selectedModel={selectedModel}
-										onProviderChange={setSelectedProvider}
-										onModelChange={setSelectedModel}
-										sessionId={activeSessionId}
-										onNewSession={handleNewSession}
-									/>
 								</div>
 							</div>
 						</Tabs>

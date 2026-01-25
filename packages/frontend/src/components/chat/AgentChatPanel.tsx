@@ -246,30 +246,6 @@ export function AgentChatPanel({
 
 	return (
 		<div className="flex flex-col h-full">
-			<div className="flex items-center justify-between mb-3">
-				<h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center">
-					<MessageSquare size={16} className="mr-2" />
-					Agent Chat
-				</h3>
-				{sessionId && (
-					<div className="flex items-center gap-2">
-						<span className="text-[10px] text-muted-foreground font-mono">
-							Session: {sessionId.slice(0, 8)}...
-						</span>
-						{onNewSession && (
-							<Button
-								variant="ghost"
-								size="icon-sm"
-								className="h-5 w-5"
-								onClick={onNewSession}
-								title="Start new session"
-							>
-								<RefreshCw size={12} />
-							</Button>
-						)}
-					</div>
-				)}
-			</div>
 			<div className="bg-surface border border-border rounded-lg flex flex-col flex-1 overflow-hidden">
 				<div
 					ref={scrollContainerRef}
@@ -340,10 +316,11 @@ export function AgentChatPanel({
 						</Button>
 					</form>
 					<div className="flex items-center justify-between">
-						<div className="flex items-center bg-background rounded-md border border-border p-[3px] h-7">
-							<button
-								type="button"
-								onClick={() => handleProviderChange("anthropic")}
+						<div className="flex items-center gap-3">
+							<div className="flex items-center bg-background rounded-md border border-border p-[3px] h-7">
+								<button
+									type="button"
+									onClick={() => handleProviderChange("anthropic")}
 								className={cn(
 									"px-2.5 h-5 text-xs font-medium rounded transition-colors flex items-center",
 									selectedProvider === "anthropic"
@@ -365,6 +342,25 @@ export function AgentChatPanel({
 							>
 								ZAI
 							</button>
+							</div>
+							{sessionId && (
+								<div className="flex items-center gap-1.5">
+									<span className="text-[10px] text-muted-foreground font-mono">
+										{sessionId.slice(0, 8)}
+									</span>
+									{onNewSession && (
+										<Button
+											variant="ghost"
+											size="icon-sm"
+											className="h-5 w-5"
+											onClick={onNewSession}
+											title="Start new session"
+										>
+											<RefreshCw size={12} />
+										</Button>
+									)}
+								</div>
+							)}
 						</div>
 						<div className="flex items-center bg-background rounded-md border border-border p-[3px] h-7">
 							<button

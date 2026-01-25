@@ -404,7 +404,7 @@ function App() {
 	}
 
 	return (
-		<TooltipProvider>
+		<TooltipProvider delayDuration={300}>
 			<div className="flex h-screen bg-background text-foreground overflow-hidden font-sans">
 				<Sidebar
 					activeView={activeView}
