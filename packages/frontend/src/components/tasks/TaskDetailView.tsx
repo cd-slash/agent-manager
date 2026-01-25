@@ -286,6 +286,8 @@ export function TaskDetailView({
 
 	// Cache streaming parts when complete so they can be applied to the persisted message
 	// Also cache when the streaming message ID changes (new message arrived)
+	// Backup cache effect - caches parts when streaming completes and AI message exists
+	// This runs before the clear session effect and provides redundant caching
 	useEffect(() => {
 		if (currentSessionId && streamingContent?.hasResult && streamingContent.parts.length > 0) {
 			// Find the last AI message after the baseline to associate parts with
@@ -348,7 +350,8 @@ export function TaskDetailView({
 		// IMPORTANT: Don't show streaming message if the persisted AI message has already
 		// arrived in chatMessagesData. This prevents duplicate messages in the UI.
 		// Use the newAiMessage we already computed above
-		const hasPersistedAiMessage = newAiMessage !== null
+		// Note: find() returns undefined (not null) when no match, so use != null to check both
+		const hasPersistedAiMessage = newAiMessage != null
 
 		if (streamingContent?.parts.length && currentSessionId && !hasPersistedAiMessage) {
 			messages.push({
@@ -482,6 +485,18 @@ export function TaskDetailView({
 			)
 
 		if (hasNewAiMessage) {
+			// CRITICAL: Cache the parts BEFORE clearing the session!
+			// Once we clear currentSessionId, the streamingMessages query is skipped
+			// and streamingContent becomes null, losing the parts.
+			const newAiMessage = chatMessagesData.find((msg, idx) =>
+				idx >= messageCountBeforeStreaming.current! && msg.sender === "ai"
+			)
+			if (newAiMessage && streamingContent?.parts.length) {
+				cachedPartsForMessage.current = {
+					messageId: newAiMessage._id,
+					parts: streamingContent.parts,
+				}
+			}
 			setCurrentSessionId(null)
 			return
 		}
