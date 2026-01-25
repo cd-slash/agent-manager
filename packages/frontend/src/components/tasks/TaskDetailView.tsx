@@ -28,7 +28,7 @@ import {
 	X,
 	XCircle,
 } from "lucide-react"
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import { AgentChatPanel, type Provider, type Model, type AgentStatus } from "@/components/chat/AgentChatPanel"
 import { DependencyPickerModal } from "@/components/modals/DependencyPickerModal"
 import { useCreateContainer } from "@/hooks/useGatewayCommand"
@@ -282,7 +282,10 @@ export function TaskDetailView({
 		}))
 
 		// Show streaming content with structure during active processing
-		if (streamingContent?.parts.length && isAgentProcessing) {
+		// Use currentSessionId (not isAgentProcessing) to keep showing content until
+		// the session is fully cleared, preventing a gap when transitioning from
+		// streaming to the persisted message
+		if (streamingContent?.parts.length && currentSessionId) {
 			messages.push({
 				id: "streaming-" + currentSessionId,
 				sender: "ai",
@@ -294,7 +297,7 @@ export function TaskDetailView({
 		}
 
 		return messages
-	}, [chatMessagesData, streamingContent, isAgentProcessing, currentSessionId])
+	}, [chatMessagesData, streamingContent, currentSessionId])
 
 	// Mutation to send messages
 	const sendMessage = useMutation(api.chat.sendTaskMessage)
@@ -384,14 +387,51 @@ export function TaskDetailView({
 		}
 	}, [task.activeSessionId])
 
+	// Track the message count when streaming started to detect new messages
+	const messageCountBeforeStreaming = useRef<number | null>(null)
+
+	// Set the baseline message count when streaming starts
+	useEffect(() => {
+		if (currentSessionId && messageCountBeforeStreaming.current === null) {
+			messageCountBeforeStreaming.current = chatMessagesData.length
+		}
+		if (!currentSessionId) {
+			messageCountBeforeStreaming.current = null
+		}
+	}, [currentSessionId, chatMessagesData.length])
+
 	// Clear processing state when streaming completes (result message received)
 	useEffect(() => {
 		if (streamingContent?.hasResult && isAgentProcessing) {
 			setIsAgentProcessing(false)
-			// Clear session after a brief delay to allow final UI update
-			setTimeout(() => setCurrentSessionId(null), 500)
 		}
 	}, [streamingContent?.hasResult, isAgentProcessing])
+
+	// Clear session only when the persisted AI message appears in chatMessagesData
+	// This prevents a gap between streaming and persisted message
+	useEffect(() => {
+		if (!streamingContent?.hasResult || !currentSessionId) return
+		if (messageCountBeforeStreaming.current === null) return
+
+		// Check if a new AI message has appeared since streaming started
+		const hasNewAiMessage = chatMessagesData.length > messageCountBeforeStreaming.current &&
+			chatMessagesData.some((msg, idx) =>
+				idx >= messageCountBeforeStreaming.current! && msg.sender === "ai"
+			)
+
+		if (hasNewAiMessage) {
+			setCurrentSessionId(null)
+			return
+		}
+
+		// Fallback: clear after 5 seconds if persisted message never arrives
+		// This prevents streaming message from staying forever on network failures
+		const fallbackTimer = setTimeout(() => {
+			setCurrentSessionId(null)
+		}, 5000)
+
+		return () => clearTimeout(fallbackTimer)
+	}, [streamingContent?.hasResult, currentSessionId, chatMessagesData])
 
 	const executeWithContainer = async (containerId: string, message: string, provider: Provider, model: Model, sessionIdToResume?: string | null) => {
 		setIsAgentProcessing(true)
