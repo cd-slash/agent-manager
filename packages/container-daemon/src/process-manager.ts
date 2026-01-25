@@ -80,9 +80,16 @@ export class ProcessManager extends EventEmitter {
 		// Build environment variables - start with current env
 		const processEnv = { ...process.env }
 
+		// Debug: log provider and envVars state
+		console.log(`[process] Provider: ${options.provider || "not specified"}, hasEnvVars: ${!!options.envVars}`)
+		if (options.envVars) {
+			console.log(`[process] envVars.ANTHROPIC_BASE_URL: ${options.envVars.ANTHROPIC_BASE_URL || "not set"}`)
+			console.log(`[process] envVars.ANTHROPIC_AUTH_TOKEN: ${options.envVars.ANTHROPIC_AUTH_TOKEN ? "SET" : "not set"}`)
+		}
+
 		// Apply custom environment variables from options
 		if (options.envVars) {
-			console.log(`[process] Using custom envVars - base URL: ${options.envVars.ANTHROPIC_BASE_URL || "default"}`)
+			console.log(`[process] Applying custom envVars...`)
 			if (options.envVars.ANTHROPIC_AUTH_TOKEN) {
 				// Claude CLI expects ANTHROPIC_API_KEY for API key authentication
 				processEnv.ANTHROPIC_API_KEY = options.envVars.ANTHROPIC_AUTH_TOKEN
@@ -102,6 +109,10 @@ export class ProcessManager extends EventEmitter {
 			} else {
 				delete processEnv.API_TIMEOUT_MS
 			}
+			// Log final state
+			console.log(`[process] Final env: ANTHROPIC_API_KEY=${processEnv.ANTHROPIC_API_KEY ? "SET" : "not set"}, ANTHROPIC_BASE_URL=${processEnv.ANTHROPIC_BASE_URL || "not set"}, CLAUDE_CODE_OAUTH_TOKEN=${processEnv.CLAUDE_CODE_OAUTH_TOKEN ? "SET" : "not set"}`)
+		} else {
+			console.log(`[process] No custom envVars, using default auth. CLAUDE_CODE_OAUTH_TOKEN=${processEnv.CLAUDE_CODE_OAUTH_TOKEN ? "SET" : "not set"}`)
 		}
 
 		const proc = spawn("claude", args, {
@@ -243,6 +254,10 @@ export class ProcessManager extends EventEmitter {
 			} else {
 				delete processEnv.API_TIMEOUT_MS
 			}
+			// Log final state
+			console.log(`[process] Final env: ANTHROPIC_API_KEY=${processEnv.ANTHROPIC_API_KEY ? "SET" : "not set"}, ANTHROPIC_BASE_URL=${processEnv.ANTHROPIC_BASE_URL || "not set"}, CLAUDE_CODE_OAUTH_TOKEN=${processEnv.CLAUDE_CODE_OAUTH_TOKEN ? "SET" : "not set"}`)
+		} else {
+			console.log(`[process] No custom envVars, using default auth. CLAUDE_CODE_OAUTH_TOKEN=${processEnv.CLAUDE_CODE_OAUTH_TOKEN ? "SET" : "not set"}`)
 		}
 
 		const proc = spawn("claude", args, {
