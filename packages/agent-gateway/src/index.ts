@@ -1372,6 +1372,12 @@ fi
 
 # Delete the container
 docker rm "$CONTAINER_ID"
+
+# Clean up the Docker Compose network (created automatically by docker compose)
+docker network rm "${containerName}_default" 2>/dev/null || true
+
+# Clean up the Docker image (created by docker compose build)
+docker rmi "${containerName}-server" 2>/dev/null || true
 `
 
 	const deleteProc =
@@ -2414,6 +2420,12 @@ fi
 
 # Delete the container
 docker rm "$CONTAINER_ID"
+
+# Clean up the Docker Compose network (created automatically by docker compose)
+docker network rm "${containerName}_default" 2>/dev/null || true
+
+# Clean up the Docker image (created by docker compose build)
+docker rmi "${containerName}-server" 2>/dev/null || true
 `
 
 			const deleteProc =
