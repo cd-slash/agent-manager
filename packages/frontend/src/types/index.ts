@@ -348,6 +348,8 @@ export interface ChatMessage {
 	// AI response metadata (only populated for sender: "ai")
 	model?: string
 	provider?: string
+	// Whether this message is an error (e.g., API authentication failure)
+	isError?: boolean
 }
 
 export interface HistoryEvent {

@@ -210,13 +210,21 @@ export function TaskDetailView({
 		const parts: ChatMessagePart[] = []
 		const toolResults = new Map<string, { content: string; isError: boolean }>()
 		let hasResult = false
+		let hasError = false
 		let finalResultText: string | null = null
 
-		// First pass: collect tool results
+		// First pass: collect tool results and check for errors
 		for (const msg of streamingMessages) {
 			try {
 				const content = msg.rawContent ? JSON.parse(msg.rawContent) : null
 				if (!content) continue
+
+				// Check for error events (from process manager)
+				if (content.type === "error") {
+					hasError = true
+					hasResult = true // Treat errors as completion to stop "thinking" animation
+					continue
+				}
 
 				if (content.type === "tool_result" && content.tool_use_id) {
 					const resultText =
@@ -279,9 +287,9 @@ export function TaskDetailView({
 		}
 
 		// Debug: log streaming content
-		console.log("[TaskDetailView] streamingContent - parts:", parts.length, "hasResult:", hasResult, "types:", parts.map(p => p.type))
+		console.log("[TaskDetailView] streamingContent - parts:", parts.length, "hasResult:", hasResult, "hasError:", hasError, "types:", parts.map(p => p.type))
 
-		return { parts, hasResult }
+		return { parts, hasResult, hasError }
 	}, [streamingMessages])
 
 	// Cache streaming parts when complete so they can be applied to the persisted message
@@ -339,6 +347,7 @@ export function TaskDetailView({
 				time: formatTime(msg.createdAt),
 				model: msg.model,
 				provider: msg.provider,
+				isError: msg.isError,
 			}
 		})
 

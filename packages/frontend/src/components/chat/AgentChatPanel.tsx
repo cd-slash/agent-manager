@@ -1,4 +1,4 @@
-import { MessageSquare, RefreshCw, Send } from "lucide-react"
+import { AlertCircle, MessageSquare, RefreshCw, Send } from "lucide-react"
 import { useEffect, useRef, useState, useCallback } from "react"
 import ReactMarkdown from "react-markdown"
 import { Badge } from "@/components/ui/badge"
@@ -283,6 +283,18 @@ export function AgentChatPanel({
 									<div className="max-w-[85%] rounded-lg rounded-br-sm p-component text-sm shadow-sm bg-primary text-primary-foreground">
 										{renderMessageContent(msg)}
 									</div>
+								) : msg.isError ? (
+									<div className="w-full text-sm min-w-0 overflow-hidden">
+										<div className="flex items-start gap-2 p-3 rounded-lg bg-destructive/10 border border-destructive/20">
+											<AlertCircle size={16} className="text-destructive shrink-0 mt-0.5" />
+											<div className="text-destructive min-w-0 overflow-hidden">
+												<div className="font-medium mb-1">Error</div>
+												<div className="font-mono text-xs whitespace-pre-wrap break-words">
+													{msg.text}
+												</div>
+											</div>
+										</div>
+									</div>
 								) : (
 									<div className="w-full text-sm text-foreground min-w-0 overflow-hidden">
 										{renderMessageContent(msg)}
@@ -292,7 +304,12 @@ export function AgentChatPanel({
 									<Badge variant="outline" className="text-[10px] font-normal py-0 px-1.5">
 										{msg.time}
 									</Badge>
-									{msg.sender === "ai" && msg.model && (
+									{msg.sender === "ai" && msg.isError && (
+										<Badge variant="destructive" className="text-[10px] font-normal py-0 px-1.5">
+											Error
+										</Badge>
+									)}
+									{msg.sender === "ai" && msg.model && !msg.isError && (
 										<Badge variant="outline" className="text-[10px] font-normal py-0 px-1.5">
 											{msg.model}
 										</Badge>

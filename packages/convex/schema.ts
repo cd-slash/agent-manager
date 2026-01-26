@@ -129,6 +129,8 @@ export default defineSchema({
 		provider: v.optional(v.string()),
 		// Claude session ID for this message exchange (for session resumption)
 		sessionId: v.optional(v.string()),
+		// Whether this message is an error (e.g., API authentication failure)
+		isError: v.optional(v.boolean()),
 		createdAt: v.number(),
 	})
 		.index("by_project", ["projectId"])

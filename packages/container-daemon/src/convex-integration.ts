@@ -17,6 +17,36 @@ import type { ProcessManager } from "./process-manager"
 
 type ContainerCommand = Doc<"containerCommands">
 
+/**
+ * Format API error messages to be more user-friendly
+ * Parses messages like: "API Error: 401 {"error":{"code":"1004","message":"Invalid API Key"},...} · Please run /login"
+ * Into: "Authentication Failed (401): Invalid API Key"
+ */
+function formatApiError(rawError: string): string {
+	// Try to extract the JSON error payload
+	const jsonMatch = rawError.match(/\{[^{}]*"error"[^{}]*\{[^{}]*"message"\s*:\s*"([^"]+)"/)
+	const statusMatch = rawError.match(/API Error:\s*(\d+)/)
+	const status = statusMatch?.[1]
+	const message = jsonMatch?.[1]
+
+	if (message) {
+		// Map common status codes to friendly names
+		const statusName = status === "401" ? "Authentication Failed"
+			: status === "403" ? "Access Denied"
+			: status === "429" ? "Rate Limited"
+			: status === "500" ? "Server Error"
+			: status ? `Error ${status}`
+			: "API Error"
+
+		return `${statusName}: ${message}`
+	}
+
+	// If we can't parse it, clean up the raw message
+	// Remove duplicate occurrences of the error (common with CLI output)
+	const cleaned = rawError.replace(/(.+)(\s*\1)+/g, "$1").trim()
+	return cleaned
+}
+
 interface ConvexIntegrationConfig {
 	convexUrl: string
 	containerId: string
@@ -304,6 +334,8 @@ export class ConvexIntegration extends EventEmitter<ConvexIntegrationEvents> {
 			console.error(`[convex] Failed to create agent session:`, error)
 		}
 
+		let errorMessage: string | undefined
+
 		// Stream execution results to Convex
 		for await (const event of this.processManager.executeStream({
 			message: payload.message,
@@ -317,6 +349,24 @@ export class ConvexIntegration extends EventEmitter<ConvexIntegrationEvents> {
 			disallowedTools: payload.disallowedTools,
 			sessionId: payload.sessionId,
 		})) {
+			// Handle error events from process manager
+			if (event.type === "error") {
+				errorMessage = event.error || `Process exited with code ${event.exitCode}`
+				console.error(`[convex] Process error: ${errorMessage}`)
+
+				// Store error as an agent message
+				await this.client.mutation(api.agentMessages.create, {
+					sessionId: correlationId,
+					content: JSON.stringify({
+						type: "error",
+						error: errorMessage,
+						exitCode: event.exitCode,
+					}),
+					sequenceNumber: sequenceNumber++,
+				})
+				continue
+			}
+
 			// Store each message in Convex
 			if (event.type === "data" && event.data) {
 				// event.data is already a parsed object from the process manager
@@ -343,8 +393,17 @@ export class ConvexIntegration extends EventEmitter<ConvexIntegrationEvents> {
 				}
 
 				// Extract the final result text from the result event
+				// Skip if it looks like an error message (handled separately)
 				if (data.type === "result" && data.result) {
-					finalResult = data.result
+					// Check if the result is actually an error message (e.g., "API Error: 401 ...")
+					if (data.result.startsWith("API Error:") || data.result.includes("Please run /login")) {
+						// This is an error, not a real result - mark it and skip
+						if (!errorMessage) {
+							errorMessage = data.result
+						}
+					} else {
+						finalResult = data.result
+					}
 				}
 
 				// Also accumulate text from assistant messages as fallback
@@ -362,8 +421,26 @@ export class ConvexIntegration extends EventEmitter<ConvexIntegrationEvents> {
 		// Prefer the explicit result, fall back to accumulated text
 		const responseText = finalResult || accumulatedTextParts.join("")
 
+		// If we have an error, send it as an error chat message
+		if (taskId && errorMessage) {
+			const formattedError = formatApiError(errorMessage)
+			try {
+				await this.client.mutation(api.chat.sendTaskMessage, {
+					taskId: taskId as Id<"tasks">,
+					text: formattedError,
+					sender: "ai",
+					model: payload.model,
+					provider: payload.provider,
+					sessionId: claudeSessionId,
+					isError: true,
+				})
+				console.log(`[convex] Error message added to chat for task ${taskId}`)
+			} catch (error) {
+				console.error(`[convex] Failed to add error chat message:`, error)
+			}
+		}
 		// If we have a task and any response, insert it as an AI chat message
-		if (taskId && responseText) {
+		else if (taskId && responseText) {
 			try {
 				await this.client.mutation(api.chat.sendTaskMessage, {
 					taskId: taskId as Id<"tasks">,
@@ -394,18 +471,19 @@ export class ConvexIntegration extends EventEmitter<ConvexIntegrationEvents> {
 		}
 
 		// Update the agent session status
+		const finalStatus = errorMessage ? "error" : "completed"
 		try {
 			await this.client.mutation(api.agentSessions.updateStatus, {
 				sessionId: correlationId,
-				status: "completed",
-				result: responseText || undefined,
+				status: finalStatus,
+				result: errorMessage || responseText || undefined,
 				completedAt: Date.now(),
 			})
 		} catch (error) {
 			console.error(`[convex] Failed to update agent session status:`, error)
 		}
 
-		return { correlationId, claudeSessionId, status: "completed" }
+		return { correlationId, claudeSessionId, status: finalStatus }
 	}
 
 	private async handleStartPhaseExecution(command: ContainerCommand): Promise<unknown> {
