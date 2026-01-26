@@ -577,21 +577,24 @@ async function generateTailscaleAuthKey(
 
 // Paths for binary building
 const BINARY_PATH = new URL("../container-daemon-binary", import.meta.url).pathname
+const CLI_BINARY_PATH = new URL("../code-agent-tools-binary", import.meta.url).pathname
 const CONTAINER_DAEMON_SRC = new URL("../../container-daemon/src", import.meta.url)
 	.pathname
 const CONTAINER_DAEMON_PKG = new URL("../../container-daemon", import.meta.url)
 	.pathname
+const AGENT_CLI_PKG = new URL("../../agent-cli", import.meta.url).pathname
 
 /**
- * Get the git commit hash for the container-daemon package.
+ * Get the git commit hash for the container-daemon and agent-cli packages.
  * This is more reliable than file hashing because:
  * 1. Git accurately tracks actual file changes
  * 2. No file caching issues
  * 3. Deterministic - same commit always gives same hash
  */
 async function getDaemonGitHash(): Promise<string> {
+	// Get combined hash of both packages
 	const proc = Bun.spawn(
-		["git", "log", "-1", "--format=%H", "--", "packages/container-daemon"],
+		["git", "log", "-1", "--format=%H", "--", "packages/container-daemon", "packages/agent-cli"],
 		{
 			cwd: new URL("../../..", import.meta.url).pathname, // monorepo root
 			stdout: "pipe",
@@ -649,16 +652,22 @@ async function computeSourceHashFallback(dir: string): Promise<string> {
 const BINARY_HASH_PATH = `${BINARY_PATH}.hash`
 
 /**
- * Check if the container-daemon binary needs to be rebuilt
+ * Check if the container binaries need to be rebuilt
  * Uses git commit hash for reliable change detection
  */
 async function shouldRebuildBinary(): Promise<boolean> {
 	const binaryFile = Bun.file(BINARY_PATH)
+	const cliBinaryFile = Bun.file(CLI_BINARY_PATH)
 	const hashFile = Bun.file(BINARY_HASH_PATH)
 
-	// If binary doesn't exist, we need to build it
+	// If either binary doesn't exist, we need to build
 	if (!(await binaryFile.exists())) {
-		console.log("[gateway] Binary not found, will build")
+		console.log("[gateway] Container-daemon binary not found, will build")
+		return true
+	}
+
+	if (!(await cliBinaryFile.exists())) {
+		console.log("[gateway] Agent-cli binary not found, will build")
 		return true
 	}
 
@@ -672,27 +681,28 @@ async function shouldRebuildBinary(): Promise<boolean> {
 	const currentHash = await getDaemonGitHash()
 	const storedHash = (await hashFile.text()).trim()
 
-	console.log(`[gateway] Daemon hash check: current=${currentHash.slice(0, 8)}, stored=${storedHash.slice(0, 8)}`)
+	console.log(`[gateway] Binary hash check: current=${currentHash.slice(0, 8)}, stored=${storedHash.slice(0, 8)}`)
 
 	if (currentHash !== storedHash) {
-		console.log("[gateway] Daemon source changed (git commit differs), will rebuild binary")
+		console.log("[gateway] Source changed (git commit differs), will rebuild binaries")
 		return true
 	}
 
-	console.log("[gateway] Daemon binary is up to date")
+	console.log("[gateway] Container binaries are up to date")
 	return false
 }
 
 /**
- * Build the container-daemon binary and store git hash
+ * Build the container-daemon and agent-cli binaries, store git hash
  */
 async function buildContainerApiBinary(): Promise<void> {
 	const gitHash = await getDaemonGitHash()
-	console.log(`[gateway] Building container-daemon binary (git: ${gitHash.slice(0, 8)})...`)
+	console.log(`[gateway] Building container binaries (git: ${gitHash.slice(0, 8)})...`)
 
-	const entryPoint = `${CONTAINER_DAEMON_PKG}/src/index.ts`
-	const proc = Bun.spawn(
-		["bun", "build", "--compile", "--outfile", BINARY_PATH, entryPoint],
+	// Build container-daemon
+	const daemonEntryPoint = `${CONTAINER_DAEMON_PKG}/src/index.ts`
+	const daemonProc = Bun.spawn(
+		["bun", "build", "--compile", "--outfile", BINARY_PATH, daemonEntryPoint],
 		{
 			cwd: CONTAINER_DAEMON_PKG,
 			stdout: "pipe",
@@ -700,17 +710,37 @@ async function buildContainerApiBinary(): Promise<void> {
 		},
 	)
 
-	const stderr = await new Response(proc.stderr).text()
-	const exitCode = await proc.exited
+	const daemonStderr = await new Response(daemonProc.stderr).text()
+	const daemonExitCode = await daemonProc.exited
 
-	if (exitCode !== 0) {
-		throw new Error(`Failed to build container-daemon binary: ${stderr}`)
+	if (daemonExitCode !== 0) {
+		throw new Error(`Failed to build container-daemon binary: ${daemonStderr}`)
 	}
+	console.log(`[gateway] Container-daemon binary built successfully`)
+
+	// Build agent-cli (code-agent-tools)
+	const cliEntryPoint = `${AGENT_CLI_PKG}/src/index.ts`
+	const cliProc = Bun.spawn(
+		["bun", "build", "--compile", "--outfile", CLI_BINARY_PATH, cliEntryPoint],
+		{
+			cwd: AGENT_CLI_PKG,
+			stdout: "pipe",
+			stderr: "pipe",
+		},
+	)
+
+	const cliStderr = await new Response(cliProc.stderr).text()
+	const cliExitCode = await cliProc.exited
+
+	if (cliExitCode !== 0) {
+		throw new Error(`Failed to build agent-cli binary: ${cliStderr}`)
+	}
+	console.log(`[gateway] Agent-cli binary built successfully`)
 
 	// Store the git hash used for this build
 	await Bun.write(BINARY_HASH_PATH, gitHash)
 
-	console.log(`[gateway] Container-daemon binary built successfully (git: ${gitHash.slice(0, 8)})`)
+	console.log(`[gateway] Container binaries built successfully (git: ${gitHash.slice(0, 8)})`)
 }
 
 /**
@@ -1117,16 +1147,17 @@ rm -rf "$BUILD_DIR" /tmp/compose-${containerName}.yml`
 		throw error
 	}
 
-	// Phase 4: Deploying binary
+	// Phase 4: Deploying binaries (container-daemon + agent-cli)
 	if (buildTracker)
 		await buildTracker.startPhase(containerName, "deploying_binary")
-	console.log(`[gateway] Copying container-daemon binary...`)
+	console.log(`[gateway] Copying container binaries...`)
 
-	// Check if binary exists
+	// Check if binaries exist
 	let deployLogs = ""
 	const binaryFile = Bun.file(BINARY_PATH)
+	const cliBinaryFile = Bun.file(CLI_BINARY_PATH)
 	if (!(await binaryFile.exists())) {
-		console.warn(`[gateway] Binary not found at ${BINARY_PATH}, skipping SCP`)
+		console.warn(`[gateway] Container-daemon binary not found at ${BINARY_PATH}, skipping deploy`)
 		if (buildTracker)
 			await buildTracker.skipPhase(containerName, "deploying_binary")
 		if (buildTracker)
@@ -1134,13 +1165,14 @@ rm -rf "$BUILD_DIR" /tmp/compose-${containerName}.yml`
 	} else {
 		try {
 			if (server === "localhost") {
-				// Direct docker cp for localhost
+				// Direct docker cp for localhost - deploy both binaries
 				const copyProc = Bun.spawn(
 					[
 						"bash",
 						"-c",
 						`docker cp "${BINARY_PATH}" ${containerName}:/opt/container-daemon/container-daemon && \
-           docker exec ${containerName} chmod +x /opt/container-daemon/container-daemon`,
+           docker exec ${containerName} chmod +x /opt/container-daemon/container-daemon && \
+           ${(await cliBinaryFile.exists()) ? `docker cp "${CLI_BINARY_PATH}" ${containerName}:/usr/local/bin/code-agent-tools && docker exec ${containerName} chmod +x /usr/local/bin/code-agent-tools` : "echo 'Agent CLI binary not found, skipping'"}`,
 					],
 					{ stdout: "pipe", stderr: "pipe" },
 				)
@@ -1149,10 +1181,10 @@ rm -rf "$BUILD_DIR" /tmp/compose-${containerName}.yml`
 				deployLogs = copyStdout + copyStderr
 				const copyExit = await copyProc.exited
 				if (copyExit !== 0) {
-					throw new Error(`Failed to copy binary: ${copyStderr}`)
+					throw new Error(`Failed to copy binaries: ${copyStderr}`)
 				}
 			} else {
-				// SCP to server, then docker cp
+				// SCP to server, then docker cp - deploy both binaries
 				const scpProc = Bun.spawn(
 					["scp", BINARY_PATH, `${sshTarget}:/tmp/container-daemon-binary`],
 					{
@@ -1166,10 +1198,31 @@ rm -rf "$BUILD_DIR" /tmp/compose-${containerName}.yml`
 					throw new Error(`SCP failed: ${scpStderr}`)
 				}
 
+				// Also SCP the CLI binary if it exists
+				if (await cliBinaryFile.exists()) {
+					const cliScpProc = Bun.spawn(
+						["scp", CLI_BINARY_PATH, `${sshTarget}:/tmp/code-agent-tools-binary`],
+						{
+							stdout: "pipe",
+							stderr: "pipe",
+						},
+					)
+					const cliScpStderr = await new Response(cliScpProc.stderr).text()
+					const cliScpExit = await cliScpProc.exited
+					if (cliScpExit !== 0) {
+						console.warn(`[gateway] Failed to SCP agent-cli binary: ${cliScpStderr}`)
+					}
+				}
+
 				const copyScript = `set -e
 docker cp /tmp/container-daemon-binary ${containerName}:/opt/container-daemon/container-daemon
 docker exec ${containerName} chmod +x /opt/container-daemon/container-daemon
-rm /tmp/container-daemon-binary`
+rm -f /tmp/container-daemon-binary
+if [ -f /tmp/code-agent-tools-binary ]; then
+  docker cp /tmp/code-agent-tools-binary ${containerName}:/usr/local/bin/code-agent-tools
+  docker exec ${containerName} chmod +x /usr/local/bin/code-agent-tools
+  rm -f /tmp/code-agent-tools-binary
+fi`
 
 				const copyProc = Bun.spawn(["ssh", sshTarget, "bash", "-s"], {
 					stdin: new Blob([copyScript]),
@@ -1181,14 +1234,14 @@ rm /tmp/container-daemon-binary`
 				deployLogs = copyStdout + copyStderr
 				const copyExit = await copyProc.exited
 				if (copyExit !== 0) {
-					throw new Error(`Failed to copy binary: ${copyStderr}`)
+					throw new Error(`Failed to copy binaries: ${copyStderr}`)
 				}
 			}
 			if (buildTracker)
 				await buildTracker.completePhase(
 					containerName,
 					"deploying_binary",
-					deployLogs || "Binary deployed successfully",
+					deployLogs || "Binaries deployed successfully",
 				)
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error)

@@ -733,6 +733,17 @@ The entrypoint script (embedded in the container at build time):
 2. **Clone workspace** if `WORKSPACE_REPO` is set
 3. **Start container-daemon** binary (SCP'd after container starts)
 
+### Deployed Binaries
+
+Two binaries are deployed to each container after it starts:
+
+| Binary | Location | Purpose |
+|--------|----------|---------|
+| `container-daemon` | `/opt/container-daemon/container-daemon` | Background service managing Claude CLI |
+| `code-agent-tools` | `/usr/local/bin/code-agent-tools` | CLI for agents to interact with Convex |
+
+Both binaries are compiled from the monorepo by the gateway and SCP'd into containers during the "deploying_binary" build phase.
+
 ### Container Daemon
 
 The container-daemon is a background service that:
@@ -910,10 +921,10 @@ Container creation progresses through these phases:
 | Order | Phase | Description |
 |-------|-------|-------------|
 | 0 | `pending` | Request received, waiting to start |
-| 1 | `building_binary` | Compiling container-daemon binary (if needed) |
+| 1 | `building_binary` | Compiling container-daemon and agent-cli binaries (if needed) |
 | 2 | `building_image` | Docker build in progress |
 | 3 | `starting_container` | Container starting, Tailscale connecting |
-| 4 | `deploying_binary` | SCP'ing binary to container |
+| 4 | `deploying_binary` | SCP'ing both binaries to container |
 | 5 | `starting_daemon` | Starting container-daemon service |
 | 6 | `ready` | Fully operational |
 
@@ -929,6 +940,108 @@ const phases = useQuery(api.containerBuilds.getPhases, { containerId });
 
 ## Claude Code CLI Integration
 
+### Sandbox Permissions
+
+Since containers are fully sandboxed environments, Claude Code runs with `--dangerously-skip-permissions` to allow full tool access. This means:
+
+- **All Bash commands** are allowed (no tool restrictions)
+- **All file operations** (read, write, edit) work without prompts
+- **Web access** for documentation and API calls
+- **Full git operations** for commits, branches, PRs
+
+The permission mode in phase configurations is now advisory only - used in prompts to guide agent behavior (e.g., "focus on planning, don't write code yet") but doesn't restrict actual capabilities.
+
+### Agent CLI Tools (`code-agent-tools`)
+
+Agents have access to a CLI tool for interacting with the Convex database. This allows agents to:
+
+- Update acceptance criteria status
+- Add notes about findings and decisions
+- Query task and project information
+- Check phase status and dependencies
+
+The CLI binary is deployed to `/usr/local/bin/code-agent-tools` and is available in PATH.
+
+#### Available Commands
+
+```bash
+# Task Management
+code-agent-tools task get <task-id>
+code-agent-tools task list --project-id <id>
+code-agent-tools task create --project-id <id> --title "..." --description "..."
+code-agent-tools task update <task-id> --title "..." --description "..."
+code-agent-tools task move <task-id> --category <backlog|todo|in-progress|done>
+
+# Acceptance Criteria (Requirements)
+code-agent-tools requirements list --task-id <id>
+code-agent-tools requirements add --task-id <id> --text "User can login with email"
+code-agent-tools requirements add-bulk --task-id <id> --items '["Req 1", "Req 2"]'
+code-agent-tools requirements set-done <criteria-id> --done true
+code-agent-tools requirements delete <criteria-id>
+
+# Notes/Chat Messages
+code-agent-tools notes add --task-id <id> --text "Found auth module needs refactoring"
+code-agent-tools notes add --project-id <id> --text "Architecture decision: using JWT"
+code-agent-tools notes list --task-id <id>
+
+# Project Information
+code-agent-tools project get <project-id>
+code-agent-tools project list
+code-agent-tools project stats <project-id>
+
+# Task Dependencies
+code-agent-tools deps list --task-id <id>
+code-agent-tools deps add --task-id <id> --depends-on <other-task-id>
+code-agent-tools deps blocked-by --task-id <id>
+
+# Phase Information (read-only)
+code-agent-tools phase current --task-id <id>
+code-agent-tools phase list --task-id <id>
+```
+
+All commands output JSON:
+
+```json
+{
+  "success": true,
+  "data": {
+    "task": { "id": "...", "title": "...", ... },
+    "requirements": [ ... ]
+  }
+}
+```
+
+#### Environment
+
+The CLI uses the `CONVEX_URL` environment variable (automatically set in containers) to connect to the database. No additional authentication is required.
+
+### TODO: Phase-Specific CLI Permissions
+
+> **Future Enhancement**: The current CLI provides full access to all commands regardless of phase context. This should be refined to restrict access based on:
+>
+> 1. **Current Phase**: An agent in the implementation phase shouldn't need to create/delete tasks on the project
+> 2. **Task vs Project Context**: When working on a specific task, project-level mutations should be limited
+> 3. **Read vs Write**: Some phases (like AI Review) should have read-only access to most resources
+>
+> Proposed restrictions by phase:
+>
+> | Phase | Allowed CLI Operations |
+> |-------|----------------------|
+> | Requirements | Full requirements CRUD, notes add, task read |
+> | Planning | Requirements read, notes add, deps read, task read |
+> | Implementation | Requirements set-done, notes add, task read |
+> | AI Review | All read operations only |
+> | Remediation | Requirements set-done, notes add, task read |
+> | Human Review | All operations (interactive with human) |
+> | Merge | Task read, notes add |
+>
+> Implementation options:
+> - Pass `--phase` and `--task-id` flags to CLI, validate server-side
+> - Generate phase-specific CLI binaries or config
+> - Use environment variables to set allowed operations
+>
+> This prevents agents from accidentally or unnecessarily modifying project state outside their scope.
+
 ### Print Mode
 
 The container-daemon runs Claude Code with `--print` mode for non-interactive streaming:
@@ -936,6 +1049,7 @@ The container-daemon runs Claude Code with `--print` mode for non-interactive st
 ```bash
 claude --print \
   --output-format stream-json \
+  --dangerously-skip-permissions \
   --session-id $SESSION_ID \
   "$PROMPT"
 ```
@@ -1051,3 +1165,4 @@ All components log to stdout for container aggregation:
 5. **Container scaling**: Auto-scale containers based on queue depth
 6. **Custom review criteria**: Define project-specific review checklists for AI Review
 7. **Remediation learning**: Track common issues to improve initial implementation prompts
+8. **Phase-specific CLI permissions**: Restrict agent CLI access based on current phase and context (see TODO in Agent CLI Tools section)

@@ -37,3 +37,4 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 # Compiled binaries
 packages/agent-gateway/container-daemon-binary
 packages/agent-gateway/container-daemon-binary.hash
+packages/agent-cli/code-agent-tools

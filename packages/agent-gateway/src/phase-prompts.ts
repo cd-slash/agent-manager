@@ -4,6 +4,77 @@
  * Generates prompts for each task phase based on task context.
  */
 
+/**
+ * CLI Tools Documentation
+ *
+ * This documentation is included in prompts to help agents use the CLI tools.
+ */
+const CLI_TOOLS_DOCUMENTATION = `
+## Agent CLI Tools
+
+You have access to the \`code-agent-tools\` CLI for interacting with the task management database.
+All commands output JSON for easy parsing.
+
+### Requirements Management
+\`\`\`bash
+# List acceptance criteria
+code-agent-tools requirements list --task-id <task-id>
+
+# Add a requirement
+code-agent-tools requirements add --task-id <task-id> --text "User can login with email"
+
+# Add multiple requirements
+code-agent-tools requirements add-bulk --task-id <task-id> --items '["Req 1", "Req 2"]'
+
+# Mark requirement as done
+code-agent-tools requirements set-done <criteria-id> --done true
+
+# Delete a requirement
+code-agent-tools requirements delete <criteria-id>
+\`\`\`
+
+### Notes/Chat
+\`\`\`bash
+# Add a note to the task (for findings, decisions, questions)
+code-agent-tools notes add --task-id <task-id> --text "Found that auth module needs refactoring"
+
+# List notes for the task
+code-agent-tools notes list --task-id <task-id>
+\`\`\`
+
+### Task Information
+\`\`\`bash
+# Get task details
+code-agent-tools task get <task-id>
+
+# List tasks in project
+code-agent-tools task list --project-id <project-id>
+
+# Update task fields
+code-agent-tools task update <task-id> --description "Updated description"
+\`\`\`
+
+### Dependencies
+\`\`\`bash
+# List task dependencies
+code-agent-tools deps list --task-id <task-id>
+
+# Check what tasks this one blocks
+code-agent-tools deps blocked-by --task-id <task-id>
+\`\`\`
+
+### Phase Information (read-only)
+\`\`\`bash
+# Get current phase details
+code-agent-tools phase current --task-id <task-id>
+
+# List all phases with status
+code-agent-tools phase list --task-id <task-id>
+\`\`\`
+
+Use these tools to update task state, add notes about your findings, and mark requirements as complete.
+`
+
 export type TaskPhase =
 	| "requirements"
 	| "planning"
@@ -132,7 +203,12 @@ Provide a clear summary of:
 3. Any questions or clarifications needed
 4. Suggested acceptance criteria
 
-Do NOT write any code yet. Focus only on understanding and documenting the requirements.`
+**IMPORTANT**: After your analysis, use the CLI tools to:
+- Add suggested acceptance criteria using \`code-agent-tools requirements add-bulk\`
+- Add notes about any important findings or questions
+
+Do NOT write any code yet. Focus only on understanding and documenting the requirements.
+${CLI_TOOLS_DOCUMENTATION}`
 
 	return {
 		message,
@@ -189,7 +265,13 @@ Provide:
 4. **Testing Strategy**: How to verify the implementation
 5. **Risks/Considerations**: Any concerns or alternatives
 
-Do NOT write implementation code yet. Focus on planning.`
+**IMPORTANT**: Use the CLI tools to:
+- Add notes about architectural decisions using \`code-agent-tools notes add\`
+- Refine acceptance criteria if needed using the requirements commands
+- Check task dependencies using \`code-agent-tools deps list\`
+
+Do NOT write implementation code yet. Focus on planning.
+${CLI_TOOLS_DOCUMENTATION}`
 
 	return {
 		message,
@@ -259,7 +341,13 @@ After completing the implementation:
 1. Summarize what was implemented
 2. List all files modified/created
 3. Describe any decisions made during implementation
-4. Note any concerns or follow-up items`
+4. Note any concerns or follow-up items
+
+**IMPORTANT**: As you implement, use the CLI tools to:
+- Mark acceptance criteria as done when implemented: \`code-agent-tools requirements set-done <id> --done true\`
+- Add notes about implementation decisions: \`code-agent-tools notes add --task-id <task-id> --text "..."\`
+- Check your progress: \`code-agent-tools requirements list --task-id <task-id>\`
+${CLI_TOOLS_DOCUMENTATION}`
 
 	return {
 		message,
@@ -403,7 +491,12 @@ After completing remediation:
 1. List each issue and how it was addressed
 2. Describe any additional changes made
 3. Note any issues that couldn't be fully resolved
-4. Confirm tests are passing`
+4. Confirm tests are passing
+
+**IMPORTANT**: Use the CLI tools to:
+- Add notes about remediation decisions: \`code-agent-tools notes add --task-id <task-id> --text "..."\`
+- Update acceptance criteria status if needed
+${CLI_TOOLS_DOCUMENTATION}`
 
 	return {
 		message,

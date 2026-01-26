@@ -442,6 +442,23 @@ export function TaskDetailView({
 	const [selectedProvider, setSelectedProvider] = useState<Provider>("anthropic")
 	const [selectedModel, setSelectedModel] = useState<Model>("opus")
 
+	// Handlers for provider/model changes with user feedback
+	const handleProviderChange = (newProvider: Provider) => {
+		if (newProvider !== selectedProvider) {
+			setSelectedProvider(newProvider)
+			const providerName = newProvider === "anthropic" ? "Anthropic" : "ZAI"
+			toast.info("Provider changed", `Using ${providerName} for next message`)
+		}
+	}
+
+	const handleModelChange = (newModel: Model) => {
+		if (newModel !== selectedModel) {
+			setSelectedModel(newModel)
+			const modelName = newModel.charAt(0).toUpperCase() + newModel.slice(1)
+			toast.info("Model changed", `Using ${modelName} for next message`)
+		}
+	}
+
 	// Fetch ZAI API key for when ZAI provider is selected
 	const zaiApiKey = useQuery(api.secrets.get, { key: "ZAI_API_KEY" })
 
@@ -816,8 +833,8 @@ export function TaskDetailView({
 											agentStatus={agentStatus}
 											selectedProvider={selectedProvider}
 											selectedModel={selectedModel}
-											onProviderChange={setSelectedProvider}
-											onModelChange={setSelectedModel}
+											onProviderChange={handleProviderChange}
+											onModelChange={handleModelChange}
 											sessionId={activeSessionId}
 											onNewSession={handleNewSession}
 										/>

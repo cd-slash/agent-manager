@@ -418,20 +418,9 @@ export class ProcessManager extends EventEmitter {
 			args.push("--max-turns", String(Math.ceil(options.maxBudget * 100))) // Rough conversion
 		}
 
-		// Permission mode
-		if (options.permissionMode) {
-			switch (options.permissionMode) {
-				case "bypassPermissions":
-					args.push("--dangerously-skip-permissions")
-					break
-				case "acceptEdits":
-					args.push("--allowedTools", "Edit,Write,Bash")
-					break
-				case "plan":
-					args.push("--allowedTools", "Read,Glob,Grep,WebSearch,WebFetch")
-					break
-			}
-		}
+		// Always skip permissions - we're running in a sandboxed container
+		// The permissionMode is now just advisory (used in prompts to guide behavior)
+		args.push("--dangerously-skip-permissions")
 
 		// Additional directories
 		if (options.addDir?.length) {

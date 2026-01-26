@@ -13,6 +13,15 @@
         "turbo": "^2.7.5",
       },
     },
+    "packages/agent-cli": {
+      "name": "@agent-manager/agent-cli",
+      "version": "0.1.0",
+      "dependencies": {
+        "@agent-manager/convex": "workspace:*",
+        "commander": "^14.0.0",
+        "convex": "^1.31.5",
+      },
+    },
     "packages/agent-gateway": {
       "name": "@agent-manager/agent-gateway",
       "version": "0.1.0",
@@ -95,6 +104,8 @@
     },
   },
   "packages": {
+    "@agent-manager/agent-cli": ["@agent-manager/agent-cli@workspace:packages/agent-cli"],
+
     "@agent-manager/agent-gateway": ["@agent-manager/agent-gateway@workspace:packages/agent-gateway"],
 
     "@agent-manager/agent-shared": ["@agent-manager/agent-shared@workspace:packages/agent-shared"],
@@ -354,6 +365,8 @@
     "clsx": ["clsx@2.1.1", "", {}, "sha512-eYm0QWBtUrBWZWG0d386OGAw16Z995PiOVo2B7bjWSbHedGl5e0ZWaq65kOGgUSNesEIDkB9ISbTg/JK9dhCZA=="],
 
     "comma-separated-tokens": ["comma-separated-tokens@2.0.3", "", {}, "sha512-Fu4hJdvzeylCfQPp9SGWidpzrMs7tTrlu6Vb8XGaRGck8QSNZJJp538Wrb60Lax4fPwR64ViY468OIUTbRlGZg=="],
+
+    "commander": ["commander@14.0.2", "", {}, "sha512-TywoWNNRbhoD0BXs1P3ZEScW8W5iKrnbithIl0YH+uCmBd0QpPOA8yc82DS3BIE5Ma6FnBVUsJ7wVUDz4dvOWQ=="],
 
     "convex": ["convex@1.31.5", "", { "dependencies": { "esbuild": "0.27.0", "prettier": "^3.0.0" }, "peerDependencies": { "@auth0/auth0-react": "^2.0.1", "@clerk/clerk-react": "^4.12.8 || ^5.0.0", "react": "^18.0.0 || ^19.0.0-0 || ^19.0.0" }, "optionalPeers": ["@auth0/auth0-react", "@clerk/clerk-react", "react"], "bin": { "convex": "bin/main.js" } }, "sha512-E1IuJKFwMCHDToNGukBPs6c7RFaarR3t8chLF9n98TM5/Tgmj8lM6l7sKM1aJ3VwqGaB4wbeUAPY8osbCOXBhQ=="],
 
