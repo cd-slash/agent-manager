@@ -14,7 +14,7 @@ const server = serve({
 		"/health": new Response("OK"),
 	},
 
-	fetch(req) {
+	fetch(_req) {
 		// Fallback handler for unmatched routes
 		return new Response("Not Found", { status: 404 })
 	},

@@ -16,19 +16,21 @@
  */
 
 import { Command } from "commander"
-import { registerTaskCommands } from "./commands/task"
-import { registerRequirementsCommands } from "./commands/requirements"
-import { registerNotesCommands } from "./commands/notes"
-import { registerProjectCommands } from "./commands/project"
 import { registerDepsCommands } from "./commands/deps"
+import { registerNotesCommands } from "./commands/notes"
 import { registerPhaseCommands } from "./commands/phase"
+import { registerProjectCommands } from "./commands/project"
+import { registerRequirementsCommands } from "./commands/requirements"
+import { registerTaskCommands } from "./commands/task"
 import { error } from "./utils/output"
 
 const program = new Command()
 
 program
 	.name("code-agent-tools")
-	.description("CLI tools for Claude agents to interact with the task management database")
+	.description(
+		"CLI tools for Claude agents to interact with the task management database",
+	)
 	.version("0.1.0")
 
 // Register all command groups
@@ -42,7 +44,9 @@ registerPhaseCommands(program)
 // Global error handling for missing CONVEX_URL (checked when commands run)
 // and for unknown commands
 program.on("command:*", () => {
-	error(`Unknown command: ${program.args.join(" ")}. Use --help for available commands.`)
+	error(
+		`Unknown command: ${program.args.join(" ")}. Use --help for available commands.`,
+	)
 })
 
 // Parse and execute

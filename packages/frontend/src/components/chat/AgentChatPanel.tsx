@@ -1,5 +1,5 @@
-import { AlertCircle, MessageSquare, RefreshCw, Send } from "lucide-react"
-import { useEffect, useRef, useState, useCallback } from "react"
+import { AlertCircle, RefreshCw, Send } from "lucide-react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import ReactMarkdown from "react-markdown"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -8,7 +8,12 @@ import type { ChatMessage, ChatMessagePart } from "@/types"
 import { ToolCallGroup } from "./ToolCallGroup"
 
 // Agent status during message processing
-export type AgentStatus = "idle" | "waiting_for_container" | "starting_container" | "container_ready" | "thinking"
+export type AgentStatus =
+	| "idle"
+	| "waiting_for_container"
+	| "starting_container"
+	| "container_ready"
+	| "thinking"
 
 // Status message labels
 const statusLabels: Record<AgentStatus, string> = {
@@ -65,16 +70,34 @@ function MarkdownContent({ content }: { content: string }) {
 		<ReactMarkdown
 			components={{
 				p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
-				h1: ({ children }) => <h1 className="text-lg font-bold mb-2 mt-3 first:mt-0">{children}</h1>,
-				h2: ({ children }) => <h2 className="text-base font-bold mb-2 mt-3 first:mt-0">{children}</h2>,
-				h3: ({ children }) => <h3 className="text-sm font-bold mb-1 mt-2 first:mt-0">{children}</h3>,
-				ul: ({ children }) => <ul className="list-disc list-inside mb-2 space-y-1">{children}</ul>,
-				ol: ({ children }) => <ol className="list-decimal list-inside mb-2 space-y-1">{children}</ol>,
+				h1: ({ children }) => (
+					<h1 className="text-lg font-bold mb-2 mt-3 first:mt-0">{children}</h1>
+				),
+				h2: ({ children }) => (
+					<h2 className="text-base font-bold mb-2 mt-3 first:mt-0">
+						{children}
+					</h2>
+				),
+				h3: ({ children }) => (
+					<h3 className="text-sm font-bold mb-1 mt-2 first:mt-0">{children}</h3>
+				),
+				ul: ({ children }) => (
+					<ul className="list-disc list-inside mb-2 space-y-1">{children}</ul>
+				),
+				ol: ({ children }) => (
+					<ol className="list-decimal list-inside mb-2 space-y-1">
+						{children}
+					</ol>
+				),
 				li: ({ children }) => <li className="text-sm">{children}</li>,
 				code: ({ className, children }) => {
 					const isInline = !className
 					if (isInline) {
-						return <code className="bg-background px-1 py-0.5 rounded text-xs font-mono">{children}</code>
+						return (
+							<code className="bg-background px-1 py-0.5 rounded text-xs font-mono">
+								{children}
+							</code>
+						)
 					}
 					return (
 						<code className="block bg-background p-2 rounded text-xs font-mono overflow-x-auto my-2">
@@ -82,11 +105,22 @@ function MarkdownContent({ content }: { content: string }) {
 						</code>
 					)
 				},
-				pre: ({ children }) => <pre className="bg-background p-2 rounded overflow-x-auto my-2">{children}</pre>,
-				strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+				pre: ({ children }) => (
+					<pre className="bg-background p-2 rounded overflow-x-auto my-2">
+						{children}
+					</pre>
+				),
+				strong: ({ children }) => (
+					<strong className="font-semibold">{children}</strong>
+				),
 				em: ({ children }) => <em className="italic">{children}</em>,
 				a: ({ href, children }) => (
-					<a href={href} className="text-feature-blue hover:underline" target="_blank" rel="noopener noreferrer">
+					<a
+						href={href}
+						className="text-feature-blue hover:underline"
+						target="_blank"
+						rel="noopener noreferrer"
+					>
 						{children}
 					</a>
 				),
@@ -118,23 +152,38 @@ function renderMessageContent(msg: ChatMessage) {
 	const groupedParts = groupMessageParts(msg.parts)
 
 	// Debug: log parts info
-	console.log("[AgentChatPanel] Message parts:", msg.parts.length, "Grouped:", groupedParts.length, groupedParts.map(g => g.type))
+	console.log(
+		"[AgentChatPanel] Message parts:",
+		msg.parts.length,
+		"Grouped:",
+		groupedParts.length,
+		groupedParts.map((g) => g.type),
+	)
 
 	return (
 		<div className="space-y-2">
 			{groupedParts.map((group, idx) => {
 				if (group.type === "text") {
 					return (
-						<div key={idx} className="block">
+						<div
+							key={`text-${idx}-${group.content.slice(0, 20)}`}
+							className="block"
+						>
 							<MarkdownContent content={group.content} />
 						</div>
 					)
 				}
 
 				if (group.type === "tool_group") {
+					// Generate a stable key from the first tool's ID or name
+					const firstTool = group.parts.find((p) => p.type === "tool_use")
+					const toolKey =
+						firstTool?.type === "tool_use"
+							? firstTool.toolId || firstTool.toolName
+							: `group-${idx}`
 					return (
 						<ToolCallGroup
-							key={idx}
+							key={`tools-${toolKey}`}
 							parts={group.parts}
 							isStreaming={msg.isStreaming}
 						/>
@@ -177,7 +226,8 @@ export function AgentChatPanel({
 }: AgentChatPanelProps) {
 	const [chatInput, setChatInput] = useState("")
 	// Use external state if provided, otherwise local state
-	const [internalProvider, setInternalProvider] = useState<Provider>("anthropic")
+	const [internalProvider, setInternalProvider] =
+		useState<Provider>("anthropic")
 	const [internalModel, setInternalModel] = useState<Model>("opus")
 
 	const selectedProvider = externalProvider ?? internalProvider
@@ -211,14 +261,17 @@ export function AgentChatPanel({
 			textarea.style.height = "auto"
 			textarea.style.height = `${textarea.scrollHeight}px`
 		}
-	}, [chatInput])
+	}, [])
 
 	// Check if user is at the bottom of the scroll container
 	const isAtBottom = useCallback(() => {
 		const container = scrollContainerRef.current
 		if (!container) return true
 		const threshold = 50 // pixels from bottom to consider "at bottom"
-		return container.scrollHeight - container.scrollTop - container.clientHeight < threshold
+		return (
+			container.scrollHeight - container.scrollTop - container.clientHeight <
+			threshold
+		)
 	}, [])
 
 	// Scroll to bottom programmatically
@@ -253,7 +306,7 @@ export function AgentChatPanel({
 		if (!userHasScrolled) {
 			scrollToBottom()
 		}
-	}, [chatHistory?.length, isLoading, userHasScrolled, scrollToBottom])
+	}, [userHasScrolled, scrollToBottom])
 
 	const handleSend = (e: React.FormEvent) => {
 		e.preventDefault()
@@ -286,7 +339,10 @@ export function AgentChatPanel({
 								) : msg.isError ? (
 									<div className="w-full text-sm min-w-0 overflow-hidden">
 										<div className="flex items-start gap-2 p-3 rounded-lg bg-destructive/10 border border-destructive/20">
-											<AlertCircle size={16} className="text-destructive shrink-0 mt-0.5" />
+											<AlertCircle
+												size={16}
+												className="text-destructive shrink-0 mt-0.5"
+											/>
 											<div className="text-destructive min-w-0 overflow-hidden">
 												<div className="font-medium mb-1">Error</div>
 												<div className="font-mono text-xs whitespace-pre-wrap break-words">
@@ -301,16 +357,25 @@ export function AgentChatPanel({
 									</div>
 								)}
 								<div className="flex items-center gap-1.5 mt-1.5">
-									<Badge variant="outline" className="text-[10px] font-normal py-0 px-1.5">
+									<Badge
+										variant="outline"
+										className="text-[10px] font-normal py-0 px-1.5"
+									>
 										{msg.time}
 									</Badge>
 									{msg.sender === "ai" && msg.isError && (
-										<Badge variant="destructive" className="text-[10px] font-normal py-0 px-1.5">
+										<Badge
+											variant="destructive"
+											className="text-[10px] font-normal py-0 px-1.5"
+										>
 											Error
 										</Badge>
 									)}
 									{msg.sender === "ai" && msg.model && !msg.isError && (
-										<Badge variant="outline" className="text-[10px] font-normal py-0 px-1.5">
+										<Badge
+											variant="outline"
+											className="text-[10px] font-normal py-0 px-1.5"
+										>
 											{msg.model}
 										</Badge>
 									)}
@@ -320,9 +385,18 @@ export function AgentChatPanel({
 						{isLoading && (
 							<div className="flex flex-col items-start">
 								<div className="flex items-center space-x-1 py-1">
-									<div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
-									<div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
-									<div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+									<div
+										className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce"
+										style={{ animationDelay: "0ms" }}
+									/>
+									<div
+										className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce"
+										style={{ animationDelay: "150ms" }}
+									/>
+									<div
+										className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce"
+										style={{ animationDelay: "300ms" }}
+									/>
 								</div>
 								<span className="text-[10px] text-muted-foreground mt-1 px-compact">
 									{statusLabels[agentStatus] || statusLabels.thinking}
@@ -363,27 +437,27 @@ export function AgentChatPanel({
 								<button
 									type="button"
 									onClick={() => handleProviderChange("anthropic")}
-								className={cn(
-									"px-2.5 h-5 text-xs font-medium rounded transition-colors flex items-center",
-									selectedProvider === "anthropic"
-										? "bg-surface-elevated text-foreground shadow-sm"
-										: "text-muted-foreground hover:text-foreground",
-								)}
-							>
-								Anthropic
-							</button>
-							<button
-								type="button"
-								onClick={() => handleProviderChange("zai")}
-								className={cn(
-									"px-2.5 h-5 text-xs font-medium rounded transition-colors flex items-center",
-									selectedProvider === "zai"
-										? "bg-surface-elevated text-foreground shadow-sm"
-										: "text-muted-foreground hover:text-foreground",
-								)}
-							>
-								ZAI
-							</button>
+									className={cn(
+										"px-2.5 h-5 text-xs font-medium rounded transition-colors flex items-center",
+										selectedProvider === "anthropic"
+											? "bg-surface-elevated text-foreground shadow-sm"
+											: "text-muted-foreground hover:text-foreground",
+									)}
+								>
+									Anthropic
+								</button>
+								<button
+									type="button"
+									onClick={() => handleProviderChange("zai")}
+									className={cn(
+										"px-2.5 h-5 text-xs font-medium rounded transition-colors flex items-center",
+										selectedProvider === "zai"
+											? "bg-surface-elevated text-foreground shadow-sm"
+											: "text-muted-foreground hover:text-foreground",
+									)}
+								>
+									ZAI
+								</button>
 							</div>
 							{sessionId && (
 								<div className="flex items-center gap-1.5">

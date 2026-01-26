@@ -34,7 +34,8 @@ export function ProvidersSettings() {
 						No AI Providers Configured
 					</h4>
 					<p className="text-sm text-muted-foreground mb-4">
-						Run the seed function in the Convex dashboard to initialize providers.
+						Run the seed function in the Convex dashboard to initialize
+						providers.
 					</p>
 				</div>
 			</section>

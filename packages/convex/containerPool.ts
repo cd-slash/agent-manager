@@ -21,7 +21,9 @@ export const get = query({
 	handler: async (ctx, args) => {
 		return await ctx.db
 			.query("containerPool")
-			.withIndex("by_container_id", (q) => q.eq("containerId", args.containerId))
+			.withIndex("by_container_id", (q) =>
+				q.eq("containerId", args.containerId),
+			)
 			.first()
 	},
 })
@@ -140,7 +142,9 @@ export const register = mutation({
 		// Check if container already exists
 		const existing = await ctx.db
 			.query("containerPool")
-			.withIndex("by_container_id", (q) => q.eq("containerId", args.containerId))
+			.withIndex("by_container_id", (q) =>
+				q.eq("containerId", args.containerId),
+			)
 			.first()
 
 		if (existing) {
@@ -180,7 +184,9 @@ export const unregister = mutation({
 	handler: async (ctx, args) => {
 		const container = await ctx.db
 			.query("containerPool")
-			.withIndex("by_container_id", (q) => q.eq("containerId", args.containerId))
+			.withIndex("by_container_id", (q) =>
+				q.eq("containerId", args.containerId),
+			)
 			.first()
 
 		if (container) {
@@ -200,7 +206,9 @@ export const markOffline = mutation({
 	handler: async (ctx, args) => {
 		const container = await ctx.db
 			.query("containerPool")
-			.withIndex("by_container_id", (q) => q.eq("containerId", args.containerId))
+			.withIndex("by_container_id", (q) =>
+				q.eq("containerId", args.containerId),
+			)
 			.first()
 
 		if (container) {
@@ -220,7 +228,9 @@ export const updateHealthCheck = mutation({
 	handler: async (ctx, args) => {
 		const container = await ctx.db
 			.query("containerPool")
-			.withIndex("by_container_id", (q) => q.eq("containerId", args.containerId))
+			.withIndex("by_container_id", (q) =>
+				q.eq("containerId", args.containerId),
+			)
 			.first()
 
 		if (container) {
@@ -250,7 +260,9 @@ export const acquire = mutation({
 
 		const container = await ctx.db
 			.query("containerPool")
-			.withIndex("by_container_id", (q) => q.eq("containerId", args.containerId))
+			.withIndex("by_container_id", (q) =>
+				q.eq("containerId", args.containerId),
+			)
 			.first()
 
 		if (!container) {
@@ -289,7 +301,9 @@ export const release = mutation({
 
 		const container = await ctx.db
 			.query("containerPool")
-			.withIndex("by_container_id", (q) => q.eq("containerId", args.containerId))
+			.withIndex("by_container_id", (q) =>
+				q.eq("containerId", args.containerId),
+			)
 			.first()
 
 		if (!container) {
@@ -329,7 +343,9 @@ export const reserve = mutation({
 
 		const container = await ctx.db
 			.query("containerPool")
-			.withIndex("by_container_id", (q) => q.eq("containerId", args.containerId))
+			.withIndex("by_container_id", (q) =>
+				q.eq("containerId", args.containerId),
+			)
 			.first()
 
 		if (!container) {
@@ -365,7 +381,9 @@ export const unreserve = mutation({
 
 		const container = await ctx.db
 			.query("containerPool")
-			.withIndex("by_container_id", (q) => q.eq("containerId", args.containerId))
+			.withIndex("by_container_id", (q) =>
+				q.eq("containerId", args.containerId),
+			)
 			.first()
 
 		if (!container) {
@@ -425,7 +443,9 @@ export const deleteByContainerId = mutation({
 	handler: async (ctx, args) => {
 		const container = await ctx.db
 			.query("containerPool")
-			.withIndex("by_container_id", (q) => q.eq("containerId", args.containerId))
+			.withIndex("by_container_id", (q) =>
+				q.eq("containerId", args.containerId),
+			)
 			.first()
 
 		if (container) {

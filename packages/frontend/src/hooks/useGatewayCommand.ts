@@ -13,7 +13,12 @@ import type { Id } from "@agent-manager/convex/dataModel"
 import { useMutation, useQuery } from "convex/react"
 import { useCallback, useEffect, useRef, useState } from "react"
 
-type CommandStatus = "pending" | "processing" | "completed" | "failed"
+type CommandStatus =
+	| "pending"
+	| "processing"
+	| "completed"
+	| "failed"
+	| "queued"
 
 interface CommandResult<T = unknown> {
 	status: CommandStatus
@@ -195,7 +200,11 @@ export function useStopContainer() {
 			containerName: string,
 			server: string,
 			sshUser?: string,
-		): Promise<{ stopped: boolean; notFound: boolean; containerName: string }> => {
+		): Promise<{
+			stopped: boolean
+			notFound: boolean
+			containerName: string
+		}> => {
 			return new Promise((resolve, reject) => {
 				createCommand({
 					containerName,
@@ -264,7 +273,11 @@ export function useRestartContainer() {
 			containerName: string,
 			server: string,
 			sshUser?: string,
-		): Promise<{ restarted: boolean; notFound: boolean; containerName: string }> => {
+		): Promise<{
+			restarted: boolean
+			notFound: boolean
+			containerName: string
+		}> => {
 			return new Promise((resolve, reject) => {
 				createCommand({
 					containerName,
@@ -368,7 +381,9 @@ export function useDeleteContainer() {
  */
 export function useStartExecution() {
 	const createCommand = useMutation(api.containerCommands.startExecution)
-	const [pendingId, setPendingId] = useState<Id<"containerCommands"> | null>(null)
+	const [pendingId, setPendingId] = useState<Id<"containerCommands"> | null>(
+		null,
+	)
 	const pendingRef = useRef<PendingContainerCommand<{
 		correlationId: string
 		status: string
@@ -438,7 +453,9 @@ export function useStartExecution() {
  */
 export function useStartPhaseExecution() {
 	const createCommand = useMutation(api.containerCommands.startPhaseExecution)
-	const [pendingId, setPendingId] = useState<Id<"containerCommands"> | null>(null)
+	const [pendingId, setPendingId] = useState<Id<"containerCommands"> | null>(
+		null,
+	)
 	const pendingRef = useRef<PendingContainerCommand<{
 		correlationId: string
 		taskId: string

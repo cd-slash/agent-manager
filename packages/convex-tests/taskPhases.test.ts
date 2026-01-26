@@ -15,7 +15,9 @@ import { createConvexTest } from "./setup"
 
 describe("taskPhases", () => {
 	// Helper to create a project and task (without triggering auto-initialize scheduler)
-	async function createProjectAndTask(t: Awaited<ReturnType<typeof createConvexTest>>) {
+	async function createProjectAndTask(
+		t: Awaited<ReturnType<typeof createConvexTest>>,
+	) {
 		const projectId = await t.mutation(api.projects.create, {
 			name: "Test Project",
 			description: "Test Description",
@@ -316,7 +318,7 @@ describe("taskPhases", () => {
 				phase: "requirements",
 				agentSessionId: "session-abc123",
 				containerId: "container-xyz",
-				totalCostUsd: 0.10,
+				totalCostUsd: 0.1,
 				numTurns: 5,
 			})
 
@@ -327,7 +329,7 @@ describe("taskPhases", () => {
 
 			expect(phase?.agentSessionId).toBe("session-abc123")
 			expect(phase?.containerId).toBe("container-xyz")
-			expect(phase?.totalCostUsd).toBe(0.10)
+			expect(phase?.totalCostUsd).toBe(0.1)
 			expect(phase?.numTurns).toBe(5)
 		})
 

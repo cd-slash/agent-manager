@@ -4,11 +4,15 @@
  * Commands for managing tasks - CRUD, category changes, etc.
  */
 
-import { Command } from "commander"
 import type { Id } from "@agent-manager/convex/dataModel"
-import { getClient, api } from "../client"
+import type { Command } from "commander"
+import { api, getClient } from "../client"
 import { success, withErrorHandler } from "../utils/output"
-import { validateId, validateCategory, validateRequired } from "../utils/validators"
+import {
+	validateCategory,
+	validateId,
+	validateRequired,
+} from "../utils/validators"
 
 export function registerTaskCommands(program: Command): void {
 	const task = program.command("task").description("Task management commands")
@@ -59,52 +63,63 @@ export function registerTaskCommands(program: Command): void {
 		.command("list")
 		.description("List tasks in a project")
 		.requiredOption("--project-id <id>", "Project ID")
-		.option("--category <category>", "Filter by category (backlog, todo, in-progress, done)")
+		.option(
+			"--category <category>",
+			"Filter by category (backlog, todo, in-progress, done)",
+		)
 		.action(
-			withErrorHandler(async (options: { projectId: string; category?: string }) => {
-				validateId(options.projectId, "project-id")
-				const client = getClient()
+			withErrorHandler(
+				async (options: { projectId: string; category?: string }) => {
+					validateId(options.projectId, "project-id")
+					const client = getClient()
 
-				// Get project info
-				const project = await client.query(api.projects.get, {
-					id: options.projectId as Id<"projects">,
-				})
-
-				if (!project) {
-					success({ project: null, tasks: [], message: "Project not found" })
-					return
-				}
-
-				let tasks
-				if (options.category) {
-					const category = validateCategory(options.category)
-					tasks = await client.query(api.tasks.listByCategory, {
-						projectId: options.projectId as Id<"projects">,
-						category,
+					// Get project info
+					const project = await client.query(api.projects.get, {
+						id: options.projectId as Id<"projects">,
 					})
-				} else {
-					tasks = await client.query(api.tasks.listByProject, {
-						projectId: options.projectId as Id<"projects">,
-					})
-				}
 
-				success({
-					project: {
-						id: project._id,
-						name: project.name,
-						repo: project.repo,
-						branch: project.branch,
-					},
-					tasks: tasks.map((t) => ({
-						id: t._id,
-						title: t.title,
-						category: t.category,
-						currentPhase: t.currentPhase,
-						tag: t.tag,
-						complexity: t.complexity,
-					})),
-				})
-			}),
+					if (!project) {
+						success({ project: null, tasks: [], message: "Project not found" })
+						return
+					}
+
+					let tasks: Array<{
+						_id: Id<"tasks">
+						title: string
+						category: string
+						phase?: string
+						order?: number
+					}>
+					if (options.category) {
+						const category = validateCategory(options.category)
+						tasks = await client.query(api.tasks.listByCategory, {
+							projectId: options.projectId as Id<"projects">,
+							category,
+						})
+					} else {
+						tasks = await client.query(api.tasks.listByProject, {
+							projectId: options.projectId as Id<"projects">,
+						})
+					}
+
+					success({
+						project: {
+							id: project._id,
+							name: project.name,
+							repo: project.repo,
+							branch: project.branch,
+						},
+						tasks: tasks.map((t) => ({
+							id: t._id,
+							title: t.title,
+							category: t.category,
+							currentPhase: t.currentPhase,
+							tag: t.tag,
+							complexity: t.complexity,
+						})),
+					})
+				},
+			),
 		)
 
 	// Create a new task
@@ -117,7 +132,11 @@ export function registerTaskCommands(program: Command): void {
 		.option("--prompt <prompt>", "Initial prompt for the task")
 		.option("--category <category>", "Category (default: todo)", "todo")
 		.option("--tag <tag>", "Task tag (default: feature)", "feature")
-		.option("--complexity <complexity>", "Complexity level (default: medium)", "medium")
+		.option(
+			"--complexity <complexity>",
+			"Complexity level (default: medium)",
+			"medium",
+		)
 		.action(
 			withErrorHandler(
 				async (options: {
@@ -248,33 +267,38 @@ export function registerTaskCommands(program: Command): void {
 	task
 		.command("move <task-id>")
 		.description("Move task to a different category")
-		.requiredOption("--category <category>", "Target category (backlog, todo, in-progress, done)")
+		.requiredOption(
+			"--category <category>",
+			"Target category (backlog, todo, in-progress, done)",
+		)
 		.action(
-			withErrorHandler(async (taskId: string, options: { category: string }) => {
-				validateId(taskId, "task-id")
-				const category = validateCategory(options.category)
-				const client = getClient()
+			withErrorHandler(
+				async (taskId: string, options: { category: string }) => {
+					validateId(taskId, "task-id")
+					const category = validateCategory(options.category)
+					const client = getClient()
 
-				await client.mutation(api.tasks.updateCategory, {
-					id: taskId as Id<"tasks">,
-					category,
-				})
+					await client.mutation(api.tasks.updateCategory, {
+						id: taskId as Id<"tasks">,
+						category,
+					})
 
-				// Fetch updated task
-				const task = await client.query(api.tasks.get, {
-					id: taskId as Id<"tasks">,
-				})
+					// Fetch updated task
+					const task = await client.query(api.tasks.get, {
+						id: taskId as Id<"tasks">,
+					})
 
-				success({
-					task: task
-						? {
-								id: task._id,
-								title: task.title,
-								category: task.category,
-							}
-						: null,
-				})
-			}),
+					success({
+						task: task
+							? {
+									id: task._id,
+									title: task.title,
+									category: task.category,
+								}
+							: null,
+					})
+				},
+			),
 		)
 
 	// Set implementation prompt

@@ -4,11 +4,16 @@
  * Commands for managing acceptance criteria on tasks.
  */
 
-import { Command } from "commander"
 import type { Id } from "@agent-manager/convex/dataModel"
-import { getClient, api } from "../client"
+import type { Command } from "commander"
+import { api, getClient } from "../client"
 import { success, withErrorHandler } from "../utils/output"
-import { validateId, validateRequired, validateBoolean, parseJsonArray } from "../utils/validators"
+import {
+	parseJsonArray,
+	validateBoolean,
+	validateId,
+	validateRequired,
+} from "../utils/validators"
 
 export function registerRequirementsCommands(program: Command): void {
 	const requirements = program
@@ -76,10 +81,13 @@ export function registerRequirementsCommands(program: Command): void {
 					return
 				}
 
-				const criteriaId = await client.mutation(api.acceptanceCriteria.create, {
-					taskId: options.taskId as Id<"tasks">,
-					text: options.text,
-				})
+				const criteriaId = await client.mutation(
+					api.acceptanceCriteria.create,
+					{
+						taskId: options.taskId as Id<"tasks">,
+						text: options.text,
+					},
+				)
 
 				success({
 					task: {
@@ -100,7 +108,10 @@ export function registerRequirementsCommands(program: Command): void {
 		.command("add-bulk")
 		.description("Add multiple acceptance criteria at once")
 		.requiredOption("--task-id <id>", "Task ID")
-		.requiredOption("--items <json>", 'JSON array of requirement texts, e.g. \'["Req 1", "Req 2"]\'')
+		.requiredOption(
+			"--items <json>",
+			'JSON array of requirement texts, e.g. \'["Req 1", "Req 2"]\'',
+		)
 		.action(
 			withErrorHandler(async (options: { taskId: string; items: string }) => {
 				validateId(options.taskId, "task-id")
@@ -142,23 +153,25 @@ export function registerRequirementsCommands(program: Command): void {
 		.description("Update requirement text")
 		.requiredOption("--text <text>", "New requirement text")
 		.action(
-			withErrorHandler(async (criteriaId: string, options: { text: string }) => {
-				validateId(criteriaId, "criteria-id")
-				validateRequired(options.text, "text")
-				const client = getClient()
+			withErrorHandler(
+				async (criteriaId: string, options: { text: string }) => {
+					validateId(criteriaId, "criteria-id")
+					validateRequired(options.text, "text")
+					const client = getClient()
 
-				await client.mutation(api.acceptanceCriteria.update, {
-					id: criteriaId as Id<"acceptanceCriteria">,
-					text: options.text,
-				})
-
-				success({
-					requirement: {
-						id: criteriaId,
+					await client.mutation(api.acceptanceCriteria.update, {
+						id: criteriaId as Id<"acceptanceCriteria">,
 						text: options.text,
-					},
-				})
-			}),
+					})
+
+					success({
+						requirement: {
+							id: criteriaId,
+							text: options.text,
+						},
+					})
+				},
+			),
 		)
 
 	// Set done status
@@ -167,23 +180,25 @@ export function registerRequirementsCommands(program: Command): void {
 		.description("Mark requirement as done or not done")
 		.requiredOption("--done <boolean>", "Done status (true or false)")
 		.action(
-			withErrorHandler(async (criteriaId: string, options: { done: string }) => {
-				validateId(criteriaId, "criteria-id")
-				const done = validateBoolean(options.done, "done")
-				const client = getClient()
+			withErrorHandler(
+				async (criteriaId: string, options: { done: string }) => {
+					validateId(criteriaId, "criteria-id")
+					const done = validateBoolean(options.done, "done")
+					const client = getClient()
 
-				await client.mutation(api.acceptanceCriteria.setDone, {
-					id: criteriaId as Id<"acceptanceCriteria">,
-					done,
-				})
-
-				success({
-					requirement: {
-						id: criteriaId,
+					await client.mutation(api.acceptanceCriteria.setDone, {
+						id: criteriaId as Id<"acceptanceCriteria">,
 						done,
-					},
-				})
-			}),
+					})
+
+					success({
+						requirement: {
+							id: criteriaId,
+							done,
+						},
+					})
+				},
+			),
 		)
 
 	// Delete a requirement

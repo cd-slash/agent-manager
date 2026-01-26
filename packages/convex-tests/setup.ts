@@ -5,10 +5,10 @@
  * This setup creates the modules object using Bun's native Glob API.
  */
 
-import { convexTest as baseConvexTest } from "convex-test"
-import type { GenericSchema } from "convex/server"
+import { resolve } from "node:path"
 import { Glob } from "bun"
-import { resolve, relative } from "node:path"
+import type { GenericSchema } from "convex/server"
+import { convexTest as baseConvexTest } from "convex-test"
 
 // Cache the modules so we only scan once
 let cachedModules: Record<string, () => Promise<unknown>> | null = null

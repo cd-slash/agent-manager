@@ -19,11 +19,18 @@ export const syncDevices = action({
 // Delete a device from Tailscale (called when deleting containers)
 export const deleteDevice = action({
 	args: { nodeId: v.string() },
-	handler: async (ctx, args): Promise<{ deleted: boolean; reason?: string }> => {
+	handler: async (
+		ctx,
+		args,
+	): Promise<{ deleted: boolean; reason?: string; skipped?: boolean }> => {
 		const result = await ctx.runAction(
 			internal.internal.tailscale.deleteDeviceFromTailscale,
 			{ nodeId: args.nodeId },
 		)
+		// Handle skipped case by converting to deleted: false
+		if ("skipped" in result && result.skipped) {
+			return { deleted: false, reason: result.reason, skipped: true }
+		}
 		return result
 	},
 })

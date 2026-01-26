@@ -38,9 +38,9 @@ const statusFilters: FilterConfig[] = [
 export function ServerView({ servers, onSelectServer }: ServerViewProps) {
 	const [isRefreshing, setIsRefreshing] = useState(false)
 	const [selectedServers, setSelectedServers] = useState<ServerType[]>([])
-	const [clearSelectionFn, setClearSelectionFn] = useState<
-		(() => void) | null
-	>(null)
+	const [clearSelectionFn, setClearSelectionFn] = useState<(() => void) | null>(
+		null,
+	)
 	const [isTerminalModalOpen, setIsTerminalModalOpen] = useState(false)
 	const [isLogsModalOpen, setIsLogsModalOpen] = useState(false)
 	const syncDevices = useAction(api.tailscale.syncDevices)

@@ -1,5 +1,5 @@
+import { Brain, ChevronDown, ChevronRight } from "lucide-react"
 import { useState } from "react"
-import { ChevronRight, ChevronDown, Brain } from "lucide-react"
 import {
 	Collapsible,
 	CollapsibleContent,
@@ -27,14 +27,10 @@ export function ThinkingBlock({ content, isStreaming }: ThinkingBlockProps) {
 					className={cn(
 						"w-full flex items-center gap-2 text-xs px-2 py-1.5 rounded",
 						"bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 transition-colors",
-						isStreaming && "animate-pulse"
+						isStreaming && "animate-pulse",
 					)}
 				>
-					{isOpen ? (
-						<ChevronDown size={12} />
-					) : (
-						<ChevronRight size={12} />
-					)}
+					{isOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
 					<Brain size={12} className="text-purple-400" />
 					<span className="font-medium text-purple-300">Thinking</span>
 					{!isOpen && (
@@ -43,9 +39,7 @@ export function ThinkingBlock({ content, isStreaming }: ThinkingBlockProps) {
 						</span>
 					)}
 					<span className="flex-1" />
-					{isStreaming && (
-						<span className="text-purple-400">...</span>
-					)}
+					{isStreaming && <span className="text-purple-400">...</span>}
 				</button>
 			</CollapsibleTrigger>
 			<CollapsibleContent>

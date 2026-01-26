@@ -8,10 +8,10 @@
  * - Handle heartbeats and health updates
  */
 
-import { api } from "@agent-manager/convex/api"
-import { ConvexClient } from "convex/browser"
-import type { Doc, Id } from "@agent-manager/convex/dataModel"
 import { EventEmitter } from "node:events"
+import { api } from "@agent-manager/convex/api"
+import type { Doc, Id } from "@agent-manager/convex/dataModel"
+import { ConvexClient } from "convex/browser"
 import type { AuthManager } from "./auth-manager"
 import type { ProcessManager } from "./process-manager"
 
@@ -24,19 +24,27 @@ type ContainerCommand = Doc<"containerCommands">
  */
 function formatApiError(rawError: string): string {
 	// Try to extract the JSON error payload
-	const jsonMatch = rawError.match(/\{[^{}]*"error"[^{}]*\{[^{}]*"message"\s*:\s*"([^"]+)"/)
+	const jsonMatch = rawError.match(
+		/\{[^{}]*"error"[^{}]*\{[^{}]*"message"\s*:\s*"([^"]+)"/,
+	)
 	const statusMatch = rawError.match(/API Error:\s*(\d+)/)
 	const status = statusMatch?.[1]
 	const message = jsonMatch?.[1]
 
 	if (message) {
 		// Map common status codes to friendly names
-		const statusName = status === "401" ? "Authentication Failed"
-			: status === "403" ? "Access Denied"
-			: status === "429" ? "Rate Limited"
-			: status === "500" ? "Server Error"
-			: status ? `Error ${status}`
-			: "API Error"
+		const statusName =
+			status === "401"
+				? "Authentication Failed"
+				: status === "403"
+					? "Access Denied"
+					: status === "429"
+						? "Rate Limited"
+						: status === "500"
+							? "Server Error"
+							: status
+								? `Error ${status}`
+								: "API Error"
 
 		return `${statusName}: ${message}`
 	}
@@ -111,7 +119,10 @@ export class ConvexIntegration extends EventEmitter<ConvexIntegrationEvents> {
 			this.subscribeToAuthToken()
 		} catch (error) {
 			console.error("[convex] Failed to connect:", error)
-			this.emit("error", error instanceof Error ? error : new Error(String(error)))
+			this.emit(
+				"error",
+				error instanceof Error ? error : new Error(String(error)),
+			)
 			throw error
 		}
 	}
@@ -187,7 +198,9 @@ export class ConvexIntegration extends EventEmitter<ConvexIntegrationEvents> {
 			{ key: "CLAUDE_CODE_OAUTH_TOKEN" },
 			async (secret) => {
 				if (secret?.value) {
-					console.log("[convex] Received OAuth token update (CLAUDE_CODE_OAUTH_TOKEN)")
+					console.log(
+						"[convex] Received OAuth token update (CLAUDE_CODE_OAUTH_TOKEN)",
+					)
 					try {
 						await this.authManager.setToken(secret.value)
 					} catch (error) {
@@ -202,9 +215,13 @@ export class ConvexIntegration extends EventEmitter<ConvexIntegrationEvents> {
 			{ key: "ANTHROPIC_AUTH_TOKEN" },
 			async (secret) => {
 				// Only use legacy key if new key doesn't exist
-				const newKey = await this.client.query(api.secrets.get, { key: "CLAUDE_CODE_OAUTH_TOKEN" })
+				const newKey = await this.client.query(api.secrets.get, {
+					key: "CLAUDE_CODE_OAUTH_TOKEN",
+				})
 				if (!newKey?.value && secret?.value) {
-					console.log("[convex] Received OAuth token update (legacy ANTHROPIC_AUTH_TOKEN)")
+					console.log(
+						"[convex] Received OAuth token update (legacy ANTHROPIC_AUTH_TOKEN)",
+					)
 					try {
 						await this.authManager.setToken(secret.value)
 					} catch (error) {
@@ -269,7 +286,10 @@ export class ConvexIntegration extends EventEmitter<ConvexIntegrationEvents> {
 			this.emit("command:completed", commandId, result)
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error)
-			console.error(`[convex] Command failed: ${command.type} (${commandId}):`, message)
+			console.error(
+				`[convex] Command failed: ${command.type} (${commandId}):`,
+				message,
+			)
 
 			// Mark command as failed
 			await this.client.mutation(api.containerCommands.fail, {
@@ -288,7 +308,9 @@ export class ConvexIntegration extends EventEmitter<ConvexIntegrationEvents> {
 		}
 	}
 
-	private async handleStartExecution(command: ContainerCommand): Promise<unknown> {
+	private async handleStartExecution(
+		command: ContainerCommand,
+	): Promise<unknown> {
 		const payload = command.payload as {
 			message: string
 			model?: string
@@ -351,7 +373,8 @@ export class ConvexIntegration extends EventEmitter<ConvexIntegrationEvents> {
 		})) {
 			// Handle error events from process manager
 			if (event.type === "error") {
-				errorMessage = event.error || `Process exited with code ${event.exitCode}`
+				errorMessage =
+					event.error || `Process exited with code ${event.exitCode}`
 				console.error(`[convex] Process error: ${errorMessage}`)
 
 				// Store error as an agent message
@@ -396,7 +419,10 @@ export class ConvexIntegration extends EventEmitter<ConvexIntegrationEvents> {
 				// Skip if it looks like an error message (handled separately)
 				if (data.type === "result" && data.result) {
 					// Check if the result is actually an error message (e.g., "API Error: 401 ...")
-					if (data.result.startsWith("API Error:") || data.result.includes("Please run /login")) {
+					if (
+						data.result.startsWith("API Error:") ||
+						data.result.includes("Please run /login")
+					) {
 						// This is an error, not a real result - mark it and skip
 						if (!errorMessage) {
 							errorMessage = data.result
@@ -486,7 +512,9 @@ export class ConvexIntegration extends EventEmitter<ConvexIntegrationEvents> {
 		return { correlationId, claudeSessionId, status: finalStatus }
 	}
 
-	private async handleStartPhaseExecution(command: ContainerCommand): Promise<unknown> {
+	private async handleStartPhaseExecution(
+		command: ContainerCommand,
+	): Promise<unknown> {
 		const payload = command.payload as {
 			taskId: string
 			phase: string
@@ -500,14 +528,26 @@ export class ConvexIntegration extends EventEmitter<ConvexIntegrationEvents> {
 		// Get phase configuration from Convex
 		const phaseConfig = await this.client.query(api.taskPhases.getPhase, {
 			taskId: payload.taskId as Id<"tasks">,
-			phase: payload.phase as "requirements" | "planning" | "implementation" | "ai_review" | "remediation" | "human_review" | "merge",
+			phase: payload.phase as
+				| "requirements"
+				| "planning"
+				| "implementation"
+				| "ai_review"
+				| "remediation"
+				| "human_review"
+				| "merge",
 		})
 
 		if (!phaseConfig) {
-			throw new Error(`Phase ${payload.phase} not found for task ${payload.taskId}`)
+			throw new Error(
+				`Phase ${payload.phase} not found for task ${payload.taskId}`,
+			)
 		}
 
-		const prompt = payload.customPrompt || phaseConfig.prompt || `Execute ${payload.phase} phase`
+		const prompt =
+			payload.customPrompt ||
+			phaseConfig.prompt ||
+			`Execute ${payload.phase} phase`
 		const model = payload.configOverrides?.model || phaseConfig.model
 
 		// Execute the phase
@@ -522,7 +562,9 @@ export class ConvexIntegration extends EventEmitter<ConvexIntegrationEvents> {
 		})
 	}
 
-	private async handlePushAuthToken(command: ContainerCommand): Promise<unknown> {
+	private async handlePushAuthToken(
+		command: ContainerCommand,
+	): Promise<unknown> {
 		const payload = command.payload as { token: string }
 
 		if (!payload.token) {
@@ -533,8 +575,13 @@ export class ConvexIntegration extends EventEmitter<ConvexIntegrationEvents> {
 		return { success: true }
 	}
 
-	private async handleAbortExecution(command: ContainerCommand): Promise<unknown> {
-		const payload = command.payload as { correlationId?: string; processId?: number }
+	private async handleAbortExecution(
+		command: ContainerCommand,
+	): Promise<unknown> {
+		const payload = command.payload as {
+			correlationId?: string
+			processId?: number
+		}
 
 		if (payload.processId) {
 			const success = this.processManager.abort(payload.processId)
@@ -546,13 +593,17 @@ export class ConvexIntegration extends EventEmitter<ConvexIntegrationEvents> {
 		return { success: true, abortedAll: true }
 	}
 
-	private async handleStartOAuthFlow(command: ContainerCommand): Promise<unknown> {
+	private async handleStartOAuthFlow(
+		command: ContainerCommand,
+	): Promise<unknown> {
 		const payload = command.payload as {
 			provider: string
 			oauthFlowId: string
 		}
 
-		console.log(`[convex] Starting OAuth flow for provider: ${payload.provider}`)
+		console.log(
+			`[convex] Starting OAuth flow for provider: ${payload.provider}`,
+		)
 
 		try {
 			const result = await this.authManager.startOAuthFlow()
@@ -569,7 +620,9 @@ export class ConvexIntegration extends EventEmitter<ConvexIntegrationEvents> {
 		}
 	}
 
-	private async handleCompleteOAuthFlow(command: ContainerCommand): Promise<unknown> {
+	private async handleCompleteOAuthFlow(
+		command: ContainerCommand,
+	): Promise<unknown> {
 		const payload = command.payload as {
 			oauthFlowId: string
 			containerFlowId: string

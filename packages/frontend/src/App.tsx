@@ -143,7 +143,8 @@ function App() {
 			status: c.status as "running" | "stopped",
 			port: c.port,
 			server: c.serverName ?? "",
-			serverHostname: c.resolvedServerHostname ?? c.serverHostname ?? "localhost",
+			serverHostname:
+				c.resolvedServerHostname ?? c.serverHostname ?? "localhost",
 		}))
 	}, [containersData])
 
@@ -163,7 +164,7 @@ function App() {
 	const handleCreateProject = async (projectData: {
 		name: string
 		description: string
-		repo?: string
+		repo: string
 		branch?: string
 	}) => {
 		const projectId = await createProject({

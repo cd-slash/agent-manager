@@ -10,12 +10,15 @@
 
 import { describe, expect, it } from "bun:test"
 import { api, internal } from "../convex/_generated/api"
+import type { Id } from "../convex/_generated/dataModel"
 import schema from "../convex/schema"
 import { createConvexTest } from "./setup"
 
 describe("tasks", () => {
 	// Helper to create a project
-	async function createProject(t: Awaited<ReturnType<typeof createConvexTest>>) {
+	async function createProject(
+		t: Awaited<ReturnType<typeof createConvexTest>>,
+	) {
 		return await t.mutation(api.projects.create, {
 			name: "Test Project",
 			description: "Test Description",
@@ -25,7 +28,7 @@ describe("tasks", () => {
 	// Helper to create a task without triggering the scheduler
 	async function createTaskDirect(
 		t: Awaited<ReturnType<typeof createConvexTest>>,
-		projectId: any,
+		projectId: Id<"projects">,
 		overrides: Partial<{
 			title: string
 			description: string

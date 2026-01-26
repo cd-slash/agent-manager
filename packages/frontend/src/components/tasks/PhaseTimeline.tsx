@@ -120,7 +120,9 @@ export function PhaseTimeline({
 											getPhaseStatusColor(status),
 											isActive &&
 												"ring-2 ring-primary ring-offset-2 ring-offset-background",
-											isApplicable && onPhaseClick && "cursor-pointer hover:scale-110",
+											isApplicable &&
+												onPhaseClick &&
+												"cursor-pointer hover:scale-110",
 											!isApplicable && "opacity-40 cursor-default",
 										)}
 									>
@@ -130,7 +132,9 @@ export function PhaseTimeline({
 								<TooltipContent side="bottom">
 									{isApplicable ? (
 										<>
-											<p className="font-medium">{PHASE_DISPLAY_NAMES[phase]}</p>
+											<p className="font-medium">
+												{PHASE_DISPLAY_NAMES[phase]}
+											</p>
 											<p className="text-xs text-muted-foreground capitalize">
 												{status.replace("_", " ")}
 											</p>
@@ -142,7 +146,8 @@ export function PhaseTimeline({
 										</>
 									) : (
 										<p className="text-xs text-muted-foreground">
-											{PHASE_DISPLAY_NAMES[phase]} is not applicable to {templateName || "this task type"}
+											{PHASE_DISPLAY_NAMES[phase]} is not applicable to{" "}
+											{templateName || "this task type"}
 										</p>
 									)}
 								</TooltipContent>
@@ -181,7 +186,9 @@ export function PhaseTimeline({
 									onClick={() => isApplicable && onPhaseClick?.(phase)}
 									className={cn(
 										"flex flex-col items-center gap-1.5 px-2 py-1.5 rounded-lg transition-all min-w-[80px]",
-										isApplicable && onPhaseClick && "cursor-pointer hover:bg-surface",
+										isApplicable &&
+											onPhaseClick &&
+											"cursor-pointer hover:bg-surface",
 										isActive && "bg-surface",
 										!isApplicable && "opacity-40 cursor-default",
 									)}
@@ -240,13 +247,15 @@ export function PhaseTimeline({
 										)}
 										{record?.completedAt && (
 											<p className="text-xs text-muted-foreground">
-												Completed: {new Date(record.completedAt).toLocaleString()}
+												Completed:{" "}
+												{new Date(record.completedAt).toLocaleString()}
 											</p>
 										)}
 									</div>
 								) : (
 									<p className="text-xs text-muted-foreground">
-										{PHASE_DISPLAY_NAMES[phase]} is not applicable to {templateName || "this task type"}
+										{PHASE_DISPLAY_NAMES[phase]} is not applicable to{" "}
+										{templateName || "this task type"}
 									</p>
 								)}
 							</TooltipContent>

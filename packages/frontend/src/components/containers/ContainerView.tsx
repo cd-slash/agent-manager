@@ -1,7 +1,6 @@
 import { api } from "@agent-manager/convex/api"
 import type { ColumnDef } from "@tanstack/react-table"
 import { useAction, useMutation } from "convex/react"
-import type { FunctionReturnType } from "convex/server"
 import {
 	Box,
 	MoreHorizontal,
@@ -28,11 +27,6 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import {
-	Tooltip,
-	TooltipContent,
-	TooltipTrigger,
-} from "@/components/ui/tooltip"
 import {
 	useCreateContainer,
 	useDeleteContainer,
@@ -64,7 +58,9 @@ export function ContainerView({
 	const [isRefreshing, setIsRefreshing] = useState(false)
 	const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
 	const [isTerminalModalOpen, setIsTerminalModalOpen] = useState(false)
-	const [terminalContainer, setTerminalContainer] = useState<Container | null>(null)
+	const [terminalContainer, setTerminalContainer] = useState<Container | null>(
+		null,
+	)
 	const [selectedContainers, setSelectedContainers] = useState<Container[]>([])
 	const [clearSelectionFn, setClearSelectionFn] = useState<(() => void) | null>(
 		null,
@@ -105,7 +101,9 @@ export function ContainerView({
 				if (result.notFound) {
 					// Container doesn't exist on host - remove from database
 					await deleteContainerFromDb({
-						id: container.id as Parameters<typeof deleteContainerFromDb>[0]["id"],
+						id: container.id as Parameters<
+							typeof deleteContainerFromDb
+						>[0]["id"],
 					})
 					toast.success(
 						"Container removed",
@@ -167,7 +165,9 @@ export function ContainerView({
 				if (result.notFound) {
 					// Container doesn't exist on host - remove from database
 					await deleteContainerFromDb({
-						id: container.id as Parameters<typeof deleteContainerFromDb>[0]["id"],
+						id: container.id as Parameters<
+							typeof deleteContainerFromDb
+						>[0]["id"],
 					})
 					toast.error(
 						"Container not found",
@@ -368,9 +368,7 @@ export function ContainerView({
 		} catch (error) {
 			toast.error(
 				"Sync failed",
-				error instanceof Error
-					? error.message
-					: "Failed to sync containers",
+				error instanceof Error ? error.message : "Failed to sync containers",
 			)
 		} finally {
 			setIsRefreshing(false)

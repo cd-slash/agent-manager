@@ -79,7 +79,23 @@ export const BUILTIN_TEMPLATES: Array<{
 
 // Default phase order - used when no template is specified
 // This is the Standard template's phases
-export const DEFAULT_PHASE_ORDER = BUILTIN_TEMPLATES[0]?.phases
+export const DEFAULT_PHASE_ORDER: (
+	| "requirements"
+	| "planning"
+	| "implementation"
+	| "ai_review"
+	| "remediation"
+	| "human_review"
+	| "merge"
+)[] = BUILTIN_TEMPLATES[0]?.phases ?? [
+	"requirements",
+	"planning",
+	"implementation",
+	"ai_review",
+	"remediation",
+	"human_review",
+	"merge",
+]
 
 // Get all templates
 export const list = query({

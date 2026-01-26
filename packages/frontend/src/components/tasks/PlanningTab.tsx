@@ -62,13 +62,16 @@ export function PlanningTab({
 
 	const handleStartPlanning = async () => {
 		if (!activeContainerId) {
-			toast.error("No container", "Please assign a container to this task first")
+			toast.error(
+				"No container",
+				"Please assign a container to this task first",
+			)
 			return
 		}
 		setIsStarting(true)
 		try {
 			// Call container to start phase execution via Convex
-			const result = await startPhaseCmd.execute({
+			const _result = await startPhaseCmd.execute({
 				containerId: activeContainerId,
 				taskId: taskId as string,
 				phase: "planning",

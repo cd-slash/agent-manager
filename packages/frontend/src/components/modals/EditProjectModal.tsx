@@ -131,7 +131,9 @@ export function EditProjectModal({
 							onChange={(e) =>
 								setFormData({ ...formData, name: e.target.value })
 							}
-							placeholder={isBulk ? "Leave empty to keep existing" : "Project name"}
+							placeholder={
+								isBulk ? "Leave empty to keep existing" : "Project name"
+							}
 						/>
 					</div>
 					<div className="space-y-2">
@@ -142,7 +144,9 @@ export function EditProjectModal({
 								setFormData({ ...formData, description: e.target.value })
 							}
 							className="h-24 resize-none"
-							placeholder={isBulk ? "Leave empty to keep existing" : "Project description"}
+							placeholder={
+								isBulk ? "Leave empty to keep existing" : "Project description"
+							}
 						/>
 					</div>
 					<div className="grid grid-cols-2 gap-4">
@@ -171,10 +175,7 @@ export function EditProjectModal({
 						<Button variant="outline" onClick={onClose}>
 							Cancel
 						</Button>
-						<Button
-							onClick={handleSubmit}
-							disabled={!isBulk && !formData.name}
-						>
+						<Button onClick={handleSubmit} disabled={!isBulk && !formData.name}>
 							<Save size={16} className="mr-2" />
 							{isBulk ? "Update All" : "Save Changes"}
 						</Button>

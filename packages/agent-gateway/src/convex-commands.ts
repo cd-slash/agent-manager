@@ -145,7 +145,9 @@ export class ConvexCommandProcessor {
 			if (this.processing.has(cmd._id)) continue
 
 			this.processing.add(cmd._id)
-			console.log(`[commands] Processing server command: ${cmd.type} (${cmd._id})`)
+			console.log(
+				`[commands] Processing server command: ${cmd.type} (${cmd._id})`,
+			)
 
 			this.processCommand(cmd).finally(() => {
 				this.processing.delete(cmd._id)
@@ -174,10 +176,14 @@ export class ConvexCommandProcessor {
 				result,
 			})
 
-			console.log(`[commands] Server command completed: ${cmd.type} (${cmd._id})`)
+			console.log(
+				`[commands] Server command completed: ${cmd.type} (${cmd._id})`,
+			)
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error)
-			console.error(`[commands] Server command failed: ${cmd.type} - ${message}`)
+			console.error(
+				`[commands] Server command failed: ${cmd.type} - ${message}`,
+			)
 
 			if (this.convexClient) {
 				await this.convexClient.mutation(api.serverCommands.fail, {
@@ -234,9 +240,7 @@ export class ConvexCommandProcessor {
 				})
 			}
 
-			console.log(
-				`[commands] Generated container name: ${generatedName}`,
-			)
+			console.log(`[commands] Generated container name: ${generatedName}`)
 		}
 
 		console.log(
@@ -259,7 +263,7 @@ export class ConvexCommandProcessor {
 			if (!secrets.GH_USERNAME || !secrets.GH_TOKEN) {
 				throw new Error(
 					"GitHub credentials required for container creation. " +
-					"Please configure GH_USERNAME and GH_TOKEN in Settings > Secrets.",
+						"Please configure GH_USERNAME and GH_TOKEN in Settings > Secrets.",
 				)
 			}
 		}
@@ -279,7 +283,9 @@ export class ConvexCommandProcessor {
 		// Record the container in Convex (this sets task.activeContainerId)
 		if (this.deps.recordContainerCreated) {
 			await this.deps.recordContainerCreated(result, taskId, projectId)
-			console.log(`[commands] Container registered in Convex${taskId ? ` for task ${taskId}` : ""}`)
+			console.log(
+				`[commands] Container registered in Convex${taskId ? ` for task ${taskId}` : ""}`,
+			)
 		}
 
 		return result

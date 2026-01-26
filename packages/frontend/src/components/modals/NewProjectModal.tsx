@@ -15,7 +15,12 @@ import { Textarea } from "@/components/ui/textarea"
 interface NewProjectModalProps {
 	isOpen: boolean
 	onClose: () => void
-	onCreate: (project: { name: string; description: string; repo: string; branch?: string }) => void
+	onCreate: (project: {
+		name: string
+		description: string
+		repo: string
+		branch?: string
+	}) => void
 }
 
 export function NewProjectModal({
@@ -23,7 +28,12 @@ export function NewProjectModal({
 	onClose,
 	onCreate,
 }: NewProjectModalProps) {
-	const [project, setProject] = useState({ name: "", description: "", repo: "", branch: "main" })
+	const [project, setProject] = useState({
+		name: "",
+		description: "",
+		repo: "",
+		branch: "main",
+	})
 
 	const handleSubmit = () => {
 		onCreate({
@@ -82,14 +92,18 @@ export function NewProjectModal({
 						</div>
 						<div className="grid grid-cols-2 gap-4">
 							<div className="space-y-item">
-								<Label>GitHub Repository <span className="text-destructive">*</span></Label>
+								<Label>
+									GitHub Repository <span className="text-destructive">*</span>
+								</Label>
 								<Input
 									value={project.repo}
 									onChange={(e) =>
 										setProject({ ...project, repo: e.target.value })
 									}
 									placeholder="owner/repo"
-									className={project.repo && !isValidRepo ? "border-destructive" : ""}
+									className={
+										project.repo && !isValidRepo ? "border-destructive" : ""
+									}
 								/>
 								{project.repo && !isValidRepo ? (
 									<p className="text-xs text-destructive">

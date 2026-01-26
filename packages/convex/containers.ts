@@ -1,12 +1,7 @@
 import { v } from "convex/values"
-import {
-	action,
-	internalMutation,
-	mutation,
-	query,
-} from "./_generated/server"
 import { api } from "./_generated/api"
 import type { Id } from "./_generated/dataModel"
+import { action, internalMutation, mutation, query } from "./_generated/server"
 import { patchWithTimestamp } from "./internal/updateUtils"
 import { containerStatusValidator, containerTypeValidator } from "./validators"
 
@@ -22,10 +17,11 @@ export const list = query({
 					? await ctx.db.get(container.serverId)
 					: null
 				// Resolve server hostname: use container's serverHostname, or server's tailscaleHostname, or server's IP
-				const resolvedServerHostname = container.serverHostname
-					?? server?.tailscaleHostname
-					?? server?.ip
-					?? "localhost"
+				const resolvedServerHostname =
+					container.serverHostname ??
+					server?.tailscaleHostname ??
+					server?.ip ??
+					"localhost"
 				return {
 					...container,
 					serverName: server?.name ?? null,
@@ -603,7 +599,10 @@ export const syncWithHost = action({
 		server: v.string(),
 		sshUser: v.optional(v.string()),
 	},
-	handler: async (ctx, args): Promise<{
+	handler: async (
+		ctx,
+		args,
+	): Promise<{
 		verified: number
 		removed: number
 		removedContainers: string[]
@@ -612,7 +611,7 @@ export const syncWithHost = action({
 		// 1. Get all containers from DB for this host
 		const allContainers = await ctx.runQuery(api.containers.list)
 		const hostContainers = allContainers.filter(
-			(c) =>
+			(c: { serverHostname?: string | null }) =>
 				c.serverHostname === args.server ||
 				(!c.serverHostname && args.server === "localhost"),
 		)

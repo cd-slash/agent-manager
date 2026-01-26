@@ -1,5 +1,5 @@
-import { useState, useMemo } from "react"
-import { ChevronRight, ChevronDown, Terminal, Check, X } from "lucide-react"
+import { Check, ChevronDown, ChevronRight, Terminal, X } from "lucide-react"
+import { useMemo, useState } from "react"
 import {
 	Collapsible,
 	CollapsibleContent,
@@ -20,7 +20,11 @@ function parseStringValue(value: unknown): string {
 	if (typeof value === "string") {
 		// Parse escape sequences like \n, \t, etc.
 		try {
-			if (value.includes("\\n") || value.includes("\\t") || value.includes("\\r")) {
+			if (
+				value.includes("\\n") ||
+				value.includes("\\t") ||
+				value.includes("\\r")
+			) {
 				return value
 					.replace(/\\n/g, "\n")
 					.replace(/\\t/g, "\t")
@@ -74,7 +78,11 @@ export function ToolCallCard({
 		if (!toolInput) return null
 		try {
 			const parsed = JSON.parse(toolInput)
-			if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
+			if (
+				typeof parsed === "object" &&
+				parsed !== null &&
+				!Array.isArray(parsed)
+			) {
 				return parsed as Record<string, unknown>
 			}
 			return null
@@ -91,14 +99,10 @@ export function ToolCallCard({
 					className={cn(
 						"w-full flex items-center gap-2 text-xs px-2 py-1.5 rounded",
 						"bg-muted/30 hover:bg-muted/50 border border-border/50 transition-colors",
-						isStreaming && "animate-pulse"
+						isStreaming && "animate-pulse",
 					)}
 				>
-					{isOpen ? (
-						<ChevronDown size={12} />
-					) : (
-						<ChevronRight size={12} />
-					)}
+					{isOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
 					<Terminal size={12} className="text-muted-foreground" />
 					<span className="font-medium font-mono">{toolName}</span>
 					<span className="flex-1" />
@@ -140,7 +144,7 @@ export function ToolCallCard({
 								"rounded p-2 font-mono max-h-32 whitespace-pre-wrap break-words scrollbar-styled scrollbar-no-margin overflow-x-hidden",
 								result.isError
 									? "bg-destructive/10 text-destructive"
-									: "bg-muted/20"
+									: "bg-muted/20",
 							)}
 						>
 							{result.content}

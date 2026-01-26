@@ -99,7 +99,7 @@ http.route({
 
 			for (const event of events) {
 				const eventType = (event as { type?: string }).type ?? "unknown"
-				const eventData = (event as { data?: unknown }).data
+				const _eventData = (event as { data?: unknown }).data
 
 				// Store each webhook event with its data nested in the payload
 				const eventId = await ctx.runMutation(api.webhooks.store, {

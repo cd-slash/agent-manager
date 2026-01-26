@@ -25,7 +25,11 @@ import {
 	TooltipContent,
 	TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { useDeleteContainer, useRestartContainer, useStopContainer } from "@/hooks/useGatewayCommand"
+import {
+	useDeleteContainer,
+	useRestartContainer,
+	useStopContainer,
+} from "@/hooks/useGatewayCommand"
 import type { Container } from "@/types"
 import { BuildLogViewer } from "./BuildLogViewer"
 import { type BuildPhase, BuildTimeline } from "./BuildTimeline"
@@ -159,9 +163,7 @@ export function ContainerDetailView({
 				// If Docker delete fails (e.g., container doesn't exist on host),
 				// check if it's a "not found" type error and proceed with DB cleanup
 				const errorMsg =
-					dockerError instanceof Error
-						? dockerError.message.toLowerCase()
-						: ""
+					dockerError instanceof Error ? dockerError.message.toLowerCase() : ""
 				const isNotFoundError =
 					errorMsg.includes("no such container") ||
 					errorMsg.includes("not found") ||
@@ -408,8 +410,8 @@ export function ContainerDetailView({
 																	Restart Container
 																</div>
 																<div className="text-xs text-muted-foreground mt-0.5">
-																	Start a stopped container with a fresh Tailscale
-																	auth key.
+																	Start a stopped container with a fresh
+																	Tailscale auth key.
 																</div>
 															</div>
 															<Button
@@ -520,9 +522,9 @@ export function ContainerDetailView({
 																	Force Remove (DB Only)
 																</div>
 																<div className="text-xs text-muted-foreground mt-0.5">
-																	Remove this container from the database without
-																	attempting Docker cleanup. Use for orphaned
-																	containers.
+																	Remove this container from the database
+																	without attempting Docker cleanup. Use for
+																	orphaned containers.
 																</div>
 															</div>
 															<Button

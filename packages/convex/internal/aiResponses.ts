@@ -145,9 +145,12 @@ export const generateChatResponse = internalAction({
 		taskId: v.optional(v.id("tasks")),
 		userMessage: v.string(),
 	},
-	handler: async (ctx, args) => {
+	handler: async (
+		ctx,
+		args,
+	): Promise<{ success: boolean; jobId: Id<"agentJobs"> }> => {
 		// Create a job record for tracking
-		const jobId = await ctx.runMutation(
+		const jobId: Id<"agentJobs"> = await ctx.runMutation(
 			internal.internal.aiResponses.createJob,
 			{
 				taskId: args.taskId,
@@ -192,8 +195,11 @@ export const generateChatResponse = internalAction({
 // Note: Actual analysis is performed by containers via containerCommands
 export const analyzeTask = internalAction({
 	args: { taskId: v.id("tasks") },
-	handler: async (ctx, args) => {
-		const jobId = await ctx.runMutation(
+	handler: async (
+		ctx,
+		args,
+	): Promise<{ success: boolean; jobId: Id<"agentJobs"> }> => {
+		const jobId: Id<"agentJobs"> = await ctx.runMutation(
 			internal.internal.aiResponses.createJob,
 			{
 				taskId: args.taskId,
@@ -227,8 +233,11 @@ export const analyzeTask = internalAction({
 // Note: Actual code review is performed by containers via containerCommands
 export const runCodeReview = internalAction({
 	args: { pullRequestId: v.id("pullRequests") },
-	handler: async (ctx, args) => {
-		const jobId = await ctx.runMutation(
+	handler: async (
+		ctx,
+		args,
+	): Promise<{ success: boolean; jobId: Id<"agentJobs"> }> => {
+		const jobId: Id<"agentJobs"> = await ctx.runMutation(
 			internal.internal.aiResponses.createJob,
 			{
 				pullRequestId: args.pullRequestId,
@@ -262,8 +271,11 @@ export const runCodeReview = internalAction({
 // Note: Actual fix generation is performed by containers via containerCommands
 export const autoFixIssue = internalAction({
 	args: { issueId: v.id("prIssues") },
-	handler: async (ctx, args) => {
-		const jobId = await ctx.runMutation(
+	handler: async (
+		ctx,
+		args,
+	): Promise<{ success: boolean; jobId: Id<"agentJobs"> }> => {
+		const jobId: Id<"agentJobs"> = await ctx.runMutation(
 			internal.internal.aiResponses.createJob,
 			{
 				type: "auto_fix",

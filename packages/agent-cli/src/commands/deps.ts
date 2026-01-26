@@ -4,14 +4,16 @@
  * Commands for managing task dependencies.
  */
 
-import { Command } from "commander"
 import type { Id } from "@agent-manager/convex/dataModel"
-import { getClient, api } from "../client"
+import type { Command } from "commander"
+import { api, getClient } from "../client"
 import { success, withErrorHandler } from "../utils/output"
 import { validateId } from "../utils/validators"
 
 export function registerDepsCommands(program: Command): void {
-	const deps = program.command("deps").description("Task dependency management commands")
+	const deps = program
+		.command("deps")
+		.description("Task dependency management commands")
 
 	// List dependencies for a task
 	deps
@@ -64,34 +66,36 @@ export function registerDepsCommands(program: Command): void {
 		.requiredOption("--task-id <id>", "Task ID")
 		.requiredOption("--depends-on <id>", "ID of task that this task depends on")
 		.action(
-			withErrorHandler(async (options: { taskId: string; dependsOn: string }) => {
-				validateId(options.taskId, "task-id")
-				validateId(options.dependsOn, "depends-on")
-				const client = getClient()
+			withErrorHandler(
+				async (options: { taskId: string; dependsOn: string }) => {
+					validateId(options.taskId, "task-id")
+					validateId(options.dependsOn, "depends-on")
+					const client = getClient()
 
-				await client.mutation(api.tasks.addDependency, {
-					taskId: options.taskId as Id<"tasks">,
-					dependsOnTaskId: options.dependsOn as Id<"tasks">,
-				})
+					await client.mutation(api.tasks.addDependency, {
+						taskId: options.taskId as Id<"tasks">,
+						dependsOnTaskId: options.dependsOn as Id<"tasks">,
+					})
 
-				// Get updated dependencies
-				const dependencies = await client.query(api.tasks.getDependencies, {
-					taskId: options.taskId as Id<"tasks">,
-				})
+					// Get updated dependencies
+					const dependencies = await client.query(api.tasks.getDependencies, {
+						taskId: options.taskId as Id<"tasks">,
+					})
 
-				// Filter out any null values
-				const validDependencies = dependencies.filter(
-					(d): d is NonNullable<typeof d> => d !== null,
-				)
+					// Filter out any null values
+					const validDependencies = dependencies.filter(
+						(d): d is NonNullable<typeof d> => d !== null,
+					)
 
-				success({
-					message: "Dependency added",
-					dependencies: validDependencies.map((d) => ({
-						id: d._id,
-						title: d.title,
-					})),
-				})
-			}),
+					success({
+						message: "Dependency added",
+						dependencies: validDependencies.map((d) => ({
+							id: d._id,
+							title: d.title,
+						})),
+					})
+				},
+			),
 		)
 
 	// Remove a dependency
@@ -99,42 +103,49 @@ export function registerDepsCommands(program: Command): void {
 		.command("remove")
 		.description("Remove a dependency")
 		.requiredOption("--task-id <id>", "Task ID")
-		.requiredOption("--depends-on <id>", "ID of task to remove from dependencies")
+		.requiredOption(
+			"--depends-on <id>",
+			"ID of task to remove from dependencies",
+		)
 		.action(
-			withErrorHandler(async (options: { taskId: string; dependsOn: string }) => {
-				validateId(options.taskId, "task-id")
-				validateId(options.dependsOn, "depends-on")
-				const client = getClient()
+			withErrorHandler(
+				async (options: { taskId: string; dependsOn: string }) => {
+					validateId(options.taskId, "task-id")
+					validateId(options.dependsOn, "depends-on")
+					const client = getClient()
 
-				await client.mutation(api.tasks.removeDependency, {
-					taskId: options.taskId as Id<"tasks">,
-					dependsOnTaskId: options.dependsOn as Id<"tasks">,
-				})
+					await client.mutation(api.tasks.removeDependency, {
+						taskId: options.taskId as Id<"tasks">,
+						dependsOnTaskId: options.dependsOn as Id<"tasks">,
+					})
 
-				// Get updated dependencies
-				const dependencies = await client.query(api.tasks.getDependencies, {
-					taskId: options.taskId as Id<"tasks">,
-				})
+					// Get updated dependencies
+					const dependencies = await client.query(api.tasks.getDependencies, {
+						taskId: options.taskId as Id<"tasks">,
+					})
 
-				// Filter out any null values
-				const validDependencies = dependencies.filter(
-					(d): d is NonNullable<typeof d> => d !== null,
-				)
+					// Filter out any null values
+					const validDependencies = dependencies.filter(
+						(d): d is NonNullable<typeof d> => d !== null,
+					)
 
-				success({
-					message: "Dependency removed",
-					dependencies: validDependencies.map((d) => ({
-						id: d._id,
-						title: d.title,
-					})),
-				})
-			}),
+					success({
+						message: "Dependency removed",
+						dependencies: validDependencies.map((d) => ({
+							id: d._id,
+							title: d.title,
+						})),
+					})
+				},
+			),
 		)
 
 	// List tasks blocked by this task
 	deps
 		.command("blocked-by")
-		.description("List tasks that are blocked by this task (depend on this task)")
+		.description(
+			"List tasks that are blocked by this task (depend on this task)",
+		)
 		.requiredOption("--task-id <id>", "Task ID")
 		.action(
 			withErrorHandler(async (options: { taskId: string }) => {

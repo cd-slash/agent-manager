@@ -4,8 +4,8 @@
  * Uses the CONVEX_URL environment variable for connection.
  */
 
-import { ConvexHttpClient } from "convex/browser"
 import { api } from "@agent-manager/convex/api"
+import { ConvexHttpClient } from "convex/browser"
 import { error } from "./utils/output"
 
 let clientInstance: ConvexHttpClient | null = null

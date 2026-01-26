@@ -712,5 +712,4 @@ export default defineSchema({
 		.index("by_container_id", ["containerId"])
 		.index("by_status", ["status"])
 		.index("by_status_and_activity", ["status", "lastActivityAt"]),
-
 })

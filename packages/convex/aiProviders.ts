@@ -1,6 +1,5 @@
 import { v } from "convex/values"
-import { internal } from "./_generated/api"
-import { action, internalMutation, mutation, query } from "./_generated/server"
+import { internalMutation, mutation, query } from "./_generated/server"
 import { aiProviderTypeValidator, authTypeValidator } from "./validators"
 
 // Type definitions
@@ -429,8 +428,9 @@ export const seedBuiltinProviders = internalMutation({
 				created.push(provider.name)
 			} else if (existing.isBuiltin) {
 				// Update built-in providers - replace models with canonical list
-				const modelsMatch = JSON.stringify(existing.models.map(m => m.id).sort()) ===
-					JSON.stringify(provider.models.map(m => m.id).sort())
+				const modelsMatch =
+					JSON.stringify(existing.models.map((m) => m.id).sort()) ===
+					JSON.stringify(provider.models.map((m) => m.id).sort())
 
 				if (!modelsMatch) {
 					await ctx.db.patch(existing._id, {

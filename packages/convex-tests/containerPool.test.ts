@@ -499,7 +499,9 @@ describe("containerPool", () => {
 				containerId: "container-123",
 			})
 
-			expect(after?.lastHealthCheck).toBeGreaterThanOrEqual(beforeHealthCheck!)
+			expect(after?.lastHealthCheck).toBeGreaterThanOrEqual(
+				beforeHealthCheck ?? 0,
+			)
 		})
 	})
 

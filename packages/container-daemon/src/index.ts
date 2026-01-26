@@ -30,8 +30,12 @@ if (!CONVEX_URL) {
 }
 
 if (CONTAINER_ID === "unknown") {
-	console.error("[daemon] FATAL: CONTAINER_ID or TS_HOSTNAME environment variable is required")
-	console.error("[daemon] The container must have a unique identifier to register in the pool")
+	console.error(
+		"[daemon] FATAL: CONTAINER_ID or TS_HOSTNAME environment variable is required",
+	)
+	console.error(
+		"[daemon] The container must have a unique identifier to register in the pool",
+	)
 	process.exit(1)
 }
 
@@ -64,18 +68,17 @@ processManager.on("process:error", (data) => {
 
 // Minimal HTTP server for health checks only
 // Used by entrypoint.sh to verify the server started
-const app = new Elysia()
-	.get("/health", async (): Promise<HealthStatus> => {
-		const activeProcesses = processManager.getActiveProcesses()
-		const convexState = convexIntegration?.getState()
-		return {
-			status: convexState?.connected ? "ok" : "degraded",
-			activeProcesses: activeProcesses.count,
-			version: "1.0.0",
-			uptime: Date.now() - startTime,
-			convexConnected: convexState?.connected ?? false,
-		}
-	})
+const app = new Elysia().get("/health", async (): Promise<HealthStatus> => {
+	const activeProcesses = processManager.getActiveProcesses()
+	const convexState = convexIntegration?.getState()
+	return {
+		status: convexState?.connected ? "ok" : "degraded",
+		activeProcesses: activeProcesses.count,
+		version: "1.0.0",
+		uptime: Date.now() - startTime,
+		convexConnected: convexState?.connected ?? false,
+	}
+})
 
 // ==========================================================================
 // Start Server

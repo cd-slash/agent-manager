@@ -243,17 +243,10 @@ export function ProviderCard({ provider }: ProviderCardProps) {
 
 	return (
 		<div className="bg-surface border border-border rounded-lg overflow-hidden">
-			<div
-				role="button"
-				tabIndex={0}
+			<button
+				type="button"
 				className="w-full flex items-center justify-between p-4 cursor-pointer hover:bg-surface/80 transition-colors text-left"
 				onClick={() => setIsExpanded(!isExpanded)}
-				onKeyDown={(e) => {
-					if (e.key === "Enter" || e.key === " ") {
-						e.preventDefault()
-						setIsExpanded(!isExpanded)
-					}
-				}}
 			>
 				<div className="flex items-center gap-3">
 					<Bot size={18} className="text-muted-foreground" />
@@ -300,7 +293,7 @@ export function ProviderCard({ provider }: ProviderCardProps) {
 						<ChevronDown size={18} className="text-muted-foreground" />
 					)}
 				</div>
-			</div>
+			</button>
 
 			{isExpanded && (
 				<div className="border-t border-border p-4 space-y-4 bg-background/50">
@@ -536,9 +529,7 @@ export function ProviderCard({ provider }: ProviderCardProps) {
 									key={model.id}
 									className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/50 transition-colors"
 								>
-									<span className="text-sm text-foreground">
-										{model.name}
-									</span>
+									<span className="text-sm text-foreground">{model.name}</span>
 									<Switch
 										checked={model.enabled}
 										onCheckedChange={() => handleModelToggle(model.id)}

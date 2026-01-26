@@ -19,7 +19,6 @@ import {
 } from "lucide-react"
 import { useCallback, useEffect, useState } from "react"
 import { useToast } from "@/components/ToastProvider"
-import { useDebouncedSave } from "@/hooks/useDebouncedSave"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -32,6 +31,7 @@ import {
 } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { useDebouncedSave } from "@/hooks/useDebouncedSave"
 import { PhaseDefaultsSettings } from "./PhaseDefaultsSettings"
 import { ProvidersSettings } from "./ProvidersSettings"
 import { TaskTemplatesSettings } from "./TaskTemplatesSettings"
@@ -60,11 +60,11 @@ function GatewayConfigSection() {
 	)
 
 	// Auto-save hooks
-	const { isSaving: savingUrl } = useDebouncedSave({
+	const { isSaving: savingUrl } = useDebouncedSave<string | undefined>({
 		value: gatewayUrl || undefined,
 		savedValue: gatewayConfig?.url,
 		onSave: useCallback(
-			async (val) => {
+			async (val: string | undefined) => {
 				await setGatewayConfig({ url: val })
 			},
 			[setGatewayConfig],
@@ -73,11 +73,11 @@ function GatewayConfigSection() {
 		enabled: initialized,
 	})
 
-	const { isSaving: savingServer } = useDebouncedSave({
+	const { isSaving: savingServer } = useDebouncedSave<string | undefined>({
 		value: defaultServer || undefined,
-		savedValue: gatewayConfig?.defaultServer,
+		savedValue: gatewayConfig?.defaultServer ?? undefined,
 		onSave: useCallback(
-			async (val) => {
+			async (val: string | undefined) => {
 				await setGatewayConfig({ defaultServer: val })
 			},
 			[setGatewayConfig],
@@ -86,11 +86,11 @@ function GatewayConfigSection() {
 		enabled: initialized,
 	})
 
-	const { isSaving: savingRepo } = useDebouncedSave({
+	const { isSaving: savingRepo } = useDebouncedSave<string | undefined>({
 		value: defaultRepo || undefined,
-		savedValue: gatewayConfig?.defaultRepo,
+		savedValue: gatewayConfig?.defaultRepo ?? undefined,
 		onSave: useCallback(
-			async (val) => {
+			async (val: string | undefined) => {
 				await setGatewayConfig({ defaultRepo: val })
 			},
 			[setGatewayConfig],
@@ -423,7 +423,10 @@ export function SettingsView() {
 															<Label>GitHub Username</Label>
 															{savingField === "ghUsername" && (
 																<span className="text-xs text-muted-foreground flex items-center gap-1">
-																	<RefreshCw size={10} className="animate-spin" />
+																	<RefreshCw
+																		size={10}
+																		className="animate-spin"
+																	/>
 																	Saving...
 																</span>
 															)}
@@ -452,7 +455,10 @@ export function SettingsView() {
 															<Label>GitHub Personal Access Token</Label>
 															{savingField === "ghToken" && (
 																<span className="text-xs text-muted-foreground flex items-center gap-1">
-																	<RefreshCw size={10} className="animate-spin" />
+																	<RefreshCw
+																		size={10}
+																		className="animate-spin"
+																	/>
 																	Saving...
 																</span>
 															)}
@@ -626,7 +632,10 @@ export function SettingsView() {
 															<Label>Tailnet ID</Label>
 															{savingField === "tailnetId" && (
 																<span className="text-xs text-muted-foreground flex items-center gap-1">
-																	<RefreshCw size={10} className="animate-spin" />
+																	<RefreshCw
+																		size={10}
+																		className="animate-spin"
+																	/>
 																	Saving...
 																</span>
 															)}
@@ -656,7 +665,10 @@ export function SettingsView() {
 															<Label>API Key</Label>
 															{savingField === "apiKey" && (
 																<span className="text-xs text-muted-foreground flex items-center gap-1">
-																	<RefreshCw size={10} className="animate-spin" />
+																	<RefreshCw
+																		size={10}
+																		className="animate-spin"
+																	/>
 																	Saving...
 																</span>
 															)}
@@ -713,7 +725,10 @@ export function SettingsView() {
 															<Label>Webhook Secret</Label>
 															{savingField === "webhookSecret" && (
 																<span className="text-xs text-muted-foreground flex items-center gap-1">
-																	<RefreshCw size={10} className="animate-spin" />
+																	<RefreshCw
+																		size={10}
+																		className="animate-spin"
+																	/>
 																	Saving...
 																</span>
 															)}
@@ -766,8 +781,8 @@ export function SettingsView() {
 															</div>
 														</div>
 														<p className="text-xs text-muted-foreground">
-															Create a webhook in the Tailscale admin console and
-															copy the secret here
+															Create a webhook in the Tailscale admin console
+															and copy the secret here
 														</p>
 													</div>
 													<div className="space-y-2">

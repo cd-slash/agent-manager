@@ -1,14 +1,14 @@
+import { Brain, ChevronDown, ChevronRight, Terminal } from "lucide-react"
 import { useState } from "react"
-import { ChevronRight, ChevronDown, Terminal, Brain } from "lucide-react"
 import {
 	Collapsible,
 	CollapsibleContent,
 	CollapsibleTrigger,
 } from "@/components/ui/collapsible"
 import { cn } from "@/lib/utils"
-import { ToolCallCard } from "./ToolCallCard"
-import { ThinkingBlock } from "./ThinkingBlock"
 import type { ChatMessagePart } from "@/types"
+import { ThinkingBlock } from "./ThinkingBlock"
+import { ToolCallCard } from "./ToolCallCard"
 
 interface ToolCallGroupProps {
 	parts: ChatMessagePart[]
@@ -30,7 +30,7 @@ export function ToolCallGroup({ parts, isStreaming }: ToolCallGroupProps) {
 	// Determine if the last tool without a result should show "running"
 	const lastToolWithoutResultIndex = toolUses.reduceRight(
 		(acc, tool, idx) => (acc === -1 && !tool.result ? idx : acc),
-		-1
+		-1,
 	)
 
 	const totalItems = toolUses.length + thinkingBlocks.length
@@ -38,12 +38,16 @@ export function ToolCallGroup({ parts, isStreaming }: ToolCallGroupProps) {
 	if (totalItems === 0) return null
 
 	// Build the summary text
-	let summaryParts: string[] = []
+	const summaryParts: string[] = []
 	if (toolUses.length > 0) {
-		summaryParts.push(`${toolUses.length} tool${toolUses.length !== 1 ? "s" : ""}`)
+		summaryParts.push(
+			`${toolUses.length} tool${toolUses.length !== 1 ? "s" : ""}`,
+		)
 	}
 	if (thinkingBlocks.length > 0) {
-		summaryParts.push(`${thinkingBlocks.length} thinking block${thinkingBlocks.length !== 1 ? "s" : ""}`)
+		summaryParts.push(
+			`${thinkingBlocks.length} thinking block${thinkingBlocks.length !== 1 ? "s" : ""}`,
+		)
 	}
 	const summary = summaryParts.join(", ")
 
@@ -55,14 +59,10 @@ export function ToolCallGroup({ parts, isStreaming }: ToolCallGroupProps) {
 					className={cn(
 						"w-full flex items-center gap-2 text-xs px-2 py-1.5 rounded",
 						"bg-muted/30 hover:bg-muted/50 border border-border/50 transition-colors",
-						isStreaming && runningToolsCount > 0 && "animate-pulse"
+						isStreaming && runningToolsCount > 0 && "animate-pulse",
 					)}
 				>
-					{isOpen ? (
-						<ChevronDown size={12} />
-					) : (
-						<ChevronRight size={12} />
-					)}
+					{isOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
 					{toolUses.length > 0 && (
 						<Terminal size={12} className="text-muted-foreground" />
 					)}
@@ -83,7 +83,7 @@ export function ToolCallGroup({ parts, isStreaming }: ToolCallGroupProps) {
 					{/* Render thinking blocks first */}
 					{thinkingBlocks.map((block, idx) => (
 						<ThinkingBlock
-							key={`thinking-${idx}`}
+							key={`thinking-${block.content.slice(0, 20)}-${idx}`}
 							content={block.content}
 							isStreaming={isStreaming && idx === thinkingBlocks.length - 1}
 						/>
@@ -91,8 +91,8 @@ export function ToolCallGroup({ parts, isStreaming }: ToolCallGroupProps) {
 					{/* Render tool calls */}
 					{toolUses.map((tool, idx) => (
 						<ToolCallCard
-							key={`tool-${tool.toolId || idx}`}
-							toolName={tool.toolName!}
+							key={`tool-${tool.toolId || `unnamed-${idx}`}`}
+							toolName={tool.toolName ?? "Unknown Tool"}
 							toolInput={tool.toolInput}
 							result={tool.result}
 							isStreaming={

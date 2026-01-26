@@ -4,14 +4,16 @@
  * Commands for viewing phase information for tasks.
  */
 
-import { Command } from "commander"
 import type { Id } from "@agent-manager/convex/dataModel"
-import { getClient, api } from "../client"
+import type { Command } from "commander"
+import { api, getClient } from "../client"
 import { success, withErrorHandler } from "../utils/output"
 import { validateId } from "../utils/validators"
 
 export function registerPhaseCommands(program: Command): void {
-	const phase = program.command("phase").description("Task phase information commands (read-only)")
+	const phase = program
+		.command("phase")
+		.description("Task phase information commands (read-only)")
 
 	// Get current phase
 	phase
@@ -33,9 +35,12 @@ export function registerPhaseCommands(program: Command): void {
 					return
 				}
 
-				const currentPhase = await client.query(api.taskPhases.getCurrentPhase, {
-					taskId: options.taskId as Id<"tasks">,
-				})
+				const currentPhase = await client.query(
+					api.taskPhases.getCurrentPhase,
+					{
+						taskId: options.taskId as Id<"tasks">,
+					},
+				)
 
 				success({
 					task: {

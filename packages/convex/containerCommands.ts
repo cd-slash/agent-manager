@@ -1,11 +1,6 @@
 import { v } from "convex/values"
 import { mutation, query } from "./_generated/server"
-import {
-	commandPriorityValidator,
-	containerCommandTypeValidator,
-	gatewayCommandStatusValidator,
-	taskPhaseValidator,
-} from "./validators"
+import { commandPriorityValidator, taskPhaseValidator } from "./validators"
 
 // Default retry configuration
 const DEFAULT_MAX_RETRIES = 2
@@ -32,11 +27,13 @@ export const startExecution = mutation({
 		message: v.string(),
 		model: v.optional(v.string()),
 		provider: v.optional(v.string()),
-		envVars: v.optional(v.object({
-			ANTHROPIC_AUTH_TOKEN: v.optional(v.string()),
-			ANTHROPIC_BASE_URL: v.optional(v.string()),
-			API_TIMEOUT_MS: v.optional(v.string()),
-		})),
+		envVars: v.optional(
+			v.object({
+				ANTHROPIC_AUTH_TOKEN: v.optional(v.string()),
+				ANTHROPIC_BASE_URL: v.optional(v.string()),
+				API_TIMEOUT_MS: v.optional(v.string()),
+			}),
+		),
 		workingDirectory: v.optional(v.string()),
 		permissionMode: v.optional(v.string()),
 		systemPrompt: v.optional(v.string()),

@@ -257,7 +257,9 @@ export const processTailscaleWebhook = internalAction({
 
 				case "test":
 					// Test webhook event sent when configuring webhooks
-					console.log(`Tailscale test webhook received for tailnet: ${payload.tailnet}`)
+					console.log(
+						`Tailscale test webhook received for tailnet: ${payload.tailnet}`,
+					)
 					break
 
 				default:

@@ -609,9 +609,7 @@ After completing the merge:
 /**
  * Get default config for a phase
  */
-export function getPhaseDefaults(
-	phase: TaskPhase,
-): Partial<PhasePromptConfig> {
+export function getPhaseDefaults(phase: TaskPhase): Partial<PhasePromptConfig> {
 	switch (phase) {
 		case "requirements":
 			return { model: "sonnet", permissionMode: "plan", maxBudget: 0.5 }

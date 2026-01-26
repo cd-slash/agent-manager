@@ -19,7 +19,6 @@
 
 import { EventEmitter } from "node:events"
 import { api } from "@agent-manager/convex/api"
-import type { Id } from "@agent-manager/convex/dataModel"
 import { ConvexClient } from "convex/browser"
 
 // Types for Convex OAuth flows
@@ -300,7 +299,10 @@ export class ClaudeAuth extends EventEmitter {
 	private async processPendingFlow(flow: ConvexOAuthFlow): Promise<void> {
 		if (!this.convexClient) {
 			console.error("[claude-auth] Convex client not initialized")
-			await this.updateConvexFlowFailure(flow._id, "Gateway not properly configured")
+			await this.updateConvexFlowFailure(
+				flow._id,
+				"Gateway not properly configured",
+			)
 			return
 		}
 
@@ -308,13 +310,18 @@ export class ClaudeAuth extends EventEmitter {
 		let container = await this.findAvailableContainer()
 
 		if (!container) {
-			console.log("[claude-auth] No available containers in pool, creating one...")
+			console.log(
+				"[claude-auth] No available containers in pool, creating one...",
+			)
 
 			// Create a new container
 			const commandId = await this.createContainerForOAuth()
 			if (!commandId) {
 				console.error("[claude-auth] Failed to create container command")
-				await this.updateConvexFlowFailure(flow._id, "Failed to create container for OAuth")
+				await this.updateConvexFlowFailure(
+					flow._id,
+					"Failed to create container for OAuth",
+				)
 				return
 			}
 
@@ -323,10 +330,12 @@ export class ClaudeAuth extends EventEmitter {
 			// Wait for a container to appear in the pool (up to 120 seconds)
 			console.log("[claude-auth] Waiting for container to register in pool...")
 			for (let i = 0; i < 120; i++) {
-				await new Promise(resolve => setTimeout(resolve, 1000))
+				await new Promise((resolve) => setTimeout(resolve, 1000))
 				container = await this.findAvailableContainer()
 				if (container) {
-					console.log(`[claude-auth] Container available: ${container.containerId}`)
+					console.log(
+						`[claude-auth] Container available: ${container.containerId}`,
+					)
 					break
 				}
 				// Log progress every 10 seconds
@@ -337,7 +346,10 @@ export class ClaudeAuth extends EventEmitter {
 
 			if (!container) {
 				console.error("[claude-auth] Container did not register within timeout")
-				await this.updateConvexFlowFailure(flow._id, "Container did not register in time")
+				await this.updateConvexFlowFailure(
+					flow._id,
+					"Container did not register in time",
+				)
 				return
 			}
 		}
@@ -375,7 +387,7 @@ export class ClaudeAuth extends EventEmitter {
 			let attempts = 0
 			const maxAttempts = 120 // 2 minutes
 			while (attempts < maxAttempts) {
-				await new Promise(resolve => setTimeout(resolve, 1000))
+				await new Promise((resolve) => setTimeout(resolve, 1000))
 				attempts++
 
 				const command = await this.convexClient.query(
@@ -413,14 +425,22 @@ export class ClaudeAuth extends EventEmitter {
 						console.log(`[claude-auth] OAuth URL received: ${result.url}`)
 						return
 					} else {
-						console.error(`[claude-auth] OAuth flow start failed: ${result.error}`)
-						await this.updateConvexFlowFailure(flow._id, result.error ?? "Unknown error")
+						console.error(
+							`[claude-auth] OAuth flow start failed: ${result.error}`,
+						)
+						await this.updateConvexFlowFailure(
+							flow._id,
+							result.error ?? "Unknown error",
+						)
 						this.containerFlowMap.delete(flow._id)
 						return
 					}
 				} else if (command.status === "failed") {
 					console.error(`[claude-auth] Command failed: ${command.error}`)
-					await this.updateConvexFlowFailure(flow._id, command.error ?? "Command failed")
+					await this.updateConvexFlowFailure(
+						flow._id,
+						command.error ?? "Command failed",
+					)
 					this.containerFlowMap.delete(flow._id)
 					return
 				}
@@ -433,9 +453,11 @@ export class ClaudeAuth extends EventEmitter {
 
 			// Timeout
 			console.error("[claude-auth] Timeout waiting for OAuth URL")
-			await this.updateConvexFlowFailure(flow._id, "Timeout waiting for OAuth URL")
+			await this.updateConvexFlowFailure(
+				flow._id,
+				"Timeout waiting for OAuth URL",
+			)
 			this.containerFlowMap.delete(flow._id)
-
 		} catch (error) {
 			const msg = error instanceof Error ? error.message : String(error)
 			console.error(`[claude-auth] Failed to start OAuth flow: ${msg}`)
@@ -474,7 +496,10 @@ export class ClaudeAuth extends EventEmitter {
 	private async processFlowWithCode(flow: ConvexOAuthFlow): Promise<void> {
 		if (!this.convexClient) {
 			console.error("[claude-auth] Convex client not initialized")
-			await this.updateConvexFlowFailure(flow._id, "Gateway not properly configured")
+			await this.updateConvexFlowFailure(
+				flow._id,
+				"Gateway not properly configured",
+			)
 			return
 		}
 
@@ -498,17 +523,19 @@ export class ClaudeAuth extends EventEmitter {
 					containerId: activeFlow.containerId,
 					oauthFlowId: flow._id,
 					containerFlowId: activeFlow.containerFlowId,
-					authCode: flow.authCode!,
+					authCode: flow.authCode ?? "",
 				},
 			)
 
-			console.log(`[claude-auth] Created completeOAuthFlow command: ${commandId}`)
+			console.log(
+				`[claude-auth] Created completeOAuthFlow command: ${commandId}`,
+			)
 
 			// Wait for the command to complete (poll for result)
 			let attempts = 0
 			const maxAttempts = 180 // 3 minutes (OAuth completion can take time)
 			while (attempts < maxAttempts) {
-				await new Promise(resolve => setTimeout(resolve, 1000))
+				await new Promise((resolve) => setTimeout(resolve, 1000))
 				attempts++
 
 				const command = await this.convexClient.query(
@@ -540,29 +567,41 @@ export class ClaudeAuth extends EventEmitter {
 						this.containerFlowMap.delete(flow._id)
 						return
 					} else {
-						console.error(`[claude-auth] OAuth flow completion failed: ${result.error}`)
-						await this.updateConvexFlowFailure(flow._id, result.error ?? "Unknown error")
+						console.error(
+							`[claude-auth] OAuth flow completion failed: ${result.error}`,
+						)
+						await this.updateConvexFlowFailure(
+							flow._id,
+							result.error ?? "Unknown error",
+						)
 						this.containerFlowMap.delete(flow._id)
 						return
 					}
 				} else if (command.status === "failed") {
 					console.error(`[claude-auth] Command failed: ${command.error}`)
-					await this.updateConvexFlowFailure(flow._id, command.error ?? "Command failed")
+					await this.updateConvexFlowFailure(
+						flow._id,
+						command.error ?? "Command failed",
+					)
 					this.containerFlowMap.delete(flow._id)
 					return
 				}
 
 				// Log progress every 15 seconds
 				if (attempts > 0 && attempts % 15 === 0) {
-					console.log(`[claude-auth] Waiting for OAuth completion... (${attempts}s)`)
+					console.log(
+						`[claude-auth] Waiting for OAuth completion... (${attempts}s)`,
+					)
 				}
 			}
 
 			// Timeout
 			console.error("[claude-auth] Timeout waiting for OAuth completion")
-			await this.updateConvexFlowFailure(flow._id, "Timeout waiting for OAuth completion")
+			await this.updateConvexFlowFailure(
+				flow._id,
+				"Timeout waiting for OAuth completion",
+			)
 			this.containerFlowMap.delete(flow._id)
-
 		} catch (error) {
 			const msg = error instanceof Error ? error.message : String(error)
 			console.error(`[claude-auth] Failed to complete OAuth flow: ${msg}`)
@@ -607,10 +646,7 @@ export class ClaudeAuth extends EventEmitter {
 				},
 			)
 		} catch (error) {
-			console.error(
-				`[claude-auth] Failed to update flow to completing:`,
-				error,
-			)
+			console.error(`[claude-auth] Failed to update flow to completing:`, error)
 		}
 	}
 
@@ -620,9 +656,12 @@ export class ClaudeAuth extends EventEmitter {
 	private async updateConvexFlowSuccess(flowId: string): Promise<void> {
 		if (!this.convexClient) return
 		try {
-			await this.convexClient.mutation(api.aiProviders.completeOAuthFlowSuccess, {
-				flowId: flowId as never,
-			})
+			await this.convexClient.mutation(
+				api.aiProviders.completeOAuthFlowSuccess,
+				{
+					flowId: flowId as never,
+				},
+			)
 			console.log(`[claude-auth] OAuth flow ${flowId} completed successfully`)
 		} catch (error) {
 			console.error(`[claude-auth] Failed to update flow to success:`, error)
@@ -638,10 +677,13 @@ export class ClaudeAuth extends EventEmitter {
 	): Promise<void> {
 		if (!this.convexClient) return
 		try {
-			await this.convexClient.mutation(api.aiProviders.completeOAuthFlowFailure, {
-				flowId: flowId as never,
-				error,
-			})
+			await this.convexClient.mutation(
+				api.aiProviders.completeOAuthFlowFailure,
+				{
+					flowId: flowId as never,
+					error,
+				},
+			)
 			console.log(`[claude-auth] OAuth flow ${flowId} failed: ${error}`)
 		} catch (error) {
 			console.error(`[claude-auth] Failed to update flow to failure:`, error)

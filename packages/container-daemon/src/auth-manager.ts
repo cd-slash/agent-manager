@@ -191,9 +191,7 @@ export class AuthManager extends EventEmitter {
 						/https:\/\/claude\.ai\/oauth\/authorize[^\s\x1b\]]+/,
 					)
 					if (urlMatch && !foundUrl) {
-						foundUrl = urlMatch[0]
-							.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, "")
-							.trim()
+						foundUrl = urlMatch[0].replace(/\x1b\[[0-9;]*[a-zA-Z]/g, "").trim()
 						console.log(`[auth] Found OAuth URL: ${foundUrl}`)
 						if (urlResolve) {
 							urlResolve(foundUrl)

@@ -4,14 +4,16 @@
  * Commands for project management - get details, list, update plan, stats.
  */
 
-import { Command } from "commander"
 import type { Id } from "@agent-manager/convex/dataModel"
-import { getClient, api } from "../client"
+import type { Command } from "commander"
+import { api, getClient } from "../client"
 import { success, withErrorHandler } from "../utils/output"
 import { validateId, validateRequired } from "../utils/validators"
 
 export function registerProjectCommands(program: Command): void {
-	const project = program.command("project").description("Project management commands")
+	const project = program
+		.command("project")
+		.description("Project management commands")
 
 	// Get project details
 	project

@@ -86,26 +86,38 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 	)
 
 	const success = useCallback(
-		(title: string, message?: string | React.ReactNode, options?: Partial<ToastOptions>) =>
-			toast({ type: "success", title, message, ...options }),
+		(
+			title: string,
+			message?: string | React.ReactNode,
+			options?: Partial<ToastOptions>,
+		) => toast({ type: "success", title, message, ...options }),
 		[toast],
 	)
 
 	const error = useCallback(
-		(title: string, message?: string | React.ReactNode, options?: Partial<ToastOptions>) =>
-			toast({ type: "error", title, message, ...options }),
+		(
+			title: string,
+			message?: string | React.ReactNode,
+			options?: Partial<ToastOptions>,
+		) => toast({ type: "error", title, message, ...options }),
 		[toast],
 	)
 
 	const warning = useCallback(
-		(title: string, message?: string | React.ReactNode, options?: Partial<ToastOptions>) =>
-			toast({ type: "warning", title, message, ...options }),
+		(
+			title: string,
+			message?: string | React.ReactNode,
+			options?: Partial<ToastOptions>,
+		) => toast({ type: "warning", title, message, ...options }),
 		[toast],
 	)
 
 	const info = useCallback(
-		(title: string, message?: string | React.ReactNode, options?: Partial<ToastOptions>) =>
-			toast({ type: "info", title, message, ...options }),
+		(
+			title: string,
+			message?: string | React.ReactNode,
+			options?: Partial<ToastOptions>,
+		) => toast({ type: "info", title, message, ...options }),
 		[toast],
 	)
 

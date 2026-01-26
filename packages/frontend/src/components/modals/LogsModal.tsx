@@ -98,36 +98,57 @@ export function LogsModal({
 								<div className="space-y-3 text-muted-foreground">
 									<div className="grid grid-cols-2 gap-4">
 										<div className="bg-surface rounded-lg p-3">
-											<div className="text-xs uppercase tracking-wider mb-1">CPU Usage</div>
-											<div className="text-2xl font-bold text-foreground">{serverMetrics.cpu}%</div>
+											<div className="text-xs uppercase tracking-wider mb-1">
+												CPU Usage
+											</div>
+											<div className="text-2xl font-bold text-foreground">
+												{serverMetrics.cpu}%
+											</div>
 										</div>
 										<div className="bg-surface rounded-lg p-3">
-											<div className="text-xs uppercase tracking-wider mb-1">Memory Usage</div>
-											<div className="text-2xl font-bold text-foreground">{serverMetrics.mem}%</div>
+											<div className="text-xs uppercase tracking-wider mb-1">
+												Memory Usage
+											</div>
+											<div className="text-2xl font-bold text-foreground">
+												{serverMetrics.mem}%
+											</div>
 										</div>
 									</div>
 									{serverMetrics.diskUsage !== undefined && (
 										<div className="bg-surface rounded-lg p-3">
-											<div className="text-xs uppercase tracking-wider mb-1">Disk Usage</div>
-											<div className="text-2xl font-bold text-foreground">{serverMetrics.diskUsage}%</div>
-										</div>
-									)}
-									{serverMetrics.networkIn !== undefined && serverMetrics.networkOut !== undefined && (
-										<div className="grid grid-cols-2 gap-4">
-											<div className="bg-surface rounded-lg p-3">
-												<div className="text-xs uppercase tracking-wider mb-1">Network In</div>
-												<div className="text-lg font-bold text-foreground">
-													{(serverMetrics.networkIn / 1024 / 1024).toFixed(2)} MB
-												</div>
+											<div className="text-xs uppercase tracking-wider mb-1">
+												Disk Usage
 											</div>
-											<div className="bg-surface rounded-lg p-3">
-												<div className="text-xs uppercase tracking-wider mb-1">Network Out</div>
-												<div className="text-lg font-bold text-foreground">
-													{(serverMetrics.networkOut / 1024 / 1024).toFixed(2)} MB
-												</div>
+											<div className="text-2xl font-bold text-foreground">
+												{serverMetrics.diskUsage}%
 											</div>
 										</div>
 									)}
+									{serverMetrics.networkIn !== undefined &&
+										serverMetrics.networkOut !== undefined && (
+											<div className="grid grid-cols-2 gap-4">
+												<div className="bg-surface rounded-lg p-3">
+													<div className="text-xs uppercase tracking-wider mb-1">
+														Network In
+													</div>
+													<div className="text-lg font-bold text-foreground">
+														{(serverMetrics.networkIn / 1024 / 1024).toFixed(2)}{" "}
+														MB
+													</div>
+												</div>
+												<div className="bg-surface rounded-lg p-3">
+													<div className="text-xs uppercase tracking-wider mb-1">
+														Network Out
+													</div>
+													<div className="text-lg font-bold text-foreground">
+														{(serverMetrics.networkOut / 1024 / 1024).toFixed(
+															2,
+														)}{" "}
+														MB
+													</div>
+												</div>
+											</div>
+										)}
 									<div className="text-xs text-muted-foreground mt-4 pt-4 border-t border-border">
 										Last updated: {formatTime(serverMetrics.timestamp)}
 									</div>
@@ -136,7 +157,9 @@ export function LogsModal({
 								<div className="text-muted-foreground text-center py-8">
 									<FileText size={32} className="mx-auto mb-2 opacity-50" />
 									<p>No metrics available for this server.</p>
-									<p className="text-xs mt-1">Metrics are collected periodically from connected servers.</p>
+									<p className="text-xs mt-1">
+										Metrics are collected periodically from connected servers.
+									</p>
 								</div>
 							)
 						) : (
@@ -144,20 +167,36 @@ export function LogsModal({
 								{selectedItem && "containerId" in selectedItem && (
 									<>
 										<div className="bg-surface rounded-lg p-3">
-											<div className="text-xs uppercase tracking-wider mb-1">Container ID</div>
-											<code className="text-sm text-foreground">{(selectedItem as Container).containerId}</code>
+											<div className="text-xs uppercase tracking-wider mb-1">
+												Container ID
+											</div>
+											<code className="text-sm text-foreground">
+												{(selectedItem as Container).containerId}
+											</code>
 										</div>
 										<div className="bg-surface rounded-lg p-3">
-											<div className="text-xs uppercase tracking-wider mb-1">Image</div>
-											<code className="text-sm text-foreground">{(selectedItem as Container).image}</code>
+											<div className="text-xs uppercase tracking-wider mb-1">
+												Image
+											</div>
+											<code className="text-sm text-foreground">
+												{(selectedItem as Container).image}
+											</code>
 										</div>
 										<div className="bg-surface rounded-lg p-3">
-											<div className="text-xs uppercase tracking-wider mb-1">Status</div>
-											<span className="text-sm text-foreground capitalize">{(selectedItem as Container).status}</span>
+											<div className="text-xs uppercase tracking-wider mb-1">
+												Status
+											</div>
+											<span className="text-sm text-foreground capitalize">
+												{(selectedItem as Container).status}
+											</span>
 										</div>
 										<div className="bg-surface rounded-lg p-3">
-											<div className="text-xs uppercase tracking-wider mb-1">Server</div>
-											<span className="text-sm text-foreground">{(selectedItem as Container).server}</span>
+											<div className="text-xs uppercase tracking-wider mb-1">
+												Server
+											</div>
+											<span className="text-sm text-foreground">
+												{(selectedItem as Container).server}
+											</span>
 										</div>
 									</>
 								)}

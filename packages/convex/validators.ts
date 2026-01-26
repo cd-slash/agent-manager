@@ -10,7 +10,10 @@ export const aiProviderTypeValidator = v.union(
 )
 
 // Authentication type for AI providers
-export const authTypeValidator = v.union(v.literal("api_key"), v.literal("oauth"))
+export const authTypeValidator = v.union(
+	v.literal("api_key"),
+	v.literal("oauth"),
+)
 
 // Task category status
 export const categoryValidator = v.union(

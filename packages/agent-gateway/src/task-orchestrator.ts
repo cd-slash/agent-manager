@@ -82,7 +82,8 @@ export class TaskOrchestrator {
 	async startPhaseExecution(
 		options: PhaseExecutionOptions,
 	): Promise<PhaseExecutionResult> {
-		const { taskId, phase, containerId, configOverrides, customPrompt } = options
+		const { taskId, phase, containerId, configOverrides, customPrompt } =
+			options
 
 		try {
 			// Fetch task details from Convex
@@ -331,9 +332,7 @@ export class TaskOrchestrator {
 		phase: TaskPhase,
 	): Promise<void> {
 		// For review/remediation/merge phases, fetch PR info
-		if (
-			["ai_review", "remediation", "human_review", "merge"].includes(phase)
-		) {
+		if (["ai_review", "remediation", "human_review", "merge"].includes(phase)) {
 			try {
 				// @ts-expect-error - API types will be generated
 				const pr = await this.client.query("pullRequests:getByTask", {

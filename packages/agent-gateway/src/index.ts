@@ -23,7 +23,7 @@ import type {
 	StatusHealthPayload,
 	WebSocketMessage,
 } from "@agent-manager/agent-shared"
-import { isConnectMessage, parseMessage } from "@agent-manager/agent-shared"
+import { isConnectMessage } from "@agent-manager/agent-shared"
 import type { ServerWebSocket } from "bun"
 import { ClaudeAuth } from "./claude-auth"
 import { ConnectionManager, type ContainerContext } from "./connections"
@@ -539,14 +539,16 @@ async function generateTailscaleAuthKey(
 	apiKey: string,
 	tags: string[] = ["tag:code-agent"],
 ): Promise<string> {
-	console.log(`[gateway] Generating ephemeral Tailscale auth key for tailnet: ${tailnetId}`)
+	console.log(
+		`[gateway] Generating ephemeral Tailscale auth key for tailnet: ${tailnetId}`,
+	)
 
 	const response = await fetch(
 		`https://api.tailscale.com/api/v2/tailnet/${tailnetId}/keys`,
 		{
 			method: "POST",
 			headers: {
-				"Authorization": `Bearer ${apiKey}`,
+				Authorization: `Bearer ${apiKey}`,
 				"Content-Type": "application/json",
 			},
 			body: JSON.stringify({
@@ -570,16 +572,20 @@ async function generateTailscaleAuthKey(
 		throw new Error(`Tailscale API error: ${response.status} - ${errorText}`)
 	}
 
-	const data = await response.json() as { key: string }
+	const data = (await response.json()) as { key: string }
 	console.log(`[gateway] Generated ephemeral auth key successfully`)
 	return data.key
 }
 
 // Paths for binary building
-const BINARY_PATH = new URL("../container-daemon-binary", import.meta.url).pathname
-const CLI_BINARY_PATH = new URL("../code-agent-tools-binary", import.meta.url).pathname
-const CONTAINER_DAEMON_SRC = new URL("../../container-daemon/src", import.meta.url)
+const BINARY_PATH = new URL("../container-daemon-binary", import.meta.url)
 	.pathname
+const CLI_BINARY_PATH = new URL("../code-agent-tools-binary", import.meta.url)
+	.pathname
+const CONTAINER_DAEMON_SRC = new URL(
+	"../../container-daemon/src",
+	import.meta.url,
+).pathname
 const CONTAINER_DAEMON_PKG = new URL("../../container-daemon", import.meta.url)
 	.pathname
 const AGENT_CLI_PKG = new URL("../../agent-cli", import.meta.url).pathname
@@ -594,7 +600,15 @@ const AGENT_CLI_PKG = new URL("../../agent-cli", import.meta.url).pathname
 async function getDaemonGitHash(): Promise<string> {
 	// Get combined hash of both packages
 	const proc = Bun.spawn(
-		["git", "log", "-1", "--format=%H", "--", "packages/container-daemon", "packages/agent-cli"],
+		[
+			"git",
+			"log",
+			"-1",
+			"--format=%H",
+			"--",
+			"packages/container-daemon",
+			"packages/agent-cli",
+		],
 		{
 			cwd: new URL("../../..", import.meta.url).pathname, // monorepo root
 			stdout: "pipe",
@@ -639,7 +653,9 @@ async function computeSourceHashFallback(dir: string): Promise<string> {
 
 	// Also include package.json for dependency changes
 	try {
-		const pkgContent = await Bun.file(`${CONTAINER_DAEMON_PKG}/package.json`).text()
+		const pkgContent = await Bun.file(
+			`${CONTAINER_DAEMON_PKG}/package.json`,
+		).text()
 		hasher.update(pkgContent)
 	} catch {
 		// Skip if package.json doesn't exist
@@ -681,10 +697,14 @@ async function shouldRebuildBinary(): Promise<boolean> {
 	const currentHash = await getDaemonGitHash()
 	const storedHash = (await hashFile.text()).trim()
 
-	console.log(`[gateway] Binary hash check: current=${currentHash.slice(0, 8)}, stored=${storedHash.slice(0, 8)}`)
+	console.log(
+		`[gateway] Binary hash check: current=${currentHash.slice(0, 8)}, stored=${storedHash.slice(0, 8)}`,
+	)
 
 	if (currentHash !== storedHash) {
-		console.log("[gateway] Source changed (git commit differs), will rebuild binaries")
+		console.log(
+			"[gateway] Source changed (git commit differs), will rebuild binaries",
+		)
 		return true
 	}
 
@@ -697,7 +717,9 @@ async function shouldRebuildBinary(): Promise<boolean> {
  */
 async function buildContainerApiBinary(): Promise<void> {
 	const gitHash = await getDaemonGitHash()
-	console.log(`[gateway] Building container binaries (git: ${gitHash.slice(0, 8)})...`)
+	console.log(
+		`[gateway] Building container binaries (git: ${gitHash.slice(0, 8)})...`,
+	)
 
 	// Build container-daemon
 	const daemonEntryPoint = `${CONTAINER_DAEMON_PKG}/src/index.ts`
@@ -740,7 +762,9 @@ async function buildContainerApiBinary(): Promise<void> {
 	// Store the git hash used for this build
 	await Bun.write(BINARY_HASH_PATH, gitHash)
 
-	console.log(`[gateway] Container binaries built successfully (git: ${gitHash.slice(0, 8)})`)
+	console.log(
+		`[gateway] Container binaries built successfully (git: ${gitHash.slice(0, 8)})`,
+	)
 }
 
 /**
@@ -788,7 +812,9 @@ async function createContainerOnServer(
 
 	// Generate ephemeral Tailscale auth key via API
 	if (!tailscaleConfig?.tailnetId || !tailscaleConfig?.apiKey) {
-		throw new Error("Tailscale not configured - set tailnetId and API key in Settings > Tailscale")
+		throw new Error(
+			"Tailscale not configured - set tailnetId and API key in Settings > Tailscale",
+		)
 	}
 
 	let tsAuthKey: string
@@ -885,24 +911,24 @@ set -euo pipefail
 AUTH_KEY="\${TS_AUTHKEY:-}"
 FRESH_KEY=false
 if [ -f /var/run/tailscale-authkey ]; then
-  AUTH_KEY=\$(cat /var/run/tailscale-authkey)
+  AUTH_KEY=$(cat /var/run/tailscale-authkey)
   rm -f /var/run/tailscale-authkey  # Single use, remove after reading
   FRESH_KEY=true
 fi
 
 # Start Tailscale (using statedir for persistent state to support TLS certificates)
-if [ -n "\$AUTH_KEY" ]; then
+if [ -n "$AUTH_KEY" ]; then
   # If using a fresh key (restart), clear old Tailscale state to allow re-registration
-  if [ "\$FRESH_KEY" = "true" ]; then
+  if [ "$FRESH_KEY" = "true" ]; then
     echo "Fresh auth key detected, clearing old Tailscale state..."
     rm -rf /var/lib/tailscale/*
   fi
 
   TAILSCALED_ARGS="--statedir=/var/lib/tailscale"
-  [ -n "\${TS_WG_PORT:-}" ] && TAILSCALED_ARGS="\$TAILSCALED_ARGS --port=\${TS_WG_PORT}"
-  tailscaled \$TAILSCALED_ARGS &
+  [ -n "\${TS_WG_PORT:-}" ] && TAILSCALED_ARGS="$TAILSCALED_ARGS --port=\${TS_WG_PORT}"
+  tailscaled $TAILSCALED_ARGS &
   sleep 2
-  tailscale up --authkey="\$AUTH_KEY" --hostname="\${TS_HOSTNAME}" --accept-dns=true --ssh
+  tailscale up --authkey="$AUTH_KEY" --hostname="\${TS_HOSTNAME}" --accept-dns=true --ssh
 fi
 
 # Start SSH
@@ -919,7 +945,7 @@ if [ -n "\${WORKSPACE_REPO:-}" ]; then
     cd /
 
     # Remove empty workspace directory so git clone can create it fresh
-    if [ -d "/workspace" ] && [ -z "\$(ls -A /workspace)" ]; then
+    if [ -d "/workspace" ] && [ -z "$(ls -A /workspace)" ]; then
       rm -rf /workspace
     fi
 
@@ -964,7 +990,7 @@ if [ -f /workspace/package.json ]; then
     WORKSPACE_STARTED=true
   fi
 
-  if [ "\$WORKSPACE_STARTED" = "true" ]; then
+  if [ "$WORKSPACE_STARTED" = "true" ]; then
     # Wait for dev server to start (check if port 5173 is listening)
     echo "Waiting for dev server to start on port 5173..."
     for i in 1 2 3 4 5 6 7 8 9 10; do
@@ -990,7 +1016,7 @@ if [ -x /opt/container-daemon/container-daemon ]; then
 fi
 
 # Expose workspace via Tailscale serve (if workspace is running on port 5173)
-if [ "\$WORKSPACE_STARTED" = "true" ] && ss -tln | grep -q ':5173 '; then
+if [ "$WORKSPACE_STARTED" = "true" ] && ss -tln | grep -q ':5173 '; then
   echo "Setting up Tailscale serve to proxy port 5173..."
   tailscale serve --bg --https=443 http://localhost:5173 2>/dev/null || true
   echo "Tailscale serve configured - workspace accessible via https://\${TS_HOSTNAME}.tail-scale.ts.net"
@@ -998,8 +1024,8 @@ fi
 
 # Keep container alive - wait for any background process or sleep forever
 # This prevents restart loops with single-use Tailscale auth keys
-if [ \$# -gt 0 ]; then
-  exec "\$@"
+if [ $# -gt 0 ]; then
+  exec "$@"
 else
   exec sleep infinity
 fi`
@@ -1042,7 +1068,7 @@ fi`
     hostname: ${containerName}
     container_name: ${containerName}
     environment:
-${envVars.map(v => `      - ${v}`).join("\n")}
+${envVars.map((v) => `      - ${v}`).join("\n")}
     devices:
       - /dev/net/tun:/dev/net/tun
     cap_add:
@@ -1157,7 +1183,9 @@ rm -rf "$BUILD_DIR" /tmp/compose-${containerName}.yml`
 	const binaryFile = Bun.file(BINARY_PATH)
 	const cliBinaryFile = Bun.file(CLI_BINARY_PATH)
 	if (!(await binaryFile.exists())) {
-		console.warn(`[gateway] Container-daemon binary not found at ${BINARY_PATH}, skipping deploy`)
+		console.warn(
+			`[gateway] Container-daemon binary not found at ${BINARY_PATH}, skipping deploy`,
+		)
 		if (buildTracker)
 			await buildTracker.skipPhase(containerName, "deploying_binary")
 		if (buildTracker)
@@ -1201,7 +1229,11 @@ rm -rf "$BUILD_DIR" /tmp/compose-${containerName}.yml`
 				// Also SCP the CLI binary if it exists
 				if (await cliBinaryFile.exists()) {
 					const cliScpProc = Bun.spawn(
-						["scp", CLI_BINARY_PATH, `${sshTarget}:/tmp/code-agent-tools-binary`],
+						[
+							"scp",
+							CLI_BINARY_PATH,
+							`${sshTarget}:/tmp/code-agent-tools-binary`,
+						],
 						{
 							stdout: "pipe",
 							stderr: "pipe",
@@ -1210,7 +1242,9 @@ rm -rf "$BUILD_DIR" /tmp/compose-${containerName}.yml`
 					const cliScpStderr = await new Response(cliScpProc.stderr).text()
 					const cliScpExit = await cliScpProc.exited
 					if (cliScpExit !== 0) {
-						console.warn(`[gateway] Failed to SCP agent-cli binary: ${cliScpStderr}`)
+						console.warn(
+							`[gateway] Failed to SCP agent-cli binary: ${cliScpStderr}`,
+						)
 					}
 				}
 
@@ -1589,7 +1623,11 @@ docker ps -a --filter "label=agent-manager.tailscale-hostname" --format '{"name"
 	}
 
 	// Parse JSON lines output
-	const containers: Array<{ name: string; containerId: string; running: boolean }> = []
+	const containers: Array<{
+		name: string
+		containerId: string
+		running: boolean
+	}> = []
 	for (const line of stdout.trim().split("\n")) {
 		if (line) {
 			try {
@@ -1609,8 +1647,8 @@ docker ps -a --filter "label=agent-manager.tailscale-hostname" --format '{"name"
 const CONVEX_URL = process.env.CONVEX_URL || ""
 const SERVER_ID =
 	process.env.SERVER_ID || `gateway-${crypto.randomUUID().slice(0, 8)}`
-const PING_INTERVAL = 30000 // 30 seconds
-const PRUNE_INTERVAL = 60000 // 60 seconds
+const _PING_INTERVAL = 30000 // 30 seconds
+const _PRUNE_INTERVAL = 60000 // 60 seconds
 
 const connections = new ConnectionManager(SERVER_ID)
 const convexSync = CONVEX_URL ? new ConvexSync(CONVEX_URL) : null
@@ -1674,7 +1712,7 @@ async function pushTokenToContainer(containerId: string): Promise<boolean> {
 /**
  * Handle incoming WebSocket messages from containers
  */
-function handleContainerMessage(
+function _handleContainerMessage(
 	ws: ServerWebSocket<ContainerContext>,
 	message: WebSocketMessage,
 ): void {
@@ -1788,9 +1826,7 @@ function handleExecStream(
 	correlationId?: string,
 ): void {
 	// Check local execution tracking (for REST API initiated executions)
-	const execution = correlationId
-		? activeExecutions.get(correlationId)
-		: null
+	const execution = correlationId ? activeExecutions.get(correlationId) : null
 
 	// Log stream events
 	console.log(
@@ -1820,9 +1856,7 @@ function handleExecComplete(
 	correlationId?: string,
 ): void {
 	// Check local execution tracking (for REST API initiated executions)
-	const execution = correlationId
-		? activeExecutions.get(correlationId)
-		: null
+	const execution = correlationId ? activeExecutions.get(correlationId) : null
 
 	console.log(
 		`[gateway] Execution complete from ${containerId}:`,
@@ -1912,7 +1946,7 @@ function startExecution(
 /**
  * HTTP API handler
  */
-async function handleHttpRequest(req: Request): Promise<Response> {
+async function _handleHttpRequest(req: Request): Promise<Response> {
 	const url = new URL(req.url)
 
 	// CORS headers
@@ -2170,9 +2204,13 @@ async function handleHttpRequest(req: Request): Promise<Response> {
 		if (sent) {
 			// Remove from active executions
 			activeExecutions.delete(correlationId)
-			console.log(`[gateway] Abort sent to container ${execution.containerId} for correlation ${correlationId}`)
+			console.log(
+				`[gateway] Abort sent to container ${execution.containerId} for correlation ${correlationId}`,
+			)
 		} else {
-			console.warn(`[gateway] Failed to send abort to container ${execution.containerId}`)
+			console.warn(
+				`[gateway] Failed to send abort to container ${execution.containerId}`,
+			)
 		}
 
 		return Response.json(
@@ -2300,7 +2338,9 @@ async function handleHttpRequest(req: Request): Promise<Response> {
 			const body = (await req.json()) as CreateContainerRequest
 
 			// Repo is now optional - management containers don't need one
-			console.log(`[gateway] Creating container${body.repo ? ` for repo: ${body.repo}` : " (no repo)"}`)
+			console.log(
+				`[gateway] Creating container${body.repo ? ` for repo: ${body.repo}` : " (no repo)"}`,
+			)
 
 			// Fetch config from Convex
 			if (!CONVEX_URL) {
@@ -2322,7 +2362,9 @@ async function handleHttpRequest(req: Request): Promise<Response> {
 				const missingSecrets = requiredSecrets.filter((key) => !secrets[key])
 				if (missingSecrets.length > 0) {
 					return Response.json(
-						{ error: `Missing required secrets for repo cloning: ${missingSecrets.join(", ")}` },
+						{
+							error: `Missing required secrets for repo cloning: ${missingSecrets.join(", ")}`,
+						},
 						{ status: 500, headers: corsHeaders },
 					)
 				}

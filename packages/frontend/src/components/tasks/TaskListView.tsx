@@ -203,9 +203,7 @@ export function TaskListView({
 									align="end"
 									onClick={(e) => e.stopPropagation()}
 								>
-									<DropdownMenuItem
-										onClick={() => setEditingTask(task)}
-									>
+									<DropdownMenuItem onClick={() => setEditingTask(task)}>
 										<Edit2 size={16} />
 										Edit
 									</DropdownMenuItem>

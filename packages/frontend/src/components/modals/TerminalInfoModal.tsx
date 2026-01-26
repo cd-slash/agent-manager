@@ -78,7 +78,7 @@ export function TerminalInfoModal({
 				<div className="space-y-3 pt-4">
 					{commands.map((item, index) => (
 						<div
-							key={index}
+							key={item.label}
 							className="bg-surface border border-border rounded-lg p-4"
 						>
 							<div className="flex items-center justify-between mb-2">

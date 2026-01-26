@@ -498,7 +498,9 @@ function parseStreamContent(
 
 			// Extract tool_use from content blocks
 			const toolBlocks = obj.content.filter(
-				(c): c is {
+				(
+					c,
+				): c is {
 					type: "tool_use"
 					id: string
 					name: string

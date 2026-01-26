@@ -28,10 +28,14 @@ import {
 	X,
 	XCircle,
 } from "lucide-react"
-import { useState, useEffect, useMemo, useRef } from "react"
-import { AgentChatPanel, type Provider, type Model, type AgentStatus } from "@/components/chat/AgentChatPanel"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import {
+	AgentChatPanel,
+	type AgentStatus,
+	type Model,
+	type Provider,
+} from "@/components/chat/AgentChatPanel"
 import { DependencyPickerModal } from "@/components/modals/DependencyPickerModal"
-import { useCreateContainer } from "@/hooks/useGatewayCommand"
 import { useToast } from "@/components/ToastProvider"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -42,6 +46,7 @@ import {
 	TooltipContent,
 	TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { useCreateContainer } from "@/hooks/useGatewayCommand"
 import type {
 	ChatMessage,
 	ChatMessagePart,
@@ -93,7 +98,7 @@ export function TaskDetailView({
 	onUpdate,
 }: TaskDetailViewProps) {
 	const [activeTab, setActiveTab] = useState("chat")
-	const [openFiles, setOpenFiles] = useState<Record<string, boolean>>({})
+	const [_openFiles, setOpenFiles] = useState<Record<string, boolean>>({})
 	const [showDependencyPicker, setShowDependencyPicker] = useState(false)
 	const toast = useToast()
 
@@ -147,7 +152,7 @@ export function TaskDetailView({
 	const [currentSessionId, setCurrentSessionId] = useState<string | null>(null)
 	// Track Claude's session ID for resumption (persisted to task)
 	const [activeSessionId, setActiveSessionId] = useState<string | null>(
-		task.activeSessionId ?? null
+		task.activeSessionId ?? null,
 	)
 
 	// Fetch chat messages from Convex - this is the persistent history
@@ -156,44 +161,60 @@ export function TaskDetailView({
 	// Subscribe to streaming messages only during active execution
 	const streamingMessages = useQuery(
 		api.agentMessages.getBySession,
-		currentSessionId ? { sessionId: currentSessionId } : "skip"
+		currentSessionId ? { sessionId: currentSessionId } : "skip",
 	)
 
 	// Query to watch container pool for task's container
 	const taskContainer = useQuery(
 		api.containerPool.get,
-		task.activeContainerId ? { containerId: task.activeContainerId } : "skip"
+		task.activeContainerId ? { containerId: task.activeContainerId } : "skip",
 	)
 
 	// Compute agent status based on current state
 	const agentStatus: AgentStatus = useMemo(() => {
 		if (!isAgentProcessing) return "idle"
-		if (isCreatingContainer && !task.activeContainerId) return "waiting_for_container"
-		if (isCreatingContainer && task.activeContainerId && taskContainer?.status !== "online") return "starting_container"
-		if (isCreatingContainer && taskContainer?.status === "online") return "container_ready"
+		if (isCreatingContainer && !task.activeContainerId)
+			return "waiting_for_container"
+		if (
+			isCreatingContainer &&
+			task.activeContainerId &&
+			taskContainer?.status !== "idle"
+		)
+			return "starting_container"
+		if (isCreatingContainer && taskContainer?.status === "idle")
+			return "container_ready"
 		return "thinking"
-	}, [isAgentProcessing, isCreatingContainer, task.activeContainerId, taskContainer?.status])
+	}, [
+		isAgentProcessing,
+		isCreatingContainer,
+		task.activeContainerId,
+		taskContainer?.status,
+	])
 
-	// Helper functions for formatting tool displays
-	const formatToolDisplay = (name: string, input: unknown): string => {
-		if (input && typeof input === "object") {
-			const inp = input as Record<string, unknown>
-			if ("command" in inp && typeof inp.command === "string")
-				return inp.command.slice(0, 60)
-			if ("file_path" in inp && typeof inp.file_path === "string")
-				return inp.file_path
-			if ("pattern" in inp && typeof inp.pattern === "string") return inp.pattern
-		}
-		return ""
-	}
+	// Helper functions for formatting tool displays (wrapped in useCallback for stable references)
+	const formatToolDisplay = useCallback(
+		(_name: string, input: unknown): string => {
+			if (input && typeof input === "object") {
+				const inp = input as Record<string, unknown>
+				if ("command" in inp && typeof inp.command === "string")
+					return inp.command.slice(0, 60)
+				if ("file_path" in inp && typeof inp.file_path === "string")
+					return inp.file_path
+				if ("pattern" in inp && typeof inp.pattern === "string")
+					return inp.pattern
+			}
+			return ""
+		},
+		[],
+	)
 
-	const formatToolInput = (input: unknown): string => {
+	const formatToolInput = useCallback((input: unknown): string => {
 		if (typeof input === "string") return input
 		if (input && typeof input === "object") {
 			return JSON.stringify(input, null, 2)
 		}
 		return ""
-	}
+	}, [])
 
 	// Track the message count when streaming started to detect new messages
 	// Defined early so it can be used in chatHistory useMemo
@@ -201,7 +222,10 @@ export function TaskDetailView({
 
 	// Cache streaming parts so they persist when the streaming message transitions to persisted
 	// Store by message _id to apply parts to the correct persisted message
-	const cachedPartsForMessage = useRef<{ messageId: string | null; parts: ChatMessagePart[] }>({ messageId: null, parts: [] })
+	const cachedPartsForMessage = useRef<{
+		messageId: string | null
+		parts: ChatMessagePart[]
+	}>({ messageId: null, parts: [] })
 
 	// Watch streaming messages for completion and extract structured content
 	const streamingContent = useMemo(() => {
@@ -287,21 +311,36 @@ export function TaskDetailView({
 		}
 
 		// Debug: log streaming content
-		console.log("[TaskDetailView] streamingContent - parts:", parts.length, "hasResult:", hasResult, "hasError:", hasError, "types:", parts.map(p => p.type))
+		console.log(
+			"[TaskDetailView] streamingContent - parts:",
+			parts.length,
+			"hasResult:",
+			hasResult,
+			"hasError:",
+			hasError,
+			"types:",
+			parts.map((p) => p.type),
+		)
 
 		return { parts, hasResult, hasError }
-	}, [streamingMessages])
+	}, [streamingMessages, formatToolDisplay, formatToolInput])
 
 	// Cache streaming parts when complete so they can be applied to the persisted message
 	// Also cache when the streaming message ID changes (new message arrived)
 	// Backup cache effect - caches parts when streaming completes and AI message exists
 	// This runs before the clear session effect and provides redundant caching
 	useEffect(() => {
-		if (currentSessionId && streamingContent?.hasResult && streamingContent.parts.length > 0) {
+		if (
+			currentSessionId &&
+			streamingContent?.hasResult &&
+			streamingContent.parts.length > 0
+		) {
 			// Find the last AI message after the baseline to associate parts with
 			const baselineCount = messageCountBeforeStreaming.current
 			if (baselineCount !== null) {
-				const lastAiMessage = chatMessagesData.find((msg, idx) => idx >= baselineCount && msg.sender === "ai")
+				const lastAiMessage = chatMessagesData.find(
+					(msg, idx) => idx >= baselineCount && msg.sender === "ai",
+				)
 				if (lastAiMessage) {
 					cachedPartsForMessage.current = {
 						messageId: lastAiMessage._id,
@@ -310,21 +349,30 @@ export function TaskDetailView({
 				}
 			}
 		}
-	}, [currentSessionId, streamingContent?.hasResult, streamingContent?.parts, chatMessagesData])
+	}, [
+		currentSessionId,
+		streamingContent?.hasResult,
+		streamingContent?.parts,
+		chatMessagesData,
+	])
 
 	// Convert Convex chat messages to the UI format, adding streaming message if active
 	const chatHistory: ChatMessage[] = useMemo(() => {
 		// First, determine if we have a newly persisted AI message that needs parts
 		const baselineCount = messageCountBeforeStreaming.current
-		const newAiMessage = baselineCount !== null
-			? chatMessagesData.find((msg, idx) => idx >= baselineCount && msg.sender === "ai")
-			: null
+		const newAiMessage =
+			baselineCount !== null
+				? chatMessagesData.find(
+						(msg, idx) => idx >= baselineCount && msg.sender === "ai",
+					)
+				: null
 
 		// If we have streaming content with parts and a new AI message, use streaming parts for it
 		// This handles the transition before the useEffect caches the parts
-		const partsForNewMessage = newAiMessage && streamingContent?.parts.length
-			? streamingContent.parts
-			: null
+		const partsForNewMessage =
+			newAiMessage && streamingContent?.parts.length
+				? streamingContent.parts
+				: null
 
 		const messages: ChatMessage[] = chatMessagesData.map((msg) => {
 			// For AI messages, check if we have cached parts for this specific message
@@ -362,9 +410,13 @@ export function TaskDetailView({
 		// Note: find() returns undefined (not null) when no match, so use != null to check both
 		const hasPersistedAiMessage = newAiMessage != null
 
-		if (streamingContent?.parts.length && currentSessionId && !hasPersistedAiMessage) {
+		if (
+			streamingContent?.parts.length &&
+			currentSessionId &&
+			!hasPersistedAiMessage
+		) {
 			messages.push({
-				id: "streaming-" + currentSessionId,
+				id: `streaming-${currentSessionId}`,
 				sender: "ai",
 				text: "", // Will use parts instead
 				parts: streamingContent.parts,
@@ -383,7 +435,7 @@ export function TaskDetailView({
 	const startExecution = useMutation(api.containerCommands.startExecution)
 
 	// Mutation to update task (for assigning container)
-	const updateTask = useMutation(api.tasks.update)
+	const _updateTask = useMutation(api.tasks.update)
 
 	// Hook for creating containers with proper error handling
 	const createContainer = useCreateContainer()
@@ -421,7 +473,7 @@ export function TaskDetailView({
 		}
 	}
 
-	const toggleFile = (filename: string) =>
+	const _toggleFile = (filename: string) =>
 		setOpenFiles((prev) => ({ ...prev, [filename]: !prev[filename] }))
 
 	const handleCreatePR = () => {
@@ -439,7 +491,8 @@ export function TaskDetailView({
 	const [pendingMessage, setPendingMessage] = useState<string | null>(null)
 
 	// Provider and model state for chat
-	const [selectedProvider, setSelectedProvider] = useState<Provider>("anthropic")
+	const [selectedProvider, setSelectedProvider] =
+		useState<Provider>("anthropic")
 	const [selectedModel, setSelectedModel] = useState<Model>("opus")
 
 	// Handlers for provider/model changes with user feedback
@@ -462,24 +515,108 @@ export function TaskDetailView({
 	// Fetch ZAI API key for when ZAI provider is selected
 	const zaiApiKey = useQuery(api.secrets.get, { key: "ZAI_API_KEY" })
 
+	// Execute with container - defined as useCallback to avoid use-before-declaration
+	const executeWithContainer = useCallback(
+		async (
+			containerId: string,
+			message: string,
+			provider: Provider,
+			model: Model,
+			sessionIdToResume?: string | null,
+		) => {
+			setIsAgentProcessing(true)
+			setCurrentSessionId(null) // Reset session before starting new one
+			try {
+				// Push auth token first
+				const authToken =
+					"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"
+				await pushAuthToken({
+					containerId,
+					token: authToken,
+				})
+
+				// Build environment variables based on provider
+				let envVars:
+					| {
+							ANTHROPIC_AUTH_TOKEN?: string
+							ANTHROPIC_BASE_URL?: string
+							API_TIMEOUT_MS?: string
+					  }
+					| undefined
+
+				if (provider === "zai") {
+					if (!zaiApiKey?.value) {
+						toast.error(
+							"ZAI API Key Missing",
+							"Please configure your ZAI API key in Settings > Providers",
+						)
+						setIsAgentProcessing(false)
+						return
+					}
+					envVars = {
+						ANTHROPIC_AUTH_TOKEN: zaiApiKey.value,
+						ANTHROPIC_BASE_URL: "https://api.z.ai/api/anthropic",
+						API_TIMEOUT_MS: "3000000",
+					}
+				}
+				// For anthropic provider, envVars is undefined (use default env)
+
+				const result = await startExecution({
+					containerId,
+					message,
+					model,
+					provider,
+					envVars,
+					taskId: taskId as string,
+					projectId: task.projectId as string,
+					sessionId: sessionIdToResume ?? undefined, // Resume Claude session if provided
+				})
+
+				// Track the session for streaming updates
+				if (result?.correlationId) {
+					setCurrentSessionId(result.correlationId)
+				}
+			} catch (error) {
+				console.error("Failed to start agent execution:", error)
+				toast.error("Agent error", "Failed to start agent execution")
+				setIsAgentProcessing(false)
+			}
+			// Note: isAgentProcessing will be cleared by the useEffect watching streamingMessages
+		},
+		[pushAuthToken, startExecution, taskId, task.projectId, toast, zaiApiKey],
+	)
+
 	// When container becomes available and we have a pending message, execute it
 	// Convex automatically syncs task.activeContainerId when the backend sets it
 	useEffect(() => {
 		if (task.activeContainerId && pendingMessage) {
 			// Use the stored provider and model from state (set before pending message)
 			// New container means new session (no sessionId to resume)
-			executeWithContainer(task.activeContainerId, pendingMessage, selectedProvider, selectedModel, null)
+			executeWithContainer(
+				task.activeContainerId,
+				pendingMessage,
+				selectedProvider,
+				selectedModel,
+				null,
+			)
 			setPendingMessage(null)
 			setIsCreatingContainer(false)
 		}
-	}, [task.activeContainerId, pendingMessage, selectedProvider, selectedModel])
+	}, [
+		task.activeContainerId,
+		pendingMessage,
+		selectedProvider,
+		selectedModel, // Use the stored provider and model from state (set before pending message)
+		// New container means new session (no sessionId to resume)
+		executeWithContainer,
+	])
 
 	// Sync activeSessionId from task when it changes (e.g., from backend update)
 	useEffect(() => {
 		if (task.activeSessionId !== activeSessionId) {
 			setActiveSessionId(task.activeSessionId ?? null)
 		}
-	}, [task.activeSessionId])
+	}, [task.activeSessionId, activeSessionId])
 
 	// Set the baseline message count when streaming starts
 	useEffect(() => {
@@ -504,18 +641,22 @@ export function TaskDetailView({
 		if (!streamingContent?.hasResult || !currentSessionId) return
 		if (messageCountBeforeStreaming.current === null) return
 
+		// Capture the value to satisfy TypeScript in callback closures
+		const baselineCount = messageCountBeforeStreaming.current
+
 		// Check if a new AI message has appeared since streaming started
-		const hasNewAiMessage = chatMessagesData.length > messageCountBeforeStreaming.current &&
-			chatMessagesData.some((msg, idx) =>
-				idx >= messageCountBeforeStreaming.current! && msg.sender === "ai"
+		const hasNewAiMessage =
+			chatMessagesData.length > baselineCount &&
+			chatMessagesData.some(
+				(msg, idx) => idx >= baselineCount && msg.sender === "ai",
 			)
 
 		if (hasNewAiMessage) {
 			// CRITICAL: Cache the parts BEFORE clearing the session!
 			// Once we clear currentSessionId, the streamingMessages query is skipped
 			// and streamingContent becomes null, losing the parts.
-			const newAiMessage = chatMessagesData.find((msg, idx) =>
-				idx >= messageCountBeforeStreaming.current! && msg.sender === "ai"
+			const newAiMessage = chatMessagesData.find(
+				(msg, idx) => idx >= baselineCount && msg.sender === "ai",
 			)
 			if (newAiMessage && streamingContent?.parts.length) {
 				cachedPartsForMessage.current = {
@@ -534,62 +675,12 @@ export function TaskDetailView({
 		}, 5000)
 
 		return () => clearTimeout(fallbackTimer)
-	}, [streamingContent?.hasResult, currentSessionId, chatMessagesData])
-
-	const executeWithContainer = async (containerId: string, message: string, provider: Provider, model: Model, sessionIdToResume?: string | null) => {
-		setIsAgentProcessing(true)
-		setCurrentSessionId(null) // Reset session before starting new one
-		try {
-			// Push auth token first
-			const authToken = "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"
-			await pushAuthToken({
-				containerId,
-				token: authToken,
-			})
-
-			// Build environment variables based on provider
-			let envVars: {
-				ANTHROPIC_AUTH_TOKEN?: string
-				ANTHROPIC_BASE_URL?: string
-				API_TIMEOUT_MS?: string
-			} | undefined
-
-			if (provider === "zai") {
-				if (!zaiApiKey?.value) {
-					toast.error("ZAI API Key Missing", "Please configure your ZAI API key in Settings > Providers")
-					setIsAgentProcessing(false)
-					return
-				}
-				envVars = {
-					ANTHROPIC_AUTH_TOKEN: zaiApiKey.value,
-					ANTHROPIC_BASE_URL: "https://api.z.ai/api/anthropic",
-					API_TIMEOUT_MS: "3000000",
-				}
-			}
-			// For anthropic provider, envVars is undefined (use default env)
-
-			const result = await startExecution({
-				containerId,
-				message,
-				model,
-				provider,
-				envVars,
-				taskId: taskId as string,
-				projectId: task.projectId as string,
-				sessionId: sessionIdToResume ?? undefined, // Resume Claude session if provided
-			})
-
-			// Track the session for streaming updates
-			if (result?.correlationId) {
-				setCurrentSessionId(result.correlationId)
-			}
-		} catch (error) {
-			console.error("Failed to start agent execution:", error)
-			toast.error("Agent error", "Failed to start agent execution")
-			setIsAgentProcessing(false)
-		}
-		// Note: isAgentProcessing will be cleared by the useEffect watching streamingMessages
-	}
+	}, [
+		streamingContent?.hasResult,
+		currentSessionId,
+		chatMessagesData,
+		streamingContent?.parts,
+	])
 
 	// Mutation to clear session for starting fresh
 	const clearActiveSession = useMutation(api.tasks.clearActiveSession)
@@ -598,14 +689,21 @@ export function TaskDetailView({
 		try {
 			await clearActiveSession({ taskId })
 			setActiveSessionId(null)
-			toast.info("Session cleared", "Next message will start a fresh conversation")
+			toast.info(
+				"Session cleared",
+				"Next message will start a fresh conversation",
+			)
 		} catch (error) {
 			console.error("Failed to clear session:", error)
 			toast.error("Error", "Failed to clear session")
 		}
 	}
 
-	const handleSendMessage = async (text: string, provider: Provider, model: Model) => {
+	const handleSendMessage = async (
+		text: string,
+		provider: Provider,
+		model: Model,
+	) => {
 		// Update selected provider/model state
 		setSelectedProvider(provider)
 		setSelectedModel(model)
@@ -626,13 +724,19 @@ export function TaskDetailView({
 			if (!taskContainer || taskContainer.status === "offline") {
 				toast.error(
 					"Session container unavailable",
-					"The container for this session is offline. Click 'New Session' to start fresh."
+					"The container for this session is offline. Click 'New Session' to start fresh.",
 				)
 				setIsAgentProcessing(false)
 				return
 			}
 			// Resume session on the same container
-			await executeWithContainer(task.activeContainerId, text, provider, model, activeSessionId)
+			await executeWithContainer(
+				task.activeContainerId,
+				text,
+				provider,
+				model,
+				activeSessionId,
+			)
 		} else if (containerId) {
 			// Container exists but no session - start new session
 			await executeWithContainer(containerId, text, provider, model)
@@ -641,7 +745,10 @@ export function TaskDetailView({
 			setIsCreatingContainer(true)
 			setIsAgentProcessing(true)
 			setPendingMessage(text)
-			toast.info("Creating container", "Spinning up a new container for this task...")
+			toast.info(
+				"Creating container",
+				"Spinning up a new container for this task...",
+			)
 
 			try {
 				console.log("[TaskDetailView] Creating container with:", {
@@ -660,12 +767,24 @@ export function TaskDetailView({
 					branch: project?.branch,
 				})
 				// Container creation succeeded - show confirmation toast
-				toast.success("Container created", <>Container <code className="bg-background px-1 py-0.5 rounded text-xs font-mono">{result.name}</code> is ready</>)
+				toast.success(
+					"Container created",
+					<>
+						Container{" "}
+						<code className="bg-background px-1 py-0.5 rounded text-xs font-mono">
+							{result.name}
+						</code>{" "}
+						is ready
+					</>,
+				)
 				// The backend will assign activeContainerId which will trigger the useEffect above
 			} catch (error) {
 				console.error("Failed to create container:", error)
 				// Show the actual error message from the gateway
-				const errorMessage = error instanceof Error ? error.message : "Failed to create container for task"
+				const errorMessage =
+					error instanceof Error
+						? error.message
+						: "Failed to create container for task"
 				toast.error("Container creation failed", errorMessage)
 				setIsAgentProcessing(false)
 				setIsCreatingContainer(false)
@@ -679,7 +798,11 @@ export function TaskDetailView({
 			<div className="flex-1 flex overflow-hidden">
 				<div className="flex-1 flex flex-col overflow-hidden min-w-0">
 					<div className="p-page flex-1 flex flex-col overflow-hidden">
-						<Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col flex-1 min-h-0">
+						<Tabs
+							value={activeTab}
+							onValueChange={setActiveTab}
+							className="flex flex-col flex-1 min-h-0"
+						>
 							<TabsList className="w-full justify-start">
 								<TabsTrigger value="chat" className="flex items-center">
 									<MessageSquare size={14} className="mr-1.5" />
@@ -690,11 +813,26 @@ export function TaskDetailView({
 									Status
 								</TabsTrigger>
 								{/* Phase tabs with tooltips for non-applicable phases */}
-								{([
-									{ value: "requirements", phase: "requirements" as TaskPhase, label: "Requirements", icon: ClipboardList },
-									{ value: "planning", phase: "planning" as TaskPhase, label: "Planning", icon: FileText },
-									{ value: "implementation", phase: "implementation" as TaskPhase, label: "Implementation", icon: Terminal },
-								]).map(({ value, phase, label, icon: Icon }) => {
+								{[
+									{
+										value: "requirements",
+										phase: "requirements" as TaskPhase,
+										label: "Requirements",
+										icon: ClipboardList,
+									},
+									{
+										value: "planning",
+										phase: "planning" as TaskPhase,
+										label: "Planning",
+										icon: FileText,
+									},
+									{
+										value: "implementation",
+										phase: "implementation" as TaskPhase,
+										label: "Implementation",
+										icon: Terminal,
+									},
+								].map(({ value, phase, label, icon: Icon }) => {
 									const isApplicable = isPhaseApplicable(phase)
 									return (
 										<Tooltip key={value}>
@@ -712,7 +850,10 @@ export function TaskDetailView({
 											</TooltipTrigger>
 											{!isApplicable && (
 												<TooltipContent side="bottom">
-													<p className="text-xs">{label} is not applicable to {taskTemplate?.name || "this task type"}</p>
+													<p className="text-xs">
+														{label} is not applicable to{" "}
+														{taskTemplate?.name || "this task type"}
+													</p>
 												</TooltipContent>
 											)}
 										</Tooltip>
@@ -722,12 +863,32 @@ export function TaskDetailView({
 									<GitPullRequest size={14} className="mr-1.5" />
 									Pull Request
 								</TabsTrigger>
-								{([
-									{ value: "ai-review", phase: "ai_review" as TaskPhase, label: "AI Review", icon: Bot },
-									{ value: "remediation", phase: "remediation" as TaskPhase, label: "Remediation", icon: Wrench },
-									{ value: "human-review", phase: "human_review" as TaskPhase, label: "Human Review", icon: UserCheck },
-									{ value: "merge", phase: "merge" as TaskPhase, label: "Merge", icon: GitMerge },
-								]).map(({ value, phase, label, icon: Icon }) => {
+								{[
+									{
+										value: "ai-review",
+										phase: "ai_review" as TaskPhase,
+										label: "AI Review",
+										icon: Bot,
+									},
+									{
+										value: "remediation",
+										phase: "remediation" as TaskPhase,
+										label: "Remediation",
+										icon: Wrench,
+									},
+									{
+										value: "human-review",
+										phase: "human_review" as TaskPhase,
+										label: "Human Review",
+										icon: UserCheck,
+									},
+									{
+										value: "merge",
+										phase: "merge" as TaskPhase,
+										label: "Merge",
+										icon: GitMerge,
+									},
+								].map(({ value, phase, label, icon: Icon }) => {
 									const isApplicable = isPhaseApplicable(phase)
 									return (
 										<Tooltip key={value}>
@@ -745,7 +906,10 @@ export function TaskDetailView({
 											</TooltipTrigger>
 											{!isApplicable && (
 												<TooltipContent side="bottom">
-													<p className="text-xs">{label} is not applicable to {taskTemplate?.name || "this task type"}</p>
+													<p className="text-xs">
+														{label} is not applicable to{" "}
+														{taskTemplate?.name || "this task type"}
+													</p>
 												</TooltipContent>
 											)}
 										</Tooltip>
@@ -757,28 +921,62 @@ export function TaskDetailView({
 								</TabsTrigger>
 							</TabsList>
 
-							<TabsContent value="chat" className="!mt-0 pt-section flex-1 flex flex-col min-h-0">
+							<TabsContent
+								value="chat"
+								className="!mt-0 pt-section flex-1 flex flex-col min-h-0"
+							>
 								<div className="flex gap-6 flex-1 min-h-0">
 									{/* Phase sidebar */}
 									<div className="w-48 shrink-0 self-start bg-surface border border-border rounded-lg overflow-hidden">
 										<div className="p-3 border-b border-border">
-											<h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Phases</h4>
+											<h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+												Phases
+											</h4>
 										</div>
 										<div className="p-2 space-y-1">
-											{([
-												{ phase: "requirements" as TaskPhase, label: "Requirements", icon: ClipboardList },
-												{ phase: "planning" as TaskPhase, label: "Planning", icon: FileText },
-												{ phase: "implementation" as TaskPhase, label: "Implementation", icon: Terminal },
-												{ phase: "ai_review" as TaskPhase, label: "AI Review", icon: Bot },
-												{ phase: "remediation" as TaskPhase, label: "Remediation", icon: Wrench },
-												{ phase: "human_review" as TaskPhase, label: "Human Review", icon: UserCheck },
-												{ phase: "merge" as TaskPhase, label: "Merge", icon: GitMerge },
-											]).map(({ phase, label, icon: Icon }) => {
+											{[
+												{
+													phase: "requirements" as TaskPhase,
+													label: "Requirements",
+													icon: ClipboardList,
+												},
+												{
+													phase: "planning" as TaskPhase,
+													label: "Planning",
+													icon: FileText,
+												},
+												{
+													phase: "implementation" as TaskPhase,
+													label: "Implementation",
+													icon: Terminal,
+												},
+												{
+													phase: "ai_review" as TaskPhase,
+													label: "AI Review",
+													icon: Bot,
+												},
+												{
+													phase: "remediation" as TaskPhase,
+													label: "Remediation",
+													icon: Wrench,
+												},
+												{
+													phase: "human_review" as TaskPhase,
+													label: "Human Review",
+													icon: UserCheck,
+												},
+												{
+													phase: "merge" as TaskPhase,
+													label: "Merge",
+													icon: GitMerge,
+												},
+											].map(({ phase, label, icon: Icon }) => {
 												const phaseDoc = getPhaseByName(phase)
 												const isActive = task.currentPhase === phase
 												const isApplicable = isPhaseApplicable(phase)
 												// Phase is "reached" if it has started (not pending) or is completed/failed/skipped
-												const hasBeenReached = phaseDoc && phaseDoc.status !== "pending"
+												const hasBeenReached =
+													phaseDoc && phaseDoc.status !== "pending"
 												const isEnabled = isActive || hasBeenReached
 
 												// Determine tooltip message
@@ -794,7 +992,16 @@ export function TaskDetailView({
 														<TooltipTrigger asChild>
 															<button
 																type="button"
-																onClick={() => isEnabled && setActiveTab(phase === "ai_review" ? "ai-review" : phase === "human_review" ? "human-review" : phase)}
+																onClick={() =>
+																	isEnabled &&
+																	setActiveTab(
+																		phase === "ai_review"
+																			? "ai-review"
+																			: phase === "human_review"
+																				? "human-review"
+																				: phase,
+																	)
+																}
 																className={`w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors ${
 																	isActive
 																		? "bg-primary/10 text-primary"
@@ -806,7 +1013,10 @@ export function TaskDetailView({
 																<Icon size={14} />
 																<span className="truncate">{label}</span>
 																{phaseDoc?.status === "completed" && (
-																	<CheckCircle2 size={12} className="ml-auto text-green-500" />
+																	<CheckCircle2
+																		size={12}
+																		className="ml-auto text-green-500"
+																	/>
 																)}
 																{phaseDoc?.status === "in_progress" && (
 																	<div className="ml-auto w-2 h-2 rounded-full bg-feature-blue animate-pulse" />
@@ -829,7 +1039,9 @@ export function TaskDetailView({
 										<AgentChatPanel
 											chatHistory={chatHistory}
 											onSendMessage={handleSendMessage}
-											isLoading={isAgentProcessing && !streamingContent?.parts.length}
+											isLoading={
+												isAgentProcessing && !streamingContent?.parts.length
+											}
 											agentStatus={agentStatus}
 											selectedProvider={selectedProvider}
 											selectedModel={selectedModel}
@@ -842,268 +1054,266 @@ export function TaskDetailView({
 								</div>
 							</TabsContent>
 
-							<TabsContent value="status" className="!mt-0 flex-1 overflow-y-auto min-h-0 pt-section">
-										<div className="space-y-8">
-											{phases.length > 0 && (
-												<section>
-													<h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center">
-														<Activity size={16} className="mr-2" /> Task
-														Progress
-													</h3>
-													<div className="bg-surface border border-border rounded-lg p-4">
-														<PhaseTimeline
-															phases={phases as TaskPhaseDoc[]}
-															currentPhase={
-																task.currentPhase as TaskPhase | undefined
-															}
-															applicablePhases={applicablePhases}
-															templateName={taskTemplate?.name}
-															onPhaseClick={(phase) => {
-																const phaseToTab: Record<TaskPhase, string> = {
-																	requirements: "requirements",
-																	planning: "planning",
-																	implementation: "implementation",
-																	ai_review: "ai-review",
-																	remediation: "remediation",
-																	human_review: "human-review",
-																	merge: "merge",
-																}
-																setActiveTab(
-																	phaseToTab[phase] || "requirements",
-																)
-															}}
-														/>
-													</div>
-												</section>
+							<TabsContent
+								value="status"
+								className="!mt-0 flex-1 overflow-y-auto min-h-0 pt-section"
+							>
+								<div className="space-y-8">
+									{phases.length > 0 && (
+										<section>
+											<h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center">
+												<Activity size={16} className="mr-2" /> Task Progress
+											</h3>
+											<div className="bg-surface border border-border rounded-lg p-4">
+												<PhaseTimeline
+													phases={phases as TaskPhaseDoc[]}
+													currentPhase={
+														task.currentPhase as TaskPhase | undefined
+													}
+													applicablePhases={applicablePhases}
+													templateName={taskTemplate?.name}
+													onPhaseClick={(phase) => {
+														const phaseToTab: Record<TaskPhase, string> = {
+															requirements: "requirements",
+															planning: "planning",
+															implementation: "implementation",
+															ai_review: "ai-review",
+															remediation: "remediation",
+															human_review: "human-review",
+															merge: "merge",
+														}
+														setActiveTab(phaseToTab[phase] || "requirements")
+													}}
+												/>
+											</div>
+										</section>
+									)}
+
+									<section>
+										<h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center">
+											<History size={16} className="mr-2" /> Activity History
+										</h3>
+										<div className="bg-surface border border-border rounded-lg p-4">
+											{!task.history || task.history.length === 0 ? (
+												<div className="text-sm text-muted-foreground">
+													No activity recorded yet.
+												</div>
+											) : (
+												<div className="relative border-l border-border ml-3 space-y-6">
+													{task.history?.map((event) => (
+														<div key={event.id} className="relative pl-6">
+															<div className="absolute -left-1.5 top-1.5 w-3 h-3 bg-surface-elevated border border-border rounded-full"></div>
+															<div className="text-sm text-foreground font-medium">
+																{event.action}
+															</div>
+															<div className="text-xs text-muted-foreground mt-1 flex items-center space-x-2">
+																<User size={12} />
+																<span>{event.user}</span>
+																<span className="w-1 h-1 bg-muted rounded-full"></span>
+																<span>{event.time}</span>
+															</div>
+														</div>
+													))}
+												</div>
 											)}
-
-											<section>
-												<h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center">
-													<History size={16} className="mr-2" /> Activity
-													History
-												</h3>
-												<div className="bg-surface border border-border rounded-lg p-4">
-													{!task.history || task.history.length === 0 ? (
-														<div className="text-sm text-muted-foreground">
-															No activity recorded yet.
-														</div>
-													) : (
-														<div className="relative border-l border-border ml-3 space-y-6">
-															{task.history?.map((event) => (
-																<div key={event.id} className="relative pl-6">
-																	<div className="absolute -left-1.5 top-1.5 w-3 h-3 bg-surface-elevated border border-border rounded-full"></div>
-																	<div className="text-sm text-foreground font-medium">
-																		{event.action}
-																	</div>
-																	<div className="text-xs text-muted-foreground mt-1 flex items-center space-x-2">
-																		<User size={12} />
-																		<span>{event.user}</span>
-																		<span className="w-1 h-1 bg-muted rounded-full"></span>
-																		<span>{event.time}</span>
-																	</div>
-																</div>
-															))}
-														</div>
-													)}
-												</div>
-											</section>
 										</div>
+									</section>
+								</div>
 							</TabsContent>
 
-							<TabsContent value="requirements" className="!mt-0 flex-1 overflow-y-auto min-h-0 pt-section">
-										<div className="space-y-8">
-											<section>
-												<h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center">
-													<Layout size={16} className="mr-2" /> Description
-												</h3>
-												<div className="bg-surface border border-border rounded-lg p-4 text-foreground leading-relaxed">
-													{task.description}
-												</div>
-											</section>
+							<TabsContent
+								value="requirements"
+								className="!mt-0 flex-1 overflow-y-auto min-h-0 pt-section"
+							>
+								<div className="space-y-8">
+									<section>
+										<h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center">
+											<Layout size={16} className="mr-2" /> Description
+										</h3>
+										<div className="bg-surface border border-border rounded-lg p-4 text-foreground leading-relaxed">
+											{task.description}
+										</div>
+									</section>
 
-											<section>
-												<h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center justify-between">
-													<span className="flex items-center">
-														<LinkIcon size={16} className="mr-2" /> Dependencies
-													</span>
-													<Button
-														variant="outline"
-														size="sm"
-														onClick={() => setShowDependencyPicker(true)}
+									<section>
+										<h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center justify-between">
+											<span className="flex items-center">
+												<LinkIcon size={16} className="mr-2" /> Dependencies
+											</span>
+											<Button
+												variant="outline"
+												size="sm"
+												onClick={() => setShowDependencyPicker(true)}
+											>
+												<Plus size={14} className="mr-1" />
+												Add
+											</Button>
+										</h3>
+										<div className="bg-surface border border-border rounded-lg overflow-hidden">
+											{(!task.dependencies ||
+												task.dependencies.length === 0) && (
+												<div className="p-4 text-sm text-muted-foreground">
+													No dependencies. Add tasks that must be completed
+													before this one can start.
+												</div>
+											)}
+											{task.dependencies?.map((depId) => {
+												const depTask = project?.tasks.find(
+													(t) => t.id === depId,
+												)
+												if (!depTask) return null
+												return (
+													<div
+														key={depId}
+														className="flex items-center justify-between p-3 border-b border-border last:border-0 hover:bg-surface-elevated/50 group"
 													>
-														<Plus size={14} className="mr-1" />
-														Add
-													</Button>
-												</h3>
-												<div className="bg-surface border border-border rounded-lg overflow-hidden">
-													{(!task.dependencies ||
-														task.dependencies.length === 0) && (
-														<div className="p-4 text-sm text-muted-foreground">
-															No dependencies. Add tasks that must be completed
-															before this one can start.
-														</div>
-													)}
-													{task.dependencies?.map((depId) => {
-														const depTask = project?.tasks.find(
-															(t) => t.id === depId,
-														)
-														if (!depTask) return null
-														return (
+														<div className="flex items-center min-w-0 flex-1">
 															<div
-																key={depId}
-																className="flex items-center justify-between p-3 border-b border-border last:border-0 hover:bg-surface-elevated/50 group"
+																className={`w-2 h-2 rounded-full mr-3 flex-shrink-0 ${
+																	depTask.category === "done"
+																		? "bg-green-500"
+																		: "bg-muted"
+																}`}
+															></div>
+															<span
+																className={`text-sm truncate ${
+																	depTask.category === "done"
+																		? "text-muted-foreground line-through"
+																		: "text-foreground"
+																}`}
 															>
-																<div className="flex items-center min-w-0 flex-1">
-																	<div
-																		className={`w-2 h-2 rounded-full mr-3 flex-shrink-0 ${
-																			depTask.category === "done"
-																				? "bg-green-500"
-																				: "bg-muted"
-																		}`}
-																	></div>
-																	<span
-																		className={`text-sm truncate ${
-																			depTask.category === "done"
-																				? "text-muted-foreground line-through"
-																				: "text-foreground"
-																		}`}
-																	>
-																		{depTask.title}
-																	</span>
-																</div>
-																<div className="flex items-center gap-2 flex-shrink-0">
-																	<Badge
-																		variant="secondary"
-																		className="uppercase"
-																	>
-																		{depTask.category}
-																	</Badge>
-																	<button
-																		type="button"
-																		onClick={() =>
-																			handleRemoveDependency(depId)
-																		}
-																		className="opacity-0 group-hover:opacity-100 p-1 hover:bg-destructive/10 rounded transition-all"
-																		title="Remove dependency"
-																	>
-																		<X
-																			size={14}
-																			className="text-muted-foreground hover:text-destructive"
-																		/>
-																	</button>
-																</div>
-															</div>
-														)
-													})}
-												</div>
-											</section>
-
-											<section>
-												<h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center">
-													<Terminal size={16} className="mr-2" /> AI Prompt
-												</h3>
-												<div className="bg-surface border border-border rounded-lg p-4">
-													<code className="text-sm font-mono text-feature-blue block">
-														{task.prompt}
-													</code>
-												</div>
-											</section>
-
-											<section>
-												<h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center">
-													<CheckSquare size={16} className="mr-2" /> Acceptance
-													Criteria
-												</h3>
-												<div className="bg-surface border border-border rounded-lg overflow-hidden">
-													{(!task.acceptanceCriteria ||
-														task.acceptanceCriteria.length === 0) && (
-														<div className="p-4 text-sm text-muted-foreground">
-															No acceptance criteria defined.
+																{depTask.title}
+															</span>
 														</div>
-													)}
-													{task.acceptanceCriteria?.map((criteria) => (
-														<div
-															key={criteria.id}
-															className="flex items-center justify-between p-3 border-b border-border last:border-0 hover:bg-surface-elevated/50 group"
-														>
-															<div className="flex items-center min-w-0 flex-1">
-																<div
-																	className={`w-2 h-2 rounded-full mr-3 flex-shrink-0 ${
-																		criteria.done ? "bg-green-500" : "bg-muted"
-																	}`}
-																></div>
-																<span
-																	className={`text-sm truncate ${
-																		criteria.done
-																			? "text-muted-foreground line-through"
-																			: "text-foreground"
-																	}`}
-																>
-																	{criteria.text}
-																</span>
-															</div>
-															<Badge
-																variant={
-																	criteria.done ? "success" : "secondary"
-																}
-																className="uppercase flex-shrink-0"
-															>
-																{criteria.done ? "Done" : "Pending"}
+														<div className="flex items-center gap-2 flex-shrink-0">
+															<Badge variant="secondary" className="uppercase">
+																{depTask.category}
 															</Badge>
-														</div>
-													))}
-												</div>
-											</section>
-
-											<section>
-												<h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center">
-													<Activity size={16} className="mr-2" /> Tests
-												</h3>
-												<div className="bg-surface border border-border rounded-lg overflow-hidden">
-													{(!task.tests || task.tests.length === 0) && (
-														<div className="p-4 text-sm text-muted-foreground">
-															No tests defined.
-														</div>
-													)}
-													{task.tests?.map((test) => (
-														<div
-															key={test.id}
-															className="flex items-center justify-between p-3 border-b border-border last:border-0 hover:bg-surface-elevated/50 group"
-														>
-															<div className="flex items-center min-w-0 flex-1">
-																<div
-																	className={`w-2 h-2 rounded-full mr-3 flex-shrink-0 ${
-																		test.status === "passed"
-																			? "bg-green-500"
-																			: test.status === "failed"
-																				? "bg-red-500"
-																				: "bg-muted"
-																	}`}
-																></div>
-																<span className="text-sm font-mono truncate text-foreground">
-																	{test.name}
-																</span>
-															</div>
-															<Badge
-																variant={
-																	test.status === "passed"
-																		? "success"
-																		: test.status === "failed"
-																			? "destructive"
-																			: "warning"
-																}
-																className="uppercase flex-shrink-0"
+															<button
+																type="button"
+																onClick={() => handleRemoveDependency(depId)}
+																className="opacity-0 group-hover:opacity-100 p-1 hover:bg-destructive/10 rounded transition-all"
+																title="Remove dependency"
 															>
-																{test.status}
-															</Badge>
+																<X
+																	size={14}
+																	className="text-muted-foreground hover:text-destructive"
+																/>
+															</button>
 														</div>
-													))}
-												</div>
-											</section>
+													</div>
+												)
+											})}
 										</div>
+									</section>
+
+									<section>
+										<h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center">
+											<Terminal size={16} className="mr-2" /> AI Prompt
+										</h3>
+										<div className="bg-surface border border-border rounded-lg p-4">
+											<code className="text-sm font-mono text-feature-blue block">
+												{task.prompt}
+											</code>
+										</div>
+									</section>
+
+									<section>
+										<h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center">
+											<CheckSquare size={16} className="mr-2" /> Acceptance
+											Criteria
+										</h3>
+										<div className="bg-surface border border-border rounded-lg overflow-hidden">
+											{(!task.acceptanceCriteria ||
+												task.acceptanceCriteria.length === 0) && (
+												<div className="p-4 text-sm text-muted-foreground">
+													No acceptance criteria defined.
+												</div>
+											)}
+											{task.acceptanceCriteria?.map((criteria) => (
+												<div
+													key={criteria.id}
+													className="flex items-center justify-between p-3 border-b border-border last:border-0 hover:bg-surface-elevated/50 group"
+												>
+													<div className="flex items-center min-w-0 flex-1">
+														<div
+															className={`w-2 h-2 rounded-full mr-3 flex-shrink-0 ${
+																criteria.done ? "bg-green-500" : "bg-muted"
+															}`}
+														></div>
+														<span
+															className={`text-sm truncate ${
+																criteria.done
+																	? "text-muted-foreground line-through"
+																	: "text-foreground"
+															}`}
+														>
+															{criteria.text}
+														</span>
+													</div>
+													<Badge
+														variant={criteria.done ? "success" : "secondary"}
+														className="uppercase flex-shrink-0"
+													>
+														{criteria.done ? "Done" : "Pending"}
+													</Badge>
+												</div>
+											))}
+										</div>
+									</section>
+
+									<section>
+										<h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center">
+											<Activity size={16} className="mr-2" /> Tests
+										</h3>
+										<div className="bg-surface border border-border rounded-lg overflow-hidden">
+											{(!task.tests || task.tests.length === 0) && (
+												<div className="p-4 text-sm text-muted-foreground">
+													No tests defined.
+												</div>
+											)}
+											{task.tests?.map((test) => (
+												<div
+													key={test.id}
+													className="flex items-center justify-between p-3 border-b border-border last:border-0 hover:bg-surface-elevated/50 group"
+												>
+													<div className="flex items-center min-w-0 flex-1">
+														<div
+															className={`w-2 h-2 rounded-full mr-3 flex-shrink-0 ${
+																test.status === "passed"
+																	? "bg-green-500"
+																	: test.status === "failed"
+																		? "bg-red-500"
+																		: "bg-muted"
+															}`}
+														></div>
+														<span className="text-sm font-mono truncate text-foreground">
+															{test.name}
+														</span>
+													</div>
+													<Badge
+														variant={
+															test.status === "passed"
+																? "success"
+																: test.status === "failed"
+																	? "destructive"
+																	: "warning"
+														}
+														className="uppercase flex-shrink-0"
+													>
+														{test.status}
+													</Badge>
+												</div>
+											))}
+										</div>
+									</section>
+								</div>
 							</TabsContent>
 
-							<TabsContent value="planning" className="!mt-0 flex-1 overflow-y-auto min-h-0 pt-section">
+							<TabsContent
+								value="planning"
+								className="!mt-0 flex-1 overflow-y-auto min-h-0 pt-section"
+							>
 								<PlanningTab
 									taskId={taskId}
 									planningPhase={getPhaseByName("planning")}
@@ -1114,7 +1324,10 @@ export function TaskDetailView({
 								/>
 							</TabsContent>
 
-							<TabsContent value="implementation" className="!mt-0 flex-1 overflow-y-auto min-h-0 pt-section">
+							<TabsContent
+								value="implementation"
+								className="!mt-0 flex-1 overflow-y-auto min-h-0 pt-section"
+							>
 								<ImplementationTab
 									taskId={taskId}
 									implementationPhase={getPhaseByName("implementation")}
@@ -1122,265 +1335,269 @@ export function TaskDetailView({
 								/>
 							</TabsContent>
 
-							<TabsContent value="pr" className="!mt-0 flex-1 overflow-y-auto min-h-0 pt-section">
-										{!task.prCreated ? (
-											<div className="flex flex-col items-center justify-center h-64 text-muted-foreground bg-surface/30 border border-border rounded-lg border-dashed">
-												<GitPullRequest size={48} className="mb-4 opacity-50" />
-												<p className="font-medium text-muted-foreground">
-													No Pull Request created yet.
-												</p>
-												<button
-													type="button"
-													onClick={handleCreatePR}
-													className="mt-4 text-feature-blue hover:text-feature-blue text-sm flex items-center hover:underline"
-												>
-													Create one from changes{" "}
-													<ArrowRight size={14} className="ml-1" />
-												</button>
-											</div>
-										) : (
-											<div className="space-y-6">
-												<div className="bg-surface border border-border rounded-lg p-6">
-													<div className="mb-6">
-														<div className="mb-3">
-															<span className="text-xl font-bold text-foreground">
-																#{task.prNumber} {task.title}
-															</span>
-														</div>
-														<div className="text-sm text-muted-foreground flex items-center">
-															<span className="font-mono bg-background border border-border px-2 py-0.5 rounded text-foreground text-xs">
-																feature/task-{String(task.id).slice(-4)}
-															</span>
-															<ArrowRight
-																size={14}
-																className="mx-2 text-muted-foreground"
-															/>
-															<span className="font-mono bg-background border border-border px-2 py-0.5 rounded text-foreground text-xs">
-																main
-															</span>
-															<Badge
-																variant="success"
-																className="ml-3 uppercase"
-															>
-																Open
-															</Badge>
-														</div>
-													</div>
-													<div className="flex justify-start space-x-3">
-														<Button className="bg-green-600 hover:bg-green-500">
-															<GitMerge size={16} className="mr-2" /> Merge Pull
-															Request
-														</Button>
-														<Button variant="outline">
-															<XCircle size={16} className="mr-2" /> Close Pull
-															Request
-														</Button>
-													</div>
+							<TabsContent
+								value="pr"
+								className="!mt-0 flex-1 overflow-y-auto min-h-0 pt-section"
+							>
+								{!task.prCreated ? (
+									<div className="flex flex-col items-center justify-center h-64 text-muted-foreground bg-surface/30 border border-border rounded-lg border-dashed">
+										<GitPullRequest size={48} className="mb-4 opacity-50" />
+										<p className="font-medium text-muted-foreground">
+											No Pull Request created yet.
+										</p>
+										<button
+											type="button"
+											onClick={handleCreatePR}
+											className="mt-4 text-feature-blue hover:text-feature-blue text-sm flex items-center hover:underline"
+										>
+											Create one from changes{" "}
+											<ArrowRight size={14} className="ml-1" />
+										</button>
+									</div>
+								) : (
+									<div className="space-y-6">
+										<div className="bg-surface border border-border rounded-lg p-6">
+											<div className="mb-6">
+												<div className="mb-3">
+													<span className="text-xl font-bold text-foreground">
+														#{task.prNumber} {task.title}
+													</span>
 												</div>
-
-												<div className="bg-surface border border-border rounded-lg overflow-hidden">
-													<div className="p-4 border-b border-border font-semibold text-foreground">
-														Checks
-													</div>
-													<div className="divide-y divide-border">
-														<div className="p-4 flex items-center justify-between hover:bg-surface-elevated/30 transition-colors">
-															<div className="flex items-center">
-																<CheckCircle2
-																	size={18}
-																	className="text-green-400 mr-3"
-																/>
-																<span className="text-foreground">
-																	CI Build
-																</span>
-															</div>
-															<span className="text-xs text-green-400 font-medium">
-																Passed
-															</span>
-														</div>
-														<div className="p-4 flex items-center justify-between hover:bg-surface-elevated/30 transition-colors">
-															<div className="flex items-center">
-																<Bot
-																	size={18}
-																	className="text-feature-blue mr-3"
-																/>
-																<span className="text-foreground">
-																	AI Code Review
-																</span>
-															</div>
-															<span className="text-xs text-green-400 font-medium">
-																Passed
-															</span>
-														</div>
-														<div className="p-4 flex items-center justify-between hover:bg-surface-elevated/30 transition-colors">
-															<div className="flex items-center">
-																<Activity
-																	size={18}
-																	className="text-green-400 mr-3"
-																/>
-																<span className="text-foreground">
-																	Unit Tests
-																</span>
-															</div>
-															<span className="text-xs text-green-400 font-medium">
-																3/3 Passed
-															</span>
-														</div>
-													</div>
-												</div>
-
-												<div className="relative border-l border-border ml-3 space-y-6">
-													<div className="relative pl-6">
-														<div className="absolute -left-1.5 top-1.5 w-3 h-3 bg-surface-elevated border border-border rounded-full"></div>
-														<div className="text-sm text-foreground font-medium">
-															John Doe created this pull request
-														</div>
-														<div className="text-xs text-muted-foreground mt-1">
-															Just now
-														</div>
-													</div>
-												</div>
-
-												<div className="bg-surface border border-border rounded-lg p-4">
-													<h4 className="text-sm font-medium text-muted-foreground mb-3">
-														Add a comment
-													</h4>
-													<div className="flex space-x-3">
-														<div className="w-8 h-8 rounded-full bg-blue-500/20 border border-blue-500/50 flex items-center justify-center text-feature-blue text-xs font-bold shrink-0">
-															ME
-														</div>
-														<div className="flex-1">
-															<Textarea
-																className="h-24 resize-none"
-																placeholder="Leave a comment..."
-															/>
-															<div className="flex justify-end mt-2">
-																<Button variant="outline" size="sm">
-																	Comment
-																</Button>
-															</div>
-														</div>
-													</div>
+												<div className="text-sm text-muted-foreground flex items-center">
+													<span className="font-mono bg-background border border-border px-2 py-0.5 rounded text-foreground text-xs">
+														feature/task-{String(task.id).slice(-4)}
+													</span>
+													<ArrowRight
+														size={14}
+														className="mx-2 text-muted-foreground"
+													/>
+													<span className="font-mono bg-background border border-border px-2 py-0.5 rounded text-foreground text-xs">
+														main
+													</span>
+													<Badge variant="success" className="ml-3 uppercase">
+														Open
+													</Badge>
 												</div>
 											</div>
-										)}
-							</TabsContent>
-
-							<TabsContent value="ai-review" className="!mt-0 flex-1 overflow-y-auto min-h-0 pt-section">
-										<div className="space-y-6">
-											<div className="bg-blue-950/30 border border-blue-900/50 rounded-lg p-5 text-blue-100 flex items-start space-x-4">
-												<Bot
-													size={24}
-													className="mt-1 flex-shrink-0 text-feature-blue"
-												/>
-												<div>
-													<h4 className="font-semibold text-feature-blue mb-1">
-														Agent Summary
-													</h4>
-													<p className="text-sm leading-relaxed opacity-90">
-														I have analyzed the submitted code against the
-														project requirements. The implementation correctly
-														handles the new pricing logic for bulk items.
-														However, I detected a potential SQL injection
-														vulnerability in the input handling and a minor
-														performance regression in the cart calculation loop.
-														I recommend fixing the security issue before
-														merging.
-													</p>
-												</div>
+											<div className="flex justify-start space-x-3">
+												<Button className="bg-green-600 hover:bg-green-500">
+													<GitMerge size={16} className="mr-2" /> Merge Pull
+													Request
+												</Button>
+												<Button variant="outline">
+													<XCircle size={16} className="mr-2" /> Close Pull
+													Request
+												</Button>
 											</div>
+										</div>
 
-											<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-												<div className="bg-surface p-5 rounded-lg border border-border flex flex-col items-center">
-													<div className="text-muted-foreground text-xs uppercase font-semibold mb-2">
-														Security Score
-													</div>
-													<div className="text-4xl font-bold text-green-400 mb-1">
-														A+
-													</div>
-													<div className="text-green-500/60 text-xs">
-														No vulnerabilities
-													</div>
-												</div>
-												<div className="bg-surface p-5 rounded-lg border border-border flex flex-col items-center">
-													<div className="text-muted-foreground text-xs uppercase font-semibold mb-2">
-														Performance
-													</div>
-													<div className="text-4xl font-bold text-feature-blue mb-1">
-														98
-													</div>
-													<div className="text-blue-500/60 text-xs">
-														Optimized
-													</div>
-												</div>
-												<div className="bg-surface p-5 rounded-lg border border-border flex flex-col items-center">
-													<div className="text-muted-foreground text-xs uppercase font-semibold mb-2">
-														Maintainability
-													</div>
-													<div className="text-4xl font-bold text-amber-400 mb-1">
-														B
-													</div>
-													<div className="text-amber-500/60 text-xs">
-														Refactor suggested
-													</div>
-												</div>
+										<div className="bg-surface border border-border rounded-lg overflow-hidden">
+											<div className="p-4 border-b border-border font-semibold text-foreground">
+												Checks
 											</div>
-
-											<div>
-												<h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-													Detected Issues
-												</h3>
-												<div className="space-y-3">
-													{prIssues && prIssues.length > 0 ? (
-														prIssues.filter(issue => !issue.resolved).map((issue) => (
-															<div
-																key={issue._id}
-																className="bg-surface/50 border border-border rounded-lg p-4 flex items-start"
-															>
-																<div
-																	className={`mt-0.5 mr-3 flex-shrink-0 ${
-																		issue.severity === "error"
-																			? "text-red-400"
-																			: issue.severity === "warning"
-																				? "text-amber-400"
-																				: "text-blue-400"
-																	}`}
-																>
-																	<AlertTriangle size={18} />
-																</div>
-																<div className="flex-1 min-w-0">
-																	<h4 className="text-foreground font-medium text-sm">
-																		{issue.title}
-																	</h4>
-																	<p className="text-muted-foreground text-sm mt-1">
-																		{issue.description}
-																	</p>
-																	{issue.filePath && (
-																		<p className="text-xs text-muted-foreground mt-1 font-mono">
-																			{issue.filePath}{issue.lineNumber ? `:${issue.lineNumber}` : ""}
-																		</p>
-																	)}
-																</div>
-																<Button
-																	variant="outline"
-																	size="sm"
-																	className="ml-3 shrink-0"
-																>
-																	Auto-fix
-																</Button>
-															</div>
-														))
-													) : (
-														<div className="text-center py-8 text-muted-foreground">
-															<CheckCircle2 size={32} className="mx-auto mb-2 text-green-500" />
-															<p className="text-sm">No issues detected</p>
-														</div>
-													)}
+											<div className="divide-y divide-border">
+												<div className="p-4 flex items-center justify-between hover:bg-surface-elevated/30 transition-colors">
+													<div className="flex items-center">
+														<CheckCircle2
+															size={18}
+															className="text-green-400 mr-3"
+														/>
+														<span className="text-foreground">CI Build</span>
+													</div>
+													<span className="text-xs text-green-400 font-medium">
+														Passed
+													</span>
+												</div>
+												<div className="p-4 flex items-center justify-between hover:bg-surface-elevated/30 transition-colors">
+													<div className="flex items-center">
+														<Bot size={18} className="text-feature-blue mr-3" />
+														<span className="text-foreground">
+															AI Code Review
+														</span>
+													</div>
+													<span className="text-xs text-green-400 font-medium">
+														Passed
+													</span>
+												</div>
+												<div className="p-4 flex items-center justify-between hover:bg-surface-elevated/30 transition-colors">
+													<div className="flex items-center">
+														<Activity
+															size={18}
+															className="text-green-400 mr-3"
+														/>
+														<span className="text-foreground">Unit Tests</span>
+													</div>
+													<span className="text-xs text-green-400 font-medium">
+														3/3 Passed
+													</span>
 												</div>
 											</div>
 										</div>
+
+										<div className="relative border-l border-border ml-3 space-y-6">
+											<div className="relative pl-6">
+												<div className="absolute -left-1.5 top-1.5 w-3 h-3 bg-surface-elevated border border-border rounded-full"></div>
+												<div className="text-sm text-foreground font-medium">
+													John Doe created this pull request
+												</div>
+												<div className="text-xs text-muted-foreground mt-1">
+													Just now
+												</div>
+											</div>
+										</div>
+
+										<div className="bg-surface border border-border rounded-lg p-4">
+											<h4 className="text-sm font-medium text-muted-foreground mb-3">
+												Add a comment
+											</h4>
+											<div className="flex space-x-3">
+												<div className="w-8 h-8 rounded-full bg-blue-500/20 border border-blue-500/50 flex items-center justify-center text-feature-blue text-xs font-bold shrink-0">
+													ME
+												</div>
+												<div className="flex-1">
+													<Textarea
+														className="h-24 resize-none"
+														placeholder="Leave a comment..."
+													/>
+													<div className="flex justify-end mt-2">
+														<Button variant="outline" size="sm">
+															Comment
+														</Button>
+													</div>
+												</div>
+											</div>
+										</div>
+									</div>
+								)}
 							</TabsContent>
 
-							<TabsContent value="remediation" className="!mt-0 flex-1 overflow-y-auto min-h-0 pt-section">
+							<TabsContent
+								value="ai-review"
+								className="!mt-0 flex-1 overflow-y-auto min-h-0 pt-section"
+							>
+								<div className="space-y-6">
+									<div className="bg-blue-950/30 border border-blue-900/50 rounded-lg p-5 text-blue-100 flex items-start space-x-4">
+										<Bot
+											size={24}
+											className="mt-1 flex-shrink-0 text-feature-blue"
+										/>
+										<div>
+											<h4 className="font-semibold text-feature-blue mb-1">
+												Agent Summary
+											</h4>
+											<p className="text-sm leading-relaxed opacity-90">
+												I have analyzed the submitted code against the project
+												requirements. The implementation correctly handles the
+												new pricing logic for bulk items. However, I detected a
+												potential SQL injection vulnerability in the input
+												handling and a minor performance regression in the cart
+												calculation loop. I recommend fixing the security issue
+												before merging.
+											</p>
+										</div>
+									</div>
+
+									<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+										<div className="bg-surface p-5 rounded-lg border border-border flex flex-col items-center">
+											<div className="text-muted-foreground text-xs uppercase font-semibold mb-2">
+												Security Score
+											</div>
+											<div className="text-4xl font-bold text-green-400 mb-1">
+												A+
+											</div>
+											<div className="text-green-500/60 text-xs">
+												No vulnerabilities
+											</div>
+										</div>
+										<div className="bg-surface p-5 rounded-lg border border-border flex flex-col items-center">
+											<div className="text-muted-foreground text-xs uppercase font-semibold mb-2">
+												Performance
+											</div>
+											<div className="text-4xl font-bold text-feature-blue mb-1">
+												98
+											</div>
+											<div className="text-blue-500/60 text-xs">Optimized</div>
+										</div>
+										<div className="bg-surface p-5 rounded-lg border border-border flex flex-col items-center">
+											<div className="text-muted-foreground text-xs uppercase font-semibold mb-2">
+												Maintainability
+											</div>
+											<div className="text-4xl font-bold text-amber-400 mb-1">
+												B
+											</div>
+											<div className="text-amber-500/60 text-xs">
+												Refactor suggested
+											</div>
+										</div>
+									</div>
+
+									<div>
+										<h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+											Detected Issues
+										</h3>
+										<div className="space-y-3">
+											{prIssues && prIssues.length > 0 ? (
+												prIssues
+													.filter((issue) => !issue.resolved)
+													.map((issue) => (
+														<div
+															key={issue._id}
+															className="bg-surface/50 border border-border rounded-lg p-4 flex items-start"
+														>
+															<div
+																className={`mt-0.5 mr-3 flex-shrink-0 ${
+																	issue.severity === "error"
+																		? "text-red-400"
+																		: issue.severity === "warning"
+																			? "text-amber-400"
+																			: "text-blue-400"
+																}`}
+															>
+																<AlertTriangle size={18} />
+															</div>
+															<div className="flex-1 min-w-0">
+																<h4 className="text-foreground font-medium text-sm">
+																	{issue.title}
+																</h4>
+																<p className="text-muted-foreground text-sm mt-1">
+																	{issue.description}
+																</p>
+																{issue.filePath && (
+																	<p className="text-xs text-muted-foreground mt-1 font-mono">
+																		{issue.filePath}
+																		{issue.lineNumber
+																			? `:${issue.lineNumber}`
+																			: ""}
+																	</p>
+																)}
+															</div>
+															<Button
+																variant="outline"
+																size="sm"
+																className="ml-3 shrink-0"
+															>
+																Auto-fix
+															</Button>
+														</div>
+													))
+											) : (
+												<div className="text-center py-8 text-muted-foreground">
+													<CheckCircle2
+														size={32}
+														className="mx-auto mb-2 text-green-500"
+													/>
+													<p className="text-sm">No issues detected</p>
+												</div>
+											)}
+										</div>
+									</div>
+								</div>
+							</TabsContent>
+
+							<TabsContent
+								value="remediation"
+								className="!mt-0 flex-1 overflow-y-auto min-h-0 pt-section"
+							>
 								<RemediationTab
 									taskId={taskId}
 									remediationPhase={getPhaseByName("remediation")}
@@ -1388,361 +1605,377 @@ export function TaskDetailView({
 								/>
 							</TabsContent>
 
-							<TabsContent value="human-review" className="!mt-0 flex-1 overflow-y-auto min-h-0 pt-section">
-										<div className="space-y-6">
-											<div className="bg-surface border border-border rounded-lg p-6">
-												<div className="flex items-center justify-between mb-6">
-													<h3 className="text-lg font-semibold text-foreground">
-														Review Status
-													</h3>
-													<Badge variant="warning" className="uppercase">
-														Pending Approval
-													</Badge>
-												</div>
+							<TabsContent
+								value="human-review"
+								className="!mt-0 flex-1 overflow-y-auto min-h-0 pt-section"
+							>
+								<div className="space-y-6">
+									<div className="bg-surface border border-border rounded-lg p-6">
+										<div className="flex items-center justify-between mb-6">
+											<h3 className="text-lg font-semibold text-foreground">
+												Review Status
+											</h3>
+											<Badge variant="warning" className="uppercase">
+												Pending Approval
+											</Badge>
+										</div>
 
-												<div className="bg-background rounded-lg border border-border p-4 mb-6 flex items-center justify-between">
-													<div className="flex items-center space-x-3">
-														<Globe size={18} className="text-feature-blue" />
-														<span className="text-muted-foreground text-sm">
-															Deployment URL:
+										<div className="bg-background rounded-lg border border-border p-4 mb-6 flex items-center justify-between">
+											<div className="flex items-center space-x-3">
+												<Globe size={18} className="text-feature-blue" />
+												<span className="text-muted-foreground text-sm">
+													Deployment URL:
+												</span>
+												<a
+													href="https://pr-4829.staging.app-planner.com"
+													target="_blank"
+													rel="noopener noreferrer"
+													className="text-feature-blue text-sm hover:underline font-mono"
+												>
+													https://pr-4829.staging.app-planner.com
+												</a>
+											</div>
+											<Button variant="outline" size="sm">
+												Visit
+											</Button>
+										</div>
+
+										<div className="flex items-center justify-between p-4 bg-background rounded-lg border border-border mb-6">
+											<div className="flex items-center">
+												<div className="w-10 h-10 rounded-full bg-purple-500/20 border border-purple-500/50 flex items-center justify-center text-feature-purple font-bold mr-3">
+													JD
+												</div>
+												<div>
+													<div className="text-sm font-medium text-foreground">
+														John Doe
+													</div>
+													<div className="text-xs text-muted-foreground">
+														Lead Developer
+													</div>
+												</div>
+											</div>
+											<div className="flex space-x-3">
+												<Button variant="outline">
+													<MessageSquare size={16} className="mr-2" />
+													Request Changes
+												</Button>
+												<Button className="bg-green-600 hover:bg-green-500">
+													<ThumbsUp size={16} className="mr-2" />
+													Approve
+												</Button>
+											</div>
+										</div>
+
+										<div className="space-y-4">
+											<h4 className="text-sm font-medium text-muted-foreground">
+												Comments
+											</h4>
+											<div className="flex space-x-3">
+												<div className="w-8 h-8 rounded-full bg-blue-500/20 border border-blue-500/50 flex items-center justify-center text-feature-blue text-xs font-bold shrink-0">
+													ME
+												</div>
+												<div className="flex-1">
+													<Textarea
+														className="h-24 resize-none"
+														placeholder="Leave a comment..."
+													/>
+													<div className="flex justify-end mt-2">
+														<Button variant="outline" size="sm">
+															Post Comment
+														</Button>
+													</div>
+												</div>
+											</div>
+										</div>
+									</div>
+								</div>
+							</TabsContent>
+
+							<TabsContent
+								value="merge"
+								className="!mt-0 flex-1 overflow-y-auto min-h-0 pt-section"
+							>
+								<div className="space-y-6">
+									<div className="bg-surface border border-border rounded-lg p-6">
+										<div className="flex items-center justify-between mb-6">
+											<h3 className="text-lg font-semibold text-foreground">
+												Merge Status
+											</h3>
+											<Badge variant="destructive" className="uppercase">
+												Conflicts Detected
+											</Badge>
+										</div>
+
+										<div className="bg-background rounded-lg border border-border p-4 mb-6">
+											<div className="flex items-center justify-between">
+												<div className="flex items-center space-x-3">
+													<GitMerge size={18} className="text-red-400" />
+													<div className="text-sm">
+														<span className="font-mono bg-surface border border-border px-2 py-0.5 rounded text-foreground text-xs">
+															feature/task-{String(task.id).slice(-4)}
 														</span>
-														<a
-															href="https://pr-4829.staging.app-planner.com"
-															target="_blank"
-															rel="noopener noreferrer"
-															className="text-feature-blue text-sm hover:underline font-mono"
-														>
-															https://pr-4829.staging.app-planner.com
-														</a>
-													</div>
-													<Button variant="outline" size="sm">
-														Visit
-													</Button>
-												</div>
-
-												<div className="flex items-center justify-between p-4 bg-background rounded-lg border border-border mb-6">
-													<div className="flex items-center">
-														<div className="w-10 h-10 rounded-full bg-purple-500/20 border border-purple-500/50 flex items-center justify-center text-feature-purple font-bold mr-3">
-															JD
-														</div>
-														<div>
-															<div className="text-sm font-medium text-foreground">
-																John Doe
-															</div>
-															<div className="text-xs text-muted-foreground">
-																Lead Developer
-															</div>
-														</div>
-													</div>
-													<div className="flex space-x-3">
-														<Button variant="outline">
-															<MessageSquare size={16} className="mr-2" />
-															Request Changes
-														</Button>
-														<Button className="bg-green-600 hover:bg-green-500">
-															<ThumbsUp size={16} className="mr-2" />
-															Approve
-														</Button>
+														<ArrowRight
+															size={14}
+															className="inline mx-2 text-muted-foreground"
+														/>
+														<span className="font-mono bg-surface border border-border px-2 py-0.5 rounded text-foreground text-xs">
+															main
+														</span>
 													</div>
 												</div>
+												<span className="text-xs text-red-400">
+													2 conflicting files
+												</span>
+											</div>
+										</div>
 
-												<div className="space-y-4">
-													<h4 className="text-sm font-medium text-muted-foreground">
-														Comments
+										<div className="bg-red-950/30 border border-red-900/50 rounded-lg p-4 mb-6">
+											<div className="flex items-start space-x-3">
+												<XCircle
+													size={18}
+													className="text-red-400 mt-0.5 flex-shrink-0"
+												/>
+												<div>
+													<h4 className="text-sm font-medium text-red-200">
+														Merge Conflicts Require Resolution
 													</h4>
-													<div className="flex space-x-3">
-														<div className="w-8 h-8 rounded-full bg-blue-500/20 border border-blue-500/50 flex items-center justify-center text-feature-blue text-xs font-bold shrink-0">
-															ME
+													<p className="text-xs text-red-300/70 mt-1">
+														The automatic merge failed due to conflicts between
+														the feature branch and recent changes in main.
+														Review the conflicts below and choose a resolution
+														method.
+													</p>
+												</div>
+											</div>
+										</div>
+
+										<div className="space-y-4">
+											<h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+												Conflicting Files
+											</h4>
+											<div className="space-y-3">
+												<div className="bg-background rounded-lg border border-red-900/50 overflow-hidden">
+													<button
+														type="button"
+														className="w-full flex items-center justify-between p-3 bg-red-950/20 hover:bg-red-950/30 transition-colors border-b border-red-900/30"
+													>
+														<div className="flex items-center space-x-2 text-sm font-mono text-foreground">
+															<ChevronDown size={16} />
+															<span>src/utils/cart.js</span>
 														</div>
-														<div className="flex-1">
-															<Textarea
-																className="h-24 resize-none"
-																placeholder="Leave a comment..."
-															/>
-															<div className="flex justify-end mt-2">
-																<Button variant="outline" size="sm">
-																	Post Comment
+														<Badge variant="destructive" className="text-xs">
+															3 conflicts
+														</Badge>
+													</button>
+													<div className="font-mono text-sm leading-6">
+														<div className="bg-surface/30 p-2 text-xs text-muted-foreground border-b border-border">
+															Lines 24-32
+														</div>
+														<div className="bg-red-500/5 border-l-2 border-red-500">
+															<div className="px-3 py-1 text-xs text-red-400 bg-red-950/30">
+																{"<<<<<<< HEAD (main)"}
+															</div>
+															<div className="flex">
+																<div className="w-10 text-muted-foreground text-right pr-3 select-none border-r border-border/50 bg-surface/30">
+																	25
+																</div>
+																<div className="flex-1 px-3 text-red-300 whitespace-pre">
+																	{
+																		"  return items.reduce((acc, item) => acc + item.price, 0);"
+																	}
+																</div>
+															</div>
+														</div>
+														<div className="px-3 py-1 text-xs text-muted-foreground bg-surface/50">
+															{"======="}
+														</div>
+														<div className="bg-green-500/5 border-l-2 border-green-500">
+															<div className="flex">
+																<div className="w-10 text-muted-foreground text-right pr-3 select-none border-r border-border/50 bg-surface/30">
+																	25
+																</div>
+																<div className="flex-1 px-3 text-green-300 whitespace-pre">
+																	{
+																		"  return items.reduce((acc, item) => acc + (item.price * item.qty), 0);"
+																	}
+																</div>
+															</div>
+															<div className="px-3 py-1 text-xs text-green-400 bg-green-950/30">
+																{">>>>>>> feature/task-" +
+																	String(task.id).slice(-4)}
+															</div>
+														</div>
+														<div className="p-3 bg-surface/30 border-t border-border flex items-center justify-between">
+															<span className="text-xs text-muted-foreground">
+																Choose resolution:
+															</span>
+															<div className="flex space-x-2">
+																<Button
+																	variant="outline"
+																	size="sm"
+																	className="text-xs h-7"
+																>
+																	Keep Main
+																</Button>
+																<Button
+																	variant="outline"
+																	size="sm"
+																	className="text-xs h-7"
+																>
+																	Keep Ours
+																</Button>
+																<Button
+																	variant="outline"
+																	size="sm"
+																	className="text-xs h-7 text-feature-blue border-feature-blue/50"
+																>
+																	<Bot size={12} className="mr-1" />
+																	AI Merge
 																</Button>
 															</div>
 														</div>
 													</div>
 												</div>
-											</div>
-										</div>
-							</TabsContent>
 
-							<TabsContent value="merge" className="!mt-0 flex-1 overflow-y-auto min-h-0 pt-section">
-										<div className="space-y-6">
-											<div className="bg-surface border border-border rounded-lg p-6">
-												<div className="flex items-center justify-between mb-6">
-													<h3 className="text-lg font-semibold text-foreground">
-														Merge Status
-													</h3>
-													<Badge variant="destructive" className="uppercase">
-														Conflicts Detected
-													</Badge>
-												</div>
-
-												<div className="bg-background rounded-lg border border-border p-4 mb-6">
-													<div className="flex items-center justify-between">
-														<div className="flex items-center space-x-3">
-															<GitMerge size={18} className="text-red-400" />
-															<div className="text-sm">
-																<span className="font-mono bg-surface border border-border px-2 py-0.5 rounded text-foreground text-xs">
-																	feature/task-{String(task.id).slice(-4)}
-																</span>
-																<ArrowRight
-																	size={14}
-																	className="inline mx-2 text-muted-foreground"
-																/>
-																<span className="font-mono bg-surface border border-border px-2 py-0.5 rounded text-foreground text-xs">
-																	main
-																</span>
-															</div>
+												<div className="bg-background rounded-lg border border-red-900/50 overflow-hidden">
+													<button
+														type="button"
+														className="w-full flex items-center justify-between p-3 bg-red-950/20 hover:bg-red-950/30 transition-colors"
+													>
+														<div className="flex items-center space-x-2 text-sm font-mono text-foreground">
+															<ChevronRight size={16} />
+															<span>src/components/Checkout.jsx</span>
 														</div>
-														<span className="text-xs text-red-400">
-															2 conflicting files
-														</span>
-													</div>
-												</div>
-
-												<div className="bg-red-950/30 border border-red-900/50 rounded-lg p-4 mb-6">
-													<div className="flex items-start space-x-3">
-														<XCircle
-															size={18}
-															className="text-red-400 mt-0.5 flex-shrink-0"
-														/>
-														<div>
-															<h4 className="text-sm font-medium text-red-200">
-																Merge Conflicts Require Resolution
-															</h4>
-															<p className="text-xs text-red-300/70 mt-1">
-																The automatic merge failed due to conflicts
-																between the feature branch and recent changes in
-																main. Review the conflicts below and choose a
-																resolution method.
-															</p>
-														</div>
-													</div>
-												</div>
-
-												<div className="space-y-4">
-													<h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
-														Conflicting Files
-													</h4>
-													<div className="space-y-3">
-														<div className="bg-background rounded-lg border border-red-900/50 overflow-hidden">
-															<button
-																type="button"
-																className="w-full flex items-center justify-between p-3 bg-red-950/20 hover:bg-red-950/30 transition-colors border-b border-red-900/30"
-															>
-																<div className="flex items-center space-x-2 text-sm font-mono text-foreground">
-																	<ChevronDown size={16} />
-																	<span>src/utils/cart.js</span>
-																</div>
-																<Badge
-																	variant="destructive"
-																	className="text-xs"
-																>
-																	3 conflicts
-																</Badge>
-															</button>
-															<div className="font-mono text-sm leading-6">
-																<div className="bg-surface/30 p-2 text-xs text-muted-foreground border-b border-border">
-																	Lines 24-32
-																</div>
-																<div className="bg-red-500/5 border-l-2 border-red-500">
-																	<div className="px-3 py-1 text-xs text-red-400 bg-red-950/30">
-																		{"<<<<<<< HEAD (main)"}
-																	</div>
-																	<div className="flex">
-																		<div className="w-10 text-muted-foreground text-right pr-3 select-none border-r border-border/50 bg-surface/30">
-																			25
-																		</div>
-																		<div className="flex-1 px-3 text-red-300 whitespace-pre">
-																			{
-																				"  return items.reduce((acc, item) => acc + item.price, 0);"
-																			}
-																		</div>
-																	</div>
-																</div>
-																<div className="px-3 py-1 text-xs text-muted-foreground bg-surface/50">
-																	{"======="}
-																</div>
-																<div className="bg-green-500/5 border-l-2 border-green-500">
-																	<div className="flex">
-																		<div className="w-10 text-muted-foreground text-right pr-3 select-none border-r border-border/50 bg-surface/30">
-																			25
-																		</div>
-																		<div className="flex-1 px-3 text-green-300 whitespace-pre">
-																			{
-																				"  return items.reduce((acc, item) => acc + (item.price * item.qty), 0);"
-																			}
-																		</div>
-																	</div>
-																	<div className="px-3 py-1 text-xs text-green-400 bg-green-950/30">
-																		{">>>>>>> feature/task-" +
-																			String(task.id).slice(-4)}
-																	</div>
-																</div>
-																<div className="p-3 bg-surface/30 border-t border-border flex items-center justify-between">
-																	<span className="text-xs text-muted-foreground">
-																		Choose resolution:
-																	</span>
-																	<div className="flex space-x-2">
-																		<Button
-																			variant="outline"
-																			size="sm"
-																			className="text-xs h-7"
-																		>
-																			Keep Main
-																		</Button>
-																		<Button
-																			variant="outline"
-																			size="sm"
-																			className="text-xs h-7"
-																		>
-																			Keep Ours
-																		</Button>
-																		<Button
-																			variant="outline"
-																			size="sm"
-																			className="text-xs h-7 text-feature-blue border-feature-blue/50"
-																		>
-																			<Bot size={12} className="mr-1" />
-																			AI Merge
-																		</Button>
-																	</div>
-																</div>
-															</div>
-														</div>
-
-														<div className="bg-background rounded-lg border border-red-900/50 overflow-hidden">
-															<button
-																type="button"
-																className="w-full flex items-center justify-between p-3 bg-red-950/20 hover:bg-red-950/30 transition-colors"
-															>
-																<div className="flex items-center space-x-2 text-sm font-mono text-foreground">
-																	<ChevronRight size={16} />
-																	<span>src/components/Checkout.jsx</span>
-																</div>
-																<Badge
-																	variant="destructive"
-																	className="text-xs"
-																>
-																	1 conflict
-																</Badge>
-															</button>
-														</div>
-													</div>
-												</div>
-
-												<div className="mt-6 pt-6 border-t border-border">
-													<h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">
-														Resolution Options
-													</h4>
-													<div className="flex space-x-3">
-														<Button className="bg-feature-blue hover:bg-feature-blue/80">
-															<Bot size={16} className="mr-2" />
-															Auto-Resolve All Conflicts
-														</Button>
-														<Button variant="outline">
-															<GitMerge size={16} className="mr-2" />
-															Manual Resolution
-														</Button>
-														<Button
-															variant="outline"
-															className="text-red-400 border-red-900/50 hover:bg-red-950/30"
-														>
-															<XCircle size={16} className="mr-2" />
-															Abort Merge
-														</Button>
-													</div>
-													<p className="text-xs text-muted-foreground mt-3">
-														AI will analyze both versions and create an
-														intelligent merge that preserves the intent of both
-														changes.
-													</p>
-												</div>
-											</div>
-
-											<div className="bg-surface border border-border rounded-lg p-6">
-												<h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">
-													Merge History
-												</h4>
-												<div className="relative border-l border-border ml-3 space-y-4">
-													<div className="relative pl-6">
-														<div className="absolute -left-1.5 top-1.5 w-3 h-3 bg-red-500 border border-red-400 rounded-full"></div>
-														<div className="text-sm text-foreground font-medium">
-															Merge attempt failed - conflicts detected
-														</div>
-														<div className="text-xs text-muted-foreground mt-1 flex items-center space-x-2">
-															<Bot size={12} />
-															<span>Agent</span>
-															<span className="w-1 h-1 bg-muted rounded-full"></span>
-															<span>2 minutes ago</span>
-														</div>
-													</div>
-													<div className="relative pl-6">
-														<div className="absolute -left-1.5 top-1.5 w-3 h-3 bg-green-500 border border-green-400 rounded-full"></div>
-														<div className="text-sm text-foreground font-medium">
-															Human review approved
-														</div>
-														<div className="text-xs text-muted-foreground mt-1 flex items-center space-x-2">
-															<User size={12} />
-															<span>John Doe</span>
-															<span className="w-1 h-1 bg-muted rounded-full"></span>
-															<span>5 minutes ago</span>
-														</div>
-													</div>
+														<Badge variant="destructive" className="text-xs">
+															1 conflict
+														</Badge>
+													</button>
 												</div>
 											</div>
 										</div>
+
+										<div className="mt-6 pt-6 border-t border-border">
+											<h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">
+												Resolution Options
+											</h4>
+											<div className="flex space-x-3">
+												<Button className="bg-feature-blue hover:bg-feature-blue/80">
+													<Bot size={16} className="mr-2" />
+													Auto-Resolve All Conflicts
+												</Button>
+												<Button variant="outline">
+													<GitMerge size={16} className="mr-2" />
+													Manual Resolution
+												</Button>
+												<Button
+													variant="outline"
+													className="text-red-400 border-red-900/50 hover:bg-red-950/30"
+												>
+													<XCircle size={16} className="mr-2" />
+													Abort Merge
+												</Button>
+											</div>
+											<p className="text-xs text-muted-foreground mt-3">
+												AI will analyze both versions and create an intelligent
+												merge that preserves the intent of both changes.
+											</p>
+										</div>
+									</div>
+
+									<div className="bg-surface border border-border rounded-lg p-6">
+										<h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">
+											Merge History
+										</h4>
+										<div className="relative border-l border-border ml-3 space-y-4">
+											<div className="relative pl-6">
+												<div className="absolute -left-1.5 top-1.5 w-3 h-3 bg-red-500 border border-red-400 rounded-full"></div>
+												<div className="text-sm text-foreground font-medium">
+													Merge attempt failed - conflicts detected
+												</div>
+												<div className="text-xs text-muted-foreground mt-1 flex items-center space-x-2">
+													<Bot size={12} />
+													<span>Agent</span>
+													<span className="w-1 h-1 bg-muted rounded-full"></span>
+													<span>2 minutes ago</span>
+												</div>
+											</div>
+											<div className="relative pl-6">
+												<div className="absolute -left-1.5 top-1.5 w-3 h-3 bg-green-500 border border-green-400 rounded-full"></div>
+												<div className="text-sm text-foreground font-medium">
+													Human review approved
+												</div>
+												<div className="text-xs text-muted-foreground mt-1 flex items-center space-x-2">
+													<User size={12} />
+													<span>John Doe</span>
+													<span className="w-1 h-1 bg-muted rounded-full"></span>
+													<span>5 minutes ago</span>
+												</div>
+											</div>
+										</div>
+									</div>
+								</div>
 							</TabsContent>
 
-							<TabsContent value="diff" className="!mt-0 flex-1 overflow-y-auto min-h-0 pt-section">
-										<div className="space-y-4">
-											{pullRequest ? (
-												<>
-													<div className="bg-surface border border-border rounded-lg p-6 text-center">
-														<GitPullRequest size={32} className="mx-auto mb-3 text-muted-foreground" />
-														<h3 className="text-lg font-medium text-foreground mb-2">
-															View Diff on GitHub
-														</h3>
-														<p className="text-sm text-muted-foreground mb-4">
-															PR #{pullRequest.prNumber} - {pullRequest.title}
-														</p>
-														{pullRequest.url && (
-															<Button
-																variant="outline"
-																onClick={() => window.open(pullRequest.url, "_blank")}
-															>
-																<Globe size={16} className="mr-2" />
-																Open on GitHub
-															</Button>
-														)}
-													</div>
-													<div className="text-xs text-muted-foreground text-center">
-														Branch: <code className="bg-surface px-1.5 py-0.5 rounded">{pullRequest.branch}</code>
-														{" → "}
-														<code className="bg-surface px-1.5 py-0.5 rounded">{pullRequest.baseBranch}</code>
-													</div>
-												</>
-											) : (
-												<div className="bg-surface border border-border rounded-lg p-8 text-center">
-													<FileText size={32} className="mx-auto mb-3 text-muted-foreground" />
-													<h3 className="text-lg font-medium text-foreground mb-2">
-														No Changes Yet
-													</h3>
-													<p className="text-sm text-muted-foreground mb-4">
-														Code changes will appear here once the implementation phase begins.
-													</p>
-													<Button onClick={handleCreatePR}>
-														<GitPullRequest size={16} className="mr-2" /> Create PR
+							<TabsContent
+								value="diff"
+								className="!mt-0 flex-1 overflow-y-auto min-h-0 pt-section"
+							>
+								<div className="space-y-4">
+									{pullRequest ? (
+										<>
+											<div className="bg-surface border border-border rounded-lg p-6 text-center">
+												<GitPullRequest
+													size={32}
+													className="mx-auto mb-3 text-muted-foreground"
+												/>
+												<h3 className="text-lg font-medium text-foreground mb-2">
+													View Diff on GitHub
+												</h3>
+												<p className="text-sm text-muted-foreground mb-4">
+													PR #{pullRequest.prNumber} - {pullRequest.title}
+												</p>
+												{pullRequest.url && (
+													<Button
+														variant="outline"
+														onClick={() =>
+															window.open(pullRequest.url, "_blank")
+														}
+													>
+														<Globe size={16} className="mr-2" />
+														Open on GitHub
 													</Button>
-												</div>
-											)}
+												)}
+											</div>
+											<div className="text-xs text-muted-foreground text-center">
+												Branch:{" "}
+												<code className="bg-surface px-1.5 py-0.5 rounded">
+													{pullRequest.branch}
+												</code>
+												{" → "}
+												<code className="bg-surface px-1.5 py-0.5 rounded">
+													{pullRequest.baseBranch}
+												</code>
+											</div>
+										</>
+									) : (
+										<div className="bg-surface border border-border rounded-lg p-8 text-center">
+											<FileText
+												size={32}
+												className="mx-auto mb-3 text-muted-foreground"
+											/>
+											<h3 className="text-lg font-medium text-foreground mb-2">
+												No Changes Yet
+											</h3>
+											<p className="text-sm text-muted-foreground mb-4">
+												Code changes will appear here once the implementation
+												phase begins.
+											</p>
+											<Button onClick={handleCreatePR}>
+												<GitPullRequest size={16} className="mr-2" /> Create PR
+											</Button>
 										</div>
+									)}
+								</div>
 							</TabsContent>
 						</Tabs>
 					</div>

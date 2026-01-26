@@ -203,9 +203,7 @@ describe("aiProviders", () => {
 				type: "custom",
 				enabled: true,
 				authType: "api_key",
-				models: [
-					{ id: "p2-model-1", name: "P2 Model 1", enabled: true },
-				],
+				models: [{ id: "p2-model-1", name: "P2 Model 1", enabled: true }],
 			})
 
 			const models = await t.query(api.aiProviders.getEnabledModels, {})
@@ -236,9 +234,7 @@ describe("aiProviders", () => {
 				type: "custom",
 				enabled: true,
 				authType: "api_key",
-				models: [
-					{ id: "b-1", name: "B Model 1", enabled: true },
-				],
+				models: [{ id: "b-1", name: "B Model 1", enabled: true }],
 			})
 
 			const grouped = await t.query(api.aiProviders.getEnabledModelsGrouped, {})

@@ -1,5 +1,6 @@
 import { v } from "convex/values"
 import { internal } from "../_generated/api"
+import type { Id } from "../_generated/dataModel"
 import {
 	internalAction,
 	internalMutation,
@@ -194,7 +195,11 @@ export const markContainerStopped = internalMutation({
 					status: "stopped",
 					updatedAt: Date.now(),
 				})
-				return { updated: true, id: container._id, previousStatus: container.status }
+				return {
+					updated: true,
+					id: container._id,
+					previousStatus: container.status,
+				}
 			}
 			return { updated: false, id: container._id, reason: "already_stopped" }
 		}
@@ -242,15 +247,24 @@ export const getTailscaleContainers = internalQuery({
 // Delete a device from Tailscale API
 export const deleteDeviceFromTailscale = internalAction({
 	args: { nodeId: v.string() },
-	handler: async (ctx, args) => {
+	handler: async (
+		ctx,
+		args,
+	): Promise<{
+		deleted: boolean
+		reason?: string
+		error?: string
+		skipped?: boolean
+	}> => {
 		// Get credentials
-		const credentials = await ctx.runQuery(
-			internal.internal.tailscale.getCredentials,
-		)
+		const credentials: { tailnetId?: string; apiKey?: string } | null =
+			await ctx.runQuery(internal.internal.tailscale.getCredentials)
 
 		if (!credentials?.tailnetId || !credentials?.apiKey) {
-			console.log("Tailscale credentials not configured, skipping device deletion")
-			return { skipped: true, reason: "no_credentials" }
+			console.log(
+				"Tailscale credentials not configured, skipping device deletion",
+			)
+			return { deleted: false, skipped: true, reason: "no_credentials" }
 		}
 
 		// Delete device from Tailscale API
@@ -266,11 +280,15 @@ export const deleteDeviceFromTailscale = internalAction({
 
 		if (!response.ok) {
 			if (response.status === 404) {
-				console.log(`Device ${args.nodeId} not found in Tailscale (already deleted)`)
+				console.log(
+					`Device ${args.nodeId} not found in Tailscale (already deleted)`,
+				)
 				return { deleted: false, reason: "not_found" }
 			}
 			const errorText = await response.text()
-			console.error(`Failed to delete Tailscale device: ${response.status} - ${errorText}`)
+			console.error(
+				`Failed to delete Tailscale device: ${response.status} - ${errorText}`,
+			)
 			return { deleted: false, reason: "api_error", error: errorText }
 		}
 
@@ -282,11 +300,21 @@ export const deleteDeviceFromTailscale = internalAction({
 // Sync a single device from Tailscale API by nodeID (triggered by webhooks)
 export const syncDeviceFromApi = internalAction({
 	args: { nodeID: v.string() },
-	handler: async (ctx, args) => {
+	handler: async (
+		ctx,
+		args,
+	): Promise<{
+		skipped?: boolean
+		synced?: boolean
+		reason?: string
+		deviceType?: string
+		deviceName?: string
+		action?: string
+		id?: Id<"servers"> | Id<"containers">
+	}> => {
 		// Get credentials
-		const credentials = await ctx.runQuery(
-			internal.internal.tailscale.getCredentials,
-		)
+		const credentials: { tailnetId?: string; apiKey?: string } | null =
+			await ctx.runQuery(internal.internal.tailscale.getCredentials)
 
 		if (!credentials?.tailnetId || !credentials?.apiKey) {
 			console.log("Tailscale credentials not configured, skipping device sync")
@@ -323,7 +351,11 @@ export const syncDeviceFromApi = internalAction({
 			console.log(
 				`Device ${device.id} (${device.name}) has no relevant tags, skipping`,
 			)
-			return { skipped: true, reason: "no_relevant_tags", deviceName: device.name }
+			return {
+				skipped: true,
+				reason: "no_relevant_tags",
+				deviceName: device.name,
+			}
 		}
 
 		// Sync the device
@@ -332,9 +364,13 @@ export const syncDeviceFromApi = internalAction({
 		// e.g., "vet-ape-pea.banjo-capella.ts.net" -> "vet-ape-pea"
 		const fullHostname = device.hostname || ""
 		const name = isContainer
-			? (fullHostname.split(".")[0] || device.name || fullHostname)
-			: (device.name || device.hostname)
-		const result = await ctx.runMutation(internal.internal.tailscale.syncDevice, {
+			? fullHostname.split(".")[0] || device.name || fullHostname
+			: device.name || device.hostname
+		const result: {
+			updated?: boolean
+			created?: boolean
+			id: Id<"servers"> | Id<"containers">
+		} = await ctx.runMutation(internal.internal.tailscale.syncDevice, {
 			nodeId: device.id,
 			hostname: device.hostname,
 			name,
@@ -359,11 +395,17 @@ export const syncDeviceFromApi = internalAction({
 // Perform full sync from Tailscale API
 export const performFullSync = internalAction({
 	args: {},
-	handler: async (ctx) => {
+	handler: async (
+		ctx,
+	): Promise<{
+		serversAdded: number
+		containersAdded: number
+		totalDevices: number
+		containersMarkedStopped: number
+	}> => {
 		// Get credentials
-		const credentials = await ctx.runQuery(
-			internal.internal.tailscale.getCredentials,
-		)
+		const credentials: { tailnetId?: string; apiKey?: string } | null =
+			await ctx.runQuery(internal.internal.tailscale.getCredentials)
 
 		if (!credentials?.tailnetId || !credentials?.apiKey) {
 			throw new Error("Tailscale credentials not configured")
@@ -422,7 +464,8 @@ export const performFullSync = internalAction({
 			// Extract short name for Docker container name (part before first dot)
 			// e.g., "vet-ape-pea.banjo-capella.ts.net" -> "vet-ape-pea"
 			const fullHostname = device.hostname || ""
-			const shortName = fullHostname.split(".")[0] || device.name || fullHostname
+			const shortName =
+				fullHostname.split(".")[0] || device.name || fullHostname
 			await ctx.runMutation(internal.internal.tailscale.syncDevice, {
 				nodeId: device.id,
 				hostname: device.hostname,
@@ -462,9 +505,12 @@ export const performFullSync = internalAction({
 				container.tailscaleNodeId &&
 				!containerNodeIds.has(container.tailscaleNodeId)
 			) {
-				const result = await ctx.runMutation(internal.internal.tailscale.markContainerStopped, {
-					nodeId: container.tailscaleNodeId,
-				})
+				const result: { updated: boolean } = await ctx.runMutation(
+					internal.internal.tailscale.markContainerStopped,
+					{
+						nodeId: container.tailscaleNodeId,
+					},
+				)
 				if (result.updated) {
 					containersMarkedStopped++
 				}
@@ -476,7 +522,7 @@ export const performFullSync = internalAction({
 
 		// Mark orphaned non-Tailscale containers as stopped (not deleted)
 		// These containers may still exist on the host in stopped state
-		const orphanCleanup = await ctx.runMutation(
+		const orphanCleanup: { updated: number } = await ctx.runMutation(
 			internal.containers.markOrphanedContainersStoppedInternal,
 		)
 

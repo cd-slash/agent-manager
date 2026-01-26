@@ -162,8 +162,14 @@ export const seedAiProviders = mutation({
 				created.push(provider.name)
 			} else if (existing.isBuiltin) {
 				// Update built-in providers - replace models with canonical list
-				const existingIds = existing.models.map((m) => m.id).sort().join(",")
-				const newIds = provider.models.map((m) => m.id).sort().join(",")
+				const existingIds = existing.models
+					.map((m) => m.id)
+					.sort()
+					.join(",")
+				const newIds = provider.models
+					.map((m) => m.id)
+					.sort()
+					.join(",")
 
 				if (existingIds !== newIds) {
 					await ctx.db.patch(existing._id, {

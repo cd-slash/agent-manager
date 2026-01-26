@@ -6,7 +6,7 @@ import { error } from "./output"
 
 // Convex ID format: starts with a letter, followed by alphanumeric characters
 // Example: j572qwy5e9t6kh3pqzqz82qqm56h7jvp
-const CONVEX_ID_PATTERN = /^[a-z][a-z0-9]+$/
+const _CONVEX_ID_PATTERN = /^[a-z][a-z0-9]+$/
 
 /**
  * Validate a Convex document ID
@@ -30,7 +30,10 @@ export function validateCategory(
 	category: string | undefined,
 ): "backlog" | "todo" | "in-progress" | "done" {
 	const validCategories = ["backlog", "todo", "in-progress", "done"] as const
-	if (!category || !validCategories.includes(category as typeof validCategories[number])) {
+	if (
+		!category ||
+		!validCategories.includes(category as (typeof validCategories)[number])
+	) {
 		error(`Invalid category. Must be one of: ${validCategories.join(", ")}`)
 	}
 	return category as "backlog" | "todo" | "in-progress" | "done"
@@ -67,7 +70,10 @@ export function validateBoolean(
 /**
  * Parse JSON array from string
  */
-export function parseJsonArray(value: string | undefined, fieldName: string): string[] {
+export function parseJsonArray(
+	value: string | undefined,
+	fieldName: string,
+): string[] {
 	if (!value) {
 		error(`${fieldName} is required`)
 	}
