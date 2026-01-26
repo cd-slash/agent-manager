@@ -282,6 +282,7 @@ function App() {
 			currentPhase: selectedTaskDetails.currentPhase,
 			phaseUpdatedAt: selectedTaskDetails.phaseUpdatedAt,
 			activeContainerId: selectedTaskDetails.activeContainerId,
+			activeSessionId: selectedTaskDetails.activeSessionId,
 			implementationPrompt: selectedTaskDetails.implementationPrompt,
 			templateId: selectedTaskDetails.templateId,
 		}
