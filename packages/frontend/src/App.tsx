@@ -211,10 +211,10 @@ function App() {
 		projectId: string,
 		taskTitle: string,
 		templateId?: string,
-	) => {
-		if (!taskTitle.trim()) return
+	): Promise<Id<"tasks"> | null> => {
+		if (!taskTitle.trim()) return null
 
-		await createTask({
+		const taskId = await createTask({
 			projectId: projectId as Id<"projects">,
 			title: taskTitle,
 			description: taskTitle,
@@ -223,6 +223,8 @@ function App() {
 			complexity: "Low",
 			templateId: templateId as Id<"taskTemplates"> | undefined,
 		})
+
+		return taskId
 	}
 
 	const handleQuickTaskCreate = (
@@ -230,7 +232,13 @@ function App() {
 		title: string,
 		templateId?: string,
 	) => {
-		handleAddTask(projectId, title, templateId)
+		handleAddTask(projectId, title, templateId).then((taskId) => {
+			if (taskId) {
+				setSelectedProjectId(projectId as Id<"projects">)
+				setSelectedTaskId(taskId)
+				setIsQuickTaskModalOpen(false)
+			}
+		})
 	}
 
 	// Derived state helpers

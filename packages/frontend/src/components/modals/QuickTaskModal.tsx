@@ -68,7 +68,6 @@ export function QuickTaskModal({
 		e.preventDefault()
 		if (!title.trim() || !projectId) return
 		onCreate(projectId, title, templateId || undefined)
-		onClose()
 	}
 
 	return (
