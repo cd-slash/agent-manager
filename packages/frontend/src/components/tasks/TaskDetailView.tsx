@@ -241,6 +241,29 @@ export function TaskDetailView({
 		return ""
 	}, [])
 
+	const renderDiff = useCallback((diffText: string) => {
+		return diffText.split("\n").map((line, index) => {
+			let className = "text-muted-foreground"
+			if (line.startsWith("+++ ") || line.startsWith("--- ")) {
+				className = "text-foreground"
+			} else if (line.startsWith("diff --git") || line.startsWith("index ")) {
+				className = "text-muted-foreground"
+			} else if (line.startsWith("@@")) {
+				className = "text-feature-blue"
+			} else if (line.startsWith("+")) {
+				className = "text-green-400"
+			} else if (line.startsWith("-")) {
+				className = "text-red-400"
+			}
+
+			return (
+				<div key={`${index}-${line}`} className={`whitespace-pre ${className}`}>
+					{line}
+				</div>
+			)
+		})
+	}, [])
+
 	// Track the message count when streaming started to detect new messages
 	// Defined early so it can be used in chatHistory useMemo
 	const messageCountBeforeStreaming = useRef<number | null>(null)
@@ -2090,9 +2113,9 @@ export function TaskDetailView({
 												</div>
 											</div>
 											{workingTreeDiff ? (
-												<pre className="text-xs text-muted-foreground bg-background/50 p-2 rounded overflow-x-auto">
-													{workingTreeDiff}
-												</pre>
+												<div className="text-xs font-mono bg-background/50 p-2 rounded overflow-x-auto">
+													{renderDiff(workingTreeDiff)}
+												</div>
 											) : (
 												<div className="text-sm text-muted-foreground">
 													No working tree diff fetched yet.
