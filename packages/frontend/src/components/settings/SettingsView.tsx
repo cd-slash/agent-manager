@@ -172,7 +172,7 @@ function GatewayConfigSection() {
 						</div>
 						<Input
 							type="text"
-							placeholder="anthropics/claude-code-sandbox"
+							placeholder="owner/repository"
 							value={defaultRepo}
 							onChange={(e) => setDefaultRepo(e.target.value)}
 						/>
@@ -529,34 +529,27 @@ export function SettingsView() {
 												<div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl">
 													<div className="space-y-2">
 														<Label>Primary Chat Model</Label>
-														<Select defaultValue="gemini">
+														<Select defaultValue="default">
 															<SelectTrigger>
 																<SelectValue />
 															</SelectTrigger>
 															<SelectContent>
-																<SelectItem value="gemini">
-																	Gemini 1.5 Pro
-																</SelectItem>
-																<SelectItem value="gpt4">
-																	GPT-4 Turbo
-																</SelectItem>
-																<SelectItem value="claude">
-																	Claude 3 Opus
+																<SelectItem value="default">
+																	Use provider defaults
 																</SelectItem>
 															</SelectContent>
 														</Select>
 													</div>
 													<div className="space-y-2">
 														<Label>Coding Model</Label>
-														<Select defaultValue="sonnet">
+														<Select defaultValue="default">
 															<SelectTrigger>
 																<SelectValue />
 															</SelectTrigger>
 															<SelectContent>
-																<SelectItem value="sonnet">
-																	Claude 3.5 Sonnet
+																<SelectItem value="default">
+																	Use provider defaults
 																</SelectItem>
-																<SelectItem value="gpt4">GPT-4</SelectItem>
 															</SelectContent>
 														</Select>
 													</div>

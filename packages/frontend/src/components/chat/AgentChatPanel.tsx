@@ -3,8 +3,19 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import ReactMarkdown from "react-markdown"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@/components/ui/select"
 import { cn } from "@/lib/utils"
-import type { ChatMessage, ChatMessagePart } from "@/types"
+import type {
+	ChatMessage,
+	ChatMessagePart,
+	EnabledModelsGrouped,
+} from "@/types"
 import { ToolCallGroup } from "./ToolCallGroup"
 
 // Agent status during message processing
@@ -196,8 +207,8 @@ function renderMessageContent(msg: ChatMessage) {
 	)
 }
 
-export type Provider = "anthropic" | "zai"
-export type Model = "haiku" | "sonnet" | "opus"
+export type Provider = string
+export type Model = string
 
 interface AgentChatPanelProps {
 	chatHistory?: ChatMessage[]
@@ -208,6 +219,7 @@ interface AgentChatPanelProps {
 	selectedModel?: Model
 	onProviderChange?: (provider: Provider) => void
 	onModelChange?: (model: Model) => void
+	modelGroups?: EnabledModelsGrouped[] | null
 	sessionId?: string | null
 	onNewSession?: () => void
 }
@@ -221,33 +233,73 @@ export function AgentChatPanel({
 	selectedModel: externalModel,
 	onProviderChange,
 	onModelChange,
+	modelGroups,
 	sessionId,
 	onNewSession,
 }: AgentChatPanelProps) {
 	const [chatInput, setChatInput] = useState("")
 	// Use external state if provided, otherwise local state
-	const [internalProvider, setInternalProvider] =
-		useState<Provider>("anthropic")
-	const [internalModel, setInternalModel] = useState<Model>("opus")
+	const [internalProvider, setInternalProvider] = useState<Provider>("")
+	const [internalModel, setInternalModel] = useState<Model>("")
 
 	const selectedProvider = externalProvider ?? internalProvider
 	const selectedModel = externalModel ?? internalModel
 
-	const handleProviderChange = (provider: Provider) => {
-		if (onProviderChange) {
-			onProviderChange(provider)
-		} else {
-			setInternalProvider(provider)
-		}
-	}
+	const handleProviderChange = useCallback(
+		(provider: Provider) => {
+			if (onProviderChange) {
+				onProviderChange(provider)
+			} else {
+				setInternalProvider(provider)
+			}
+		},
+		[onProviderChange],
+	)
 
-	const handleModelChange = (model: Model) => {
-		if (onModelChange) {
-			onModelChange(model)
-		} else {
-			setInternalModel(model)
+	const handleModelChange = useCallback(
+		(model: Model) => {
+			if (onModelChange) {
+				onModelChange(model)
+			} else {
+				setInternalModel(model)
+			}
+		},
+		[onModelChange],
+	)
+
+	const providerOptions = modelGroups ?? []
+	const selectedProviderGroup = providerOptions.find(
+		(group) => group.providerId === selectedProvider,
+	)
+	const modelOptions = selectedProviderGroup?.models ?? []
+
+	useEffect(() => {
+		if (!selectedProvider && providerOptions.length > 0) {
+			const firstProvider = providerOptions[0]
+			if (firstProvider) {
+				handleProviderChange(firstProvider.providerId)
+				if (firstProvider.models.length > 0) {
+					handleModelChange(firstProvider.models[0].id)
+				}
+			}
 		}
-	}
+	}, [
+		handleProviderChange,
+		handleModelChange,
+		providerOptions,
+		selectedProvider,
+	])
+
+	useEffect(() => {
+		if (!selectedProviderGroup) return
+		if (modelOptions.length === 0) return
+		const hasSelectedModel = modelOptions.some(
+			(model) => model.id === selectedModel,
+		)
+		if (!hasSelectedModel) {
+			handleModelChange(modelOptions[0].id)
+		}
+	}, [handleModelChange, modelOptions, selectedModel, selectedProviderGroup])
 	const textareaRef = useRef<HTMLTextAreaElement>(null)
 	const scrollContainerRef = useRef<HTMLDivElement>(null)
 	// Track whether user has scrolled away from bottom (disables auto-scroll)
@@ -433,31 +485,26 @@ export function AgentChatPanel({
 					</form>
 					<div className="flex items-center justify-between">
 						<div className="flex items-center gap-3">
-							<div className="flex items-center bg-background rounded-md border border-border p-[3px] h-7">
-								<button
-									type="button"
-									onClick={() => handleProviderChange("anthropic")}
-									className={cn(
-										"px-2.5 h-5 text-xs font-medium rounded transition-colors flex items-center",
-										selectedProvider === "anthropic"
-											? "bg-surface-elevated text-foreground shadow-sm"
-											: "text-muted-foreground hover:text-foreground",
-									)}
+							<div className="flex items-center gap-2">
+								<Select
+									value={selectedProvider}
+									onValueChange={(value) => handleProviderChange(value)}
+									disabled={providerOptions.length === 0}
 								>
-									Anthropic
-								</button>
-								<button
-									type="button"
-									onClick={() => handleProviderChange("zai")}
-									className={cn(
-										"px-2.5 h-5 text-xs font-medium rounded transition-colors flex items-center",
-										selectedProvider === "zai"
-											? "bg-surface-elevated text-foreground shadow-sm"
-											: "text-muted-foreground hover:text-foreground",
-									)}
-								>
-									ZAI
-								</button>
+									<SelectTrigger className="h-7 text-xs">
+										<SelectValue placeholder="Provider" />
+									</SelectTrigger>
+									<SelectContent>
+										{providerOptions.map((group) => (
+											<SelectItem
+												key={group.providerId}
+												value={group.providerId}
+											>
+												{group.providerName}
+											</SelectItem>
+										))}
+									</SelectContent>
+								</Select>
 							</div>
 							{sessionId && (
 								<div className="flex items-center gap-1.5">
@@ -478,44 +525,22 @@ export function AgentChatPanel({
 								</div>
 							)}
 						</div>
-						<div className="flex items-center bg-background rounded-md border border-border p-[3px] h-7">
-							<button
-								type="button"
-								onClick={() => handleModelChange("haiku")}
-								className={cn(
-									"px-2.5 h-5 text-xs font-medium rounded transition-colors flex items-center",
-									selectedModel === "haiku"
-										? "bg-surface-elevated text-foreground shadow-sm"
-										: "text-muted-foreground hover:text-foreground",
-								)}
-							>
-								Haiku
-							</button>
-							<button
-								type="button"
-								onClick={() => handleModelChange("sonnet")}
-								className={cn(
-									"px-2.5 h-5 text-xs font-medium rounded transition-colors flex items-center",
-									selectedModel === "sonnet"
-										? "bg-surface-elevated text-foreground shadow-sm"
-										: "text-muted-foreground hover:text-foreground",
-								)}
-							>
-								Sonnet
-							</button>
-							<button
-								type="button"
-								onClick={() => handleModelChange("opus")}
-								className={cn(
-									"px-2.5 h-5 text-xs font-medium rounded transition-colors flex items-center",
-									selectedModel === "opus"
-										? "bg-surface-elevated text-foreground shadow-sm"
-										: "text-muted-foreground hover:text-foreground",
-								)}
-							>
-								Opus
-							</button>
-						</div>
+						<Select
+							value={selectedModel}
+							onValueChange={(value) => handleModelChange(value)}
+							disabled={modelOptions.length === 0}
+						>
+							<SelectTrigger className="h-7 text-xs">
+								<SelectValue placeholder="Model" />
+							</SelectTrigger>
+							<SelectContent>
+								{modelOptions.map((model) => (
+									<SelectItem key={model.id} value={model.id}>
+										{model.name}
+									</SelectItem>
+								))}
+							</SelectContent>
+						</Select>
 					</div>
 				</div>
 			</div>

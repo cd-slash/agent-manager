@@ -118,33 +118,33 @@ Report success or any issues encountered.`,
 // Default configuration for each phase
 const DEFAULT_CONFIGS = {
 	planning: {
-		provider: "anthropic",
-		model: "claude-sonnet-4-20250514",
+		provider: "opencode",
+		model: "opencode/claude-sonnet-4",
 		permissionMode: "plan",
 	},
 	implementation: {
-		provider: "anthropic",
-		model: "claude-sonnet-4-20250514",
+		provider: "opencode",
+		model: "opencode/claude-sonnet-4",
 		permissionMode: "accept_edits",
 	},
 	ai_review: {
-		provider: "anthropic",
-		model: "claude-sonnet-4-20250514",
+		provider: "opencode",
+		model: "opencode/claude-sonnet-4",
 		permissionMode: "default",
 	},
 	remediation: {
-		provider: "anthropic",
-		model: "claude-sonnet-4-20250514",
+		provider: "opencode",
+		model: "opencode/claude-sonnet-4",
 		permissionMode: "accept_edits",
 	},
 	human_review: {
-		provider: "anthropic",
-		model: "claude-sonnet-4-20250514",
+		provider: "opencode",
+		model: "opencode/claude-sonnet-4",
 		permissionMode: "default",
 	},
 	merge: {
-		provider: "anthropic",
-		model: "claude-sonnet-4-20250514",
+		provider: "opencode",
+		model: "opencode/claude-sonnet-4",
 		permissionMode: "accept_edits",
 	},
 } as const

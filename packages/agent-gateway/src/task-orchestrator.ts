@@ -151,6 +151,20 @@ export class TaskOrchestrator {
 				...configOverrides,
 			}
 
+			if (phaseConfig?.provider) {
+				execPayload.providerId = phaseConfig.provider
+			}
+			if (phaseConfig?.model) {
+				execPayload.modelId = phaseConfig.model
+			}
+
+			if (generated.config.providerId) {
+				execPayload.providerId = generated.config.providerId
+			}
+			if (generated.config.modelId) {
+				execPayload.modelId = generated.config.modelId
+			}
+
 			// Generate correlation ID
 			const correlationId = crypto.randomUUID()
 

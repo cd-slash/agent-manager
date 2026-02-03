@@ -29,13 +29,6 @@ export type MessageType =
 	| "heartbeat"
 	| "disconnect"
 
-	// Authentication
-	| "auth:request"
-	| "auth:status"
-	| "auth:flow:start"
-	| "auth:flow:url"
-	| "auth:flow:complete"
-
 	// Execution
 	| "exec:start"
 	| "exec:stream"
@@ -95,53 +88,21 @@ export interface DisconnectPayload {
 }
 
 // =============================================================================
-// Authentication Messages
-// =============================================================================
-
-export interface AuthRequestPayload {
-	/** OAuth token string */
-	token: string
-}
-
-export interface AuthStatusPayload {
-	/** Whether the container is authenticated */
-	authenticated: boolean
-	/** Authentication method (e.g., "oauth") */
-	method?: string
-	/** Provider name (e.g., "anthropic") */
-	provider?: string
-}
-
-export type AuthFlowStartPayload = Record<string, never>
-
-export interface AuthFlowUrlPayload {
-	/** Flow identifier */
-	flowId: string
-	/** OAuth URL for user to visit */
-	url: string
-	/** Seconds until flow expires */
-	expiresIn: number
-}
-
-export interface AuthFlowCompletePayload {
-	/** Flow identifier */
-	flowId: string
-	/** Authorization code from OAuth provider */
-	code: string
-}
-
-// =============================================================================
 // Execution Messages
 // =============================================================================
 
 export interface ExecStartPayload {
 	/** Session ID to resume (optional) */
 	sessionId?: string
+	/** OpenCode provider ID (optional) */
+	providerId?: string
+	/** OpenCode model ID (optional) */
+	modelId?: string
 	/** The message/prompt to send */
 	message: string
-	/** Model to use: haiku, sonnet, or opus */
+	/** Legacy model name (deprecated) */
 	model?: string
-	/** Working directory for Claude CLI */
+	/** Working directory */
 	workingDirectory?: string
 	/** Permission mode: default, acceptEdits, bypassPermissions, plan */
 	permissionMode?: string
@@ -166,89 +127,33 @@ export interface ExecStartPayload {
 export interface ExecStreamPayload {
 	/** Process ID for this execution */
 	processId: number
-	/** Type of stream event from Claude CLI */
-	streamType:
-		| "system"
-		| "assistant"
-		| "user"
-		| "tool_use"
-		| "tool_result"
-		| "result"
-		| "error"
-	/** The actual stream data from Claude CLI */
-	data: ClaudeStreamData
+	/** Stream event type */
+	streamType: "event"
+	/** The actual stream data */
+	data: OpenCodeStreamData
 }
 
-export interface ClaudeStreamData {
+export interface OpenCodeStreamData {
 	type: string
-	subtype?: string
-	session_id?: string
-	message?: {
-		role?: string
-		content?: Array<{
-			type: string
-			text?: string
-			tool_use_id?: string
-			name?: string
-			input?: unknown
-		}>
-	}
-	result?: string
-	is_error?: boolean
-	total_cost_usd?: number
-	duration_ms?: number
-	num_turns?: number
-	usage?: unknown
-	modelUsage?: Record<
-		string,
-		{
-			costUSD: number
-			inputTokens: number
-			outputTokens: number
-			cacheReadInputTokens?: number
-			cacheWriteInputTokens?: number
-		}
-	>
+	properties?: Record<string, unknown>
 }
 
 export interface ExecCompletePayload {
-	/** Process ID */
-	processId: number
 	/** Session ID */
 	sessionId?: string
 	/** Result status */
-	result: "success" | "error" | "aborted"
+	result: "success" | "error" | "cancelled"
 	/** Total cost in USD */
 	totalCostUsd?: number
-	/** Duration in milliseconds */
-	durationMs?: number
 	/** Number of conversation turns */
 	numTurns?: number
-	/** Per-model usage breakdown */
-	modelUsage?: Record<
-		string,
-		{
-			costUSD: number
-			inputTokens: number
-			outputTokens: number
-		}
-	>
 	/** Error message if result is "error" */
 	error?: string
-	/** Exit code if result is "error" */
-	exitCode?: number
 }
 
 export interface ExecAbortPayload {
-	/** Process ID to abort */
-	processId: number
-}
-
-export interface ExecAbortedPayload {
-	/** Process ID that was aborted */
-	processId: number
-	/** Whether abort was successful */
-	success: boolean
+	/** Session ID to abort */
+	sessionId: string
 }
 
 // =============================================================================
@@ -295,7 +200,7 @@ export interface StatusProcessPayload {
 		processId: number
 		sessionId?: string
 		startedAt: number
-		status: "running" | "completed" | "aborted" | "error"
+		status: "running" | "completed" | "cancelled" | "error"
 	}>
 }
 
@@ -308,10 +213,6 @@ export interface StatusHealthPayload {
 	version: string
 	/** Uptime in milliseconds */
 	uptimeMs: number
-	/** Authentication status */
-	authenticated: boolean
-	/** Auth method if authenticated */
-	authMethod?: string
 }
 
 export interface StatusResourcePayload {

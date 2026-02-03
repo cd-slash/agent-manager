@@ -1,15 +1,12 @@
 import { api } from "@agent-manager/convex/api"
-import { useMutation, useQuery } from "convex/react"
+import { useAction, useMutation, useQuery } from "convex/react"
 import {
 	Bot,
 	Check,
 	ChevronDown,
 	ChevronUp,
-	ExternalLink,
 	Eye,
 	EyeOff,
-	Link2,
-	Link2Off,
 	Lock,
 	RefreshCw,
 	Save,
@@ -31,21 +28,16 @@ export function ProviderCard({ provider }: ProviderCardProps) {
 	const [isExpanded, setIsExpanded] = useState(false)
 	const [isSaving, setIsSaving] = useState(false)
 	const [isDirty, setIsDirty] = useState(false)
+	const [lastSyncAt, setLastSyncAt] = useState<number | null>(null)
+	const [lastSyncError, setLastSyncError] = useState<string | null>(null)
 
 	// API key state
 	const [apiKey, setApiKey] = useState("")
 	const [showApiKey, setShowApiKey] = useState(false)
 
-	// OAuth state (now using Convex-driven flow)
-	const [authCode, setAuthCode] = useState("")
-
-	// Manual token state (alternative to OAuth flow)
-	const [manualToken, setManualToken] = useState("")
-	const [showManualToken, setShowManualToken] = useState(false)
-	const [isSavingToken, setIsSavingToken] = useState(false)
-
 	// Model state
 	const [models, setModels] = useState<AiModelConfig[]>(provider.models)
+	const [baseUrl, setBaseUrl] = useState("")
 
 	// Check auth status
 	const authStatus = useQuery(api.aiProviders.getAuthStatus, {
@@ -62,31 +54,20 @@ export function ProviderCard({ provider }: ProviderCardProps) {
 	// Mutations
 	const toggleEnabled = useMutation(api.aiProviders.toggleEnabled)
 	const updateModels = useMutation(api.aiProviders.updateModels)
+	const updateOptions = useMutation(api.aiProviders.updateOptions)
+	const fetchOpencodeModels = useAction(api.aiProviders.fetchOpencodeModels)
 	const setSecret = useMutation(api.secrets.set)
-
-	// OAuth flow (Convex-driven - gateway polls and processes)
-	const activeOAuthFlow = useQuery(
-		api.aiProviders.getActiveOAuthFlow,
-		provider.authType === "oauth" ? { provider: provider.type } : "skip",
-	)
-	const requestOAuthFlow = useMutation(api.aiProviders.requestOAuthFlow)
-	const submitOAuthCode = useMutation(api.aiProviders.submitOAuthCode)
-	const cancelOAuthFlow = useMutation(api.aiProviders.cancelOAuthFlow)
-
-	// Derived OAuth state from Convex
-	const isOAuthPending = activeOAuthFlow?.status === "pending"
-	const isOAuthStarted = activeOAuthFlow?.status === "started"
-	const isOAuthCodeReceived = activeOAuthFlow?.status === "code_received"
-	const isOAuthCompleting = activeOAuthFlow?.status === "completing"
-	const isOAuthInProgress =
-		isOAuthPending || isOAuthStarted || isOAuthCodeReceived || isOAuthCompleting
-	const oauthUrl = activeOAuthFlow?.oauthUrl
 
 	// Reset models when provider changes
 	useEffect(() => {
 		setModels(provider.models)
+		setBaseUrl(
+			typeof provider.options?.baseURL === "string"
+				? provider.options.baseURL
+				: "",
+		)
 		setIsDirty(false)
-	}, [provider.models])
+	}, [provider.models, provider.options])
 
 	const handleToggleEnabled = async () => {
 		try {
@@ -122,6 +103,12 @@ export function ProviderCard({ provider }: ProviderCardProps) {
 			// Save model configuration
 			await updateModels({ id: provider._id, models })
 
+			// Save provider options
+			await updateOptions({
+				id: provider._id,
+				options: baseUrl.trim() ? { baseURL: baseUrl.trim() } : undefined,
+			})
+
 			setIsDirty(false)
 			toast.success("Saved", `${provider.name} configuration saved`)
 		} catch (error) {
@@ -134,111 +121,42 @@ export function ProviderCard({ provider }: ProviderCardProps) {
 		}
 	}
 
+	useEffect(() => {
+		if (provider.models.length > 0 && !lastSyncAt) {
+			setLastSyncAt(provider.updatedAt)
+		}
+	}, [provider.models.length, provider.updatedAt, lastSyncAt])
+
+	const handleRefreshModels = async () => {
+		setIsSaving(true)
+		try {
+			const result = await fetchOpencodeModels({ providerId: provider._id })
+			setLastSyncAt(Date.now())
+			setLastSyncError(null)
+			setIsDirty(false)
+			toast.success(
+				"Models synced",
+				`Fetched ${result.count} model${result.count === 1 ? "" : "s"}`,
+			)
+		} catch (error) {
+			const message = error instanceof Error ? error.message : "Unknown error"
+			setLastSyncError(message)
+			toast.error("Failed to sync models", message)
+		} finally {
+			setIsSaving(false)
+		}
+	}
+
 	const handleCancel = () => {
 		setModels(provider.models)
 		setApiKey("")
+		setBaseUrl(
+			typeof provider.options?.baseURL === "string"
+				? provider.options.baseURL
+				: "",
+		)
 		setIsDirty(false)
 	}
-
-	// OAuth flow handlers - uses Convex mutations (gateway polls and processes)
-	const handleStartOAuth = async () => {
-		console.log("[ProviderCard] Requesting OAuth flow via Convex...")
-		try {
-			await requestOAuthFlow({ provider: provider.type })
-			// The gateway will poll for this request and start the OAuth flow
-			// The UI will update automatically via the useQuery subscription
-			toast.success("OAuth Started", "Waiting for authentication URL...")
-		} catch (error) {
-			console.error("[ProviderCard] OAuth request failed:", error)
-			toast.error(
-				"Failed to start OAuth",
-				error instanceof Error ? error.message : "Unknown error",
-			)
-		}
-	}
-
-	// Open OAuth URL when it becomes available
-	useEffect(() => {
-		if (oauthUrl && isOAuthStarted) {
-			console.log("[ProviderCard] Opening OAuth URL:", oauthUrl)
-			window.open(oauthUrl, "_blank", "noopener,noreferrer")
-		}
-	}, [oauthUrl, isOAuthStarted])
-
-	const handleCompleteOAuth = async () => {
-		if (!activeOAuthFlow?._id || !authCode) return
-
-		try {
-			await submitOAuthCode({
-				flowId: activeOAuthFlow._id,
-				code: authCode,
-			})
-			setAuthCode("")
-			// The gateway will poll for the code and complete the OAuth flow
-			// The UI will update automatically via the useQuery subscription
-			toast.success("Code Submitted", "Completing authentication...")
-		} catch (error) {
-			toast.error(
-				"Failed to submit code",
-				error instanceof Error ? error.message : "Unknown error",
-			)
-		}
-	}
-
-	const handleCancelOAuth = async () => {
-		if (!activeOAuthFlow?._id) return
-
-		try {
-			await cancelOAuthFlow({ flowId: activeOAuthFlow._id })
-			setAuthCode("")
-		} catch (error) {
-			toast.error(
-				"Failed to cancel",
-				error instanceof Error ? error.message : "Unknown error",
-			)
-		}
-	}
-
-	const handleDisconnect = async () => {
-		// Clear the auth token by setting it to empty
-		try {
-			await setSecret({
-				key: "ANTHROPIC_AUTH_TOKEN",
-				value: "",
-				description: "Anthropic OAuth token (cleared)",
-			})
-			toast.success("Disconnected", "Anthropic connection removed")
-		} catch (error) {
-			toast.error(
-				"Failed to disconnect",
-				error instanceof Error ? error.message : "Unknown error",
-			)
-		}
-	}
-
-	const handleSaveManualToken = async () => {
-		if (!manualToken.trim()) return
-
-		setIsSavingToken(true)
-		try {
-			await setSecret({
-				key: "ANTHROPIC_AUTH_TOKEN",
-				value: manualToken.trim(),
-				description: "Anthropic OAuth token (manual entry)",
-			})
-			setManualToken("")
-			toast.success("Connected", "Anthropic token saved successfully")
-		} catch (error) {
-			toast.error(
-				"Failed to save token",
-				error instanceof Error ? error.message : "Unknown error",
-			)
-		} finally {
-			setIsSavingToken(false)
-		}
-	}
-
-	const isOAuth = provider.authType === "oauth"
 	const isConnected = authStatus?.hasAuth ?? false
 
 	return (
@@ -267,9 +185,7 @@ export function ProviderCard({ provider }: ProviderCardProps) {
 								</span>
 							)}
 						</div>
-						<div className="text-xs text-muted-foreground">
-							{isOAuth ? "OAuth (Pro/Max)" : "API Key"} auth
-						</div>
+						<div className="text-xs text-muted-foreground">API Key auth</div>
 					</div>
 				</div>
 				<div className="flex items-center gap-3">
@@ -297,189 +213,24 @@ export function ProviderCard({ provider }: ProviderCardProps) {
 
 			{isExpanded && (
 				<div className="border-t border-border p-4 space-y-4 bg-background/50">
-					{/* OAuth Authentication */}
-					{isOAuth && (
-						<div className="space-y-3">
+					<div className="space-y-4">
+						<div className="space-y-2">
 							<Label className="text-xs text-muted-foreground uppercase font-semibold">
-								Authentication
+								Provider Endpoint
 							</Label>
-							{isConnected ? (
-								<div className="flex items-center justify-between p-3 bg-success/10 border border-success/20 rounded-lg">
-									<div className="flex items-center gap-2">
-										<Link2 size={16} className="text-success" />
-										<span className="text-sm text-foreground">
-											Connected to Anthropic
-										</span>
-									</div>
-									<Button
-										variant="outline"
-										size="sm"
-										onClick={handleDisconnect}
-										className="text-destructive hover:text-destructive"
-									>
-										<Link2Off size={14} className="mr-1.5" />
-										Disconnect
-									</Button>
-								</div>
-							) : isOAuthInProgress ? (
-								<div className="space-y-3 p-3 bg-muted/50 border border-border rounded-lg">
-									{isOAuthPending && (
-										<div className="flex items-center gap-2 text-sm text-muted-foreground">
-											<RefreshCw size={14} className="animate-spin" />
-											<span>Starting authentication...</span>
-										</div>
-									)}
-									{(isOAuthStarted || isOAuthCodeReceived) && (
-										<>
-											<p className="text-sm text-muted-foreground">
-												A new window has been opened for authentication. After
-												authorizing, copy the code and paste it below.
-											</p>
-											<div className="flex items-center gap-2">
-												<Button
-													variant="outline"
-													size="sm"
-													onClick={() => {
-														if (oauthUrl) {
-															window.open(
-																oauthUrl,
-																"_blank",
-																"noopener,noreferrer",
-															)
-														}
-													}}
-													disabled={!oauthUrl}
-												>
-													<ExternalLink size={14} className="mr-1.5" />
-													Open Auth Page
-												</Button>
-											</div>
-											<div className="space-y-2">
-												<Label>Authorization Code</Label>
-												<div className="flex items-center gap-2">
-													<Input
-														type="text"
-														placeholder="Paste the authorization code here"
-														value={authCode}
-														onChange={(e) => setAuthCode(e.target.value)}
-														className="font-mono"
-														disabled={isOAuthCodeReceived || isOAuthCompleting}
-													/>
-													<Button
-														onClick={handleCompleteOAuth}
-														disabled={
-															!authCode ||
-															isOAuthCodeReceived ||
-															isOAuthCompleting
-														}
-													>
-														{isOAuthCodeReceived || isOAuthCompleting ? (
-															<RefreshCw size={14} className="animate-spin" />
-														) : (
-															"Complete"
-														)}
-													</Button>
-												</div>
-											</div>
-										</>
-									)}
-									{isOAuthCompleting && (
-										<div className="flex items-center gap-2 text-sm text-muted-foreground">
-											<RefreshCw size={14} className="animate-spin" />
-											<span>Completing authentication...</span>
-										</div>
-									)}
-									<Button
-										variant="ghost"
-										size="sm"
-										onClick={handleCancelOAuth}
-										disabled={isOAuthCompleting}
-									>
-										Cancel
-									</Button>
-								</div>
-							) : (
-								<div className="space-y-4">
-									<div className="space-y-2">
-										<Button onClick={handleStartOAuth} className="w-full">
-											<Link2 size={14} className="mr-2" />
-											Connect with Anthropic
-										</Button>
-										<p className="text-xs text-muted-foreground">
-											Sign in with your Anthropic Pro or Max account
-										</p>
-									</div>
-
-									<div className="relative">
-										<div className="absolute inset-0 flex items-center">
-											<span className="w-full border-t border-border" />
-										</div>
-										<div className="relative flex justify-center text-xs uppercase">
-											<span className="bg-background px-2 text-muted-foreground">
-												Or enter token manually
-											</span>
-										</div>
-									</div>
-
-									<div className="space-y-2">
-										<div className="relative">
-											<Input
-												type={showManualToken ? "text" : "password"}
-												placeholder="Paste your OAuth token here"
-												value={manualToken}
-												onChange={(e) => setManualToken(e.target.value)}
-												className="pr-10 font-mono text-sm"
-												disabled={isSavingToken}
-											/>
-											<button
-												type="button"
-												onClick={() => setShowManualToken(!showManualToken)}
-												className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-											>
-												{showManualToken ? (
-													<EyeOff size={14} />
-												) : (
-													<Eye size={14} />
-												)}
-											</button>
-										</div>
-										<div className="flex items-center gap-2">
-											<Button
-												onClick={handleSaveManualToken}
-												disabled={!manualToken.trim() || isSavingToken}
-												className="flex-1"
-											>
-												{isSavingToken ? (
-													<>
-														<RefreshCw
-															size={14}
-															className="mr-2 animate-spin"
-														/>
-														Saving...
-													</>
-												) : (
-													<>
-														<Save size={14} className="mr-2" />
-														Save Token
-													</>
-												)}
-											</Button>
-										</div>
-										<p className="text-xs text-muted-foreground">
-											You can get your token by running{" "}
-											<code className="bg-muted px-1 py-0.5 rounded text-[11px]">
-												claude auth status
-											</code>{" "}
-											in a terminal
-										</p>
-									</div>
-								</div>
-							)}
+							<Input
+								type="text"
+								placeholder="https://api.openai.com/v1"
+								value={baseUrl}
+								onChange={(e) => {
+									setBaseUrl(e.target.value)
+									setIsDirty(true)
+								}}
+							/>
+							<p className="text-xs text-muted-foreground">
+								Optional base URL for OpenAI-compatible providers.
+							</p>
 						</div>
-					)}
-
-					{/* API Key Authentication */}
-					{!isOAuth && (
 						<div className="space-y-2">
 							<Label className="text-xs text-muted-foreground uppercase font-semibold">
 								API Key
@@ -516,13 +267,34 @@ export function ProviderCard({ provider }: ProviderCardProps) {
 									: `Enter your ${provider.name} API key`}
 							</p>
 						</div>
-					)}
+					</div>
 
 					{/* Models Section */}
 					<div className="space-y-3">
-						<Label className="text-xs text-muted-foreground uppercase font-semibold">
-							Models
-						</Label>
+						<div className="flex items-center justify-between">
+							<Label className="text-xs text-muted-foreground uppercase font-semibold">
+								Models
+							</Label>
+							<Button
+								variant="outline"
+								size="sm"
+								onClick={handleRefreshModels}
+								disabled={isSaving}
+							>
+								<RefreshCw size={12} className="mr-1" />
+								Refresh
+							</Button>
+						</div>
+						{lastSyncAt && (
+							<div className="text-[10px] text-muted-foreground">
+								Last synced {new Date(lastSyncAt).toLocaleTimeString()}
+							</div>
+						)}
+						{lastSyncError && (
+							<div className="text-[10px] text-destructive">
+								Sync error: {lastSyncError}
+							</div>
+						)}
 						<div className="space-y-2">
 							{models.map((model) => (
 								<div

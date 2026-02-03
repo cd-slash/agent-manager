@@ -9,7 +9,6 @@
  * - text: Plain text content
  * - tool_use: Tool invocation with name and input
  * - tool_result: Tool execution result
- * - thinking: Claude's thinking output
  * - error: Error messages
  * - system: System messages
  * - result: Final execution result

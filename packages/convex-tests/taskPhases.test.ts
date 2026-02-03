@@ -88,8 +88,8 @@ describe("taskPhases", () => {
 			const phaseId = await t.mutation(api.taskPhases.startPhase, {
 				taskId,
 				phase: "planning",
-				provider: "anthropic",
-				model: "claude-sonnet-4-20250514",
+				provider: "opencode",
+				model: "opencode/claude-sonnet-4",
 				containerId: "container-123",
 			})
 
@@ -101,8 +101,8 @@ describe("taskPhases", () => {
 			})
 
 			expect(phase?.status).toBe("in_progress")
-			expect(phase?.provider).toBe("anthropic")
-			expect(phase?.model).toBe("claude-sonnet-4-20250514")
+			expect(phase?.provider).toBe("opencode")
+			expect(phase?.model).toBe("opencode/claude-sonnet-4")
 			expect(phase?.containerId).toBe("container-123")
 			expect(phase?.startedAt).toBeDefined()
 		})
@@ -414,8 +414,8 @@ describe("taskPhases", () => {
 			await t.mutation(api.taskPhases.startPhase, {
 				taskId,
 				phase: "implementation",
-				model: "claude-opus-4-20250514",
-				permissionMode: "auto-edit",
+				model: "opencode/claude-opus-4",
+				permissionMode: "accept_edits",
 			})
 
 			task = await t.query(api.tasks.get, { id: taskId })

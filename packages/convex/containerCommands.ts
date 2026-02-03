@@ -4,7 +4,6 @@ import { commandPriorityValidator, taskPhaseValidator } from "./validators"
 
 // Default retry configuration
 const DEFAULT_MAX_RETRIES = 2
-const OAUTH_MAX_RETRIES = 1
 
 // Priority order for sorting (higher number = higher priority)
 const PRIORITY_ORDER = {
@@ -25,15 +24,8 @@ export const startExecution = mutation({
 	args: {
 		containerId: v.string(),
 		message: v.string(),
-		model: v.optional(v.string()),
-		provider: v.optional(v.string()),
-		envVars: v.optional(
-			v.object({
-				ANTHROPIC_AUTH_TOKEN: v.optional(v.string()),
-				ANTHROPIC_BASE_URL: v.optional(v.string()),
-				API_TIMEOUT_MS: v.optional(v.string()),
-			}),
-		),
+		providerId: v.string(),
+		modelId: v.string(),
 		workingDirectory: v.optional(v.string()),
 		permissionMode: v.optional(v.string()),
 		systemPrompt: v.optional(v.string()),
@@ -44,7 +36,7 @@ export const startExecution = mutation({
 		taskId: v.optional(v.string()),
 		projectId: v.optional(v.string()),
 		priority: v.optional(commandPriorityValidator),
-		sessionId: v.optional(v.string()), // Claude session ID for resumption
+		sessionId: v.optional(v.string()),
 	},
 	handler: async (ctx, args) => {
 		const now = Date.now()
@@ -57,9 +49,8 @@ export const startExecution = mutation({
 			priority: args.priority ?? "normal",
 			payload: {
 				message: args.message,
-				model: args.model,
-				provider: args.provider,
-				envVars: args.envVars,
+				providerId: args.providerId,
+				modelId: args.modelId,
 				workingDirectory: args.workingDirectory,
 				permissionMode: args.permissionMode,
 				systemPrompt: args.systemPrompt,
@@ -111,33 +102,6 @@ export const abortExecution = mutation({
 })
 
 /**
- * Push auth token to a container
- */
-export const pushAuthToken = mutation({
-	args: {
-		containerId: v.string(),
-		token: v.string(),
-		priority: v.optional(commandPriorityValidator),
-	},
-	handler: async (ctx, args) => {
-		const now = Date.now()
-		return await ctx.db.insert("containerCommands", {
-			containerId: args.containerId,
-			type: "pushAuthToken",
-			status: "pending",
-			priority: args.priority ?? "high",
-			payload: {
-				token: args.token,
-			},
-			retryCount: 0,
-			maxRetries: DEFAULT_MAX_RETRIES,
-			createdAt: now,
-			updatedAt: now,
-		})
-	},
-})
-
-/**
  * Start phase execution on a container
  */
 export const startPhaseExecution = mutation({
@@ -173,66 +137,6 @@ export const startPhaseExecution = mutation({
 		})
 
 		return { commandId, correlationId }
-	},
-})
-
-/**
- * Start OAuth flow on a container
- */
-export const startOAuthFlow = mutation({
-	args: {
-		containerId: v.string(),
-		provider: v.string(),
-		oauthFlowId: v.string(),
-		priority: v.optional(commandPriorityValidator),
-	},
-	handler: async (ctx, args) => {
-		const now = Date.now()
-		return await ctx.db.insert("containerCommands", {
-			containerId: args.containerId,
-			type: "startOAuthFlow",
-			status: "pending",
-			priority: args.priority ?? "high",
-			payload: {
-				provider: args.provider,
-				oauthFlowId: args.oauthFlowId,
-			},
-			retryCount: 0,
-			maxRetries: OAUTH_MAX_RETRIES,
-			createdAt: now,
-			updatedAt: now,
-		})
-	},
-})
-
-/**
- * Complete OAuth flow on a container
- */
-export const completeOAuthFlow = mutation({
-	args: {
-		containerId: v.string(),
-		oauthFlowId: v.string(),
-		containerFlowId: v.string(), // Flow ID from the container's OAuth session
-		authCode: v.string(),
-		priority: v.optional(commandPriorityValidator),
-	},
-	handler: async (ctx, args) => {
-		const now = Date.now()
-		return await ctx.db.insert("containerCommands", {
-			containerId: args.containerId,
-			type: "completeOAuthFlow",
-			status: "pending",
-			priority: args.priority ?? "high",
-			payload: {
-				oauthFlowId: args.oauthFlowId,
-				containerFlowId: args.containerFlowId,
-				authCode: args.authCode,
-			},
-			retryCount: 0,
-			maxRetries: OAUTH_MAX_RETRIES,
-			createdAt: now,
-			updatedAt: now,
-		})
 	},
 })
 

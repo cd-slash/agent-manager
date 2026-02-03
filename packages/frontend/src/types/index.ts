@@ -11,13 +11,8 @@ type Doc<T extends string> = { _id: Id<T>; _creationTime: number } & Record<
 >
 
 // AI Provider types
-export type AiProviderType =
-	| "anthropic"
-	| "openai"
-	| "google"
-	| "zai"
-	| "custom"
-export type AuthType = "api_key" | "oauth"
+export type AiProviderType = "opencode" | "custom"
+export type AuthType = "api_key"
 
 export interface AiModelConfig {
 	id: string
@@ -31,6 +26,7 @@ export type AiProviderDoc = Doc<"aiProviders"> & {
 	enabled: boolean
 	authType: AuthType
 	apiKeySecretKey?: string
+	options?: Record<string, unknown>
 	models: AiModelConfig[]
 	isBuiltin: boolean
 	createdAt: number
@@ -130,7 +126,7 @@ export type ChatMessageDoc = Doc<"chatMessages"> & {
 	// AI response metadata (only populated for sender: "ai")
 	model?: string
 	provider?: string
-	// Claude session ID for this message exchange (for session resumption)
+	// OpenCode session ID for this message exchange (for session resumption)
 	sessionId?: string
 	createdAt: number
 }

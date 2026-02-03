@@ -1,10 +1,11 @@
 import { v } from "convex/values"
-import { internalMutation, mutation, query } from "./_generated/server"
+import { api } from "./_generated/api"
+import { action, internalMutation, mutation, query } from "./_generated/server"
 import { aiProviderTypeValidator, authTypeValidator } from "./validators"
 
 // Type definitions
-type AiProviderType = "anthropic" | "openai" | "google" | "zai" | "custom"
-type AuthType = "api_key" | "oauth"
+type AiProviderType = "opencode" | "custom"
+type AuthType = "api_key"
 
 interface AiModelConfig {
 	id: string
@@ -18,33 +19,19 @@ interface BuiltinProvider {
 	enabled: boolean
 	authType: AuthType
 	apiKeySecretKey?: string
+	options?: Record<string, unknown>
 	models: AiModelConfig[]
 }
 
 // Built-in providers that ship with the system
 export const BUILTIN_PROVIDERS: BuiltinProvider[] = [
 	{
-		name: "Anthropic",
-		type: "anthropic",
+		name: "OpenCode",
+		type: "opencode",
 		enabled: true,
-		authType: "oauth",
-		models: [
-			{ id: "opus", name: "Opus", enabled: true },
-			{ id: "sonnet", name: "Sonnet", enabled: true },
-			{ id: "haiku", name: "Haiku", enabled: true },
-		],
-	},
-	{
-		name: "ZAI",
-		type: "zai",
-		enabled: false,
 		authType: "api_key",
-		apiKeySecretKey: "ZAI_API_KEY",
-		models: [
-			{ id: "opus", name: "Opus", enabled: true },
-			{ id: "sonnet", name: "Sonnet", enabled: true },
-			{ id: "haiku", name: "Haiku", enabled: true },
-		],
+		apiKeySecretKey: "OPENCODE_API_KEY",
+		models: [],
 	},
 ]
 
@@ -181,16 +168,6 @@ export const getAuthStatus = query({
 			return { hasAuth: false, error: "Provider not found" }
 		}
 
-		if (provider.authType === "oauth") {
-			// For OAuth providers, check the ANTHROPIC_AUTH_TOKEN secret
-			const secret = await ctx.db
-				.query("secrets")
-				.withIndex("by_key", (q) => q.eq("key", "ANTHROPIC_AUTH_TOKEN"))
-				.first()
-			return { hasAuth: !!secret?.value }
-		}
-
-		// For API key providers, check the configured secret
 		if (provider.apiKeySecretKey) {
 			const secretKey = provider.apiKeySecretKey
 			const secret = await ctx.db
@@ -216,10 +193,12 @@ export const create = mutation({
 		enabled: v.boolean(),
 		authType: authTypeValidator,
 		apiKeySecretKey: v.optional(v.string()),
+		options: v.optional(v.any()),
 		models: v.array(modelConfigValidator),
 	},
 	handler: async (ctx, args) => {
-		const { name, type, enabled, authType, apiKeySecretKey, models } = args
+		const { name, type, enabled, authType, apiKeySecretKey, options, models } =
+			args
 
 		// Check for duplicate name
 		const existing = await ctx.db.query("aiProviders").collect()
@@ -242,6 +221,7 @@ export const create = mutation({
 			enabled,
 			authType,
 			apiKeySecretKey,
+			options,
 			models,
 			isBuiltin: false,
 			createdAt: now,
@@ -257,6 +237,7 @@ export const update = mutation({
 		name: v.optional(v.string()),
 		enabled: v.optional(v.boolean()),
 		apiKeySecretKey: v.optional(v.string()),
+		options: v.optional(v.any()),
 		models: v.optional(v.array(modelConfigValidator)),
 	},
 	handler: async (ctx, args) => {
@@ -394,6 +375,103 @@ export const updateModels = mutation({
 	},
 })
 
+// Replace provider models from OpenCode listing
+export const syncModels = mutation({
+	args: {
+		id: v.id("aiProviders"),
+		models: v.array(modelConfigValidator),
+	},
+	handler: async (ctx, args) => {
+		const provider = await ctx.db.get(args.id)
+		if (!provider) {
+			throw new Error("Provider not found")
+		}
+
+		if (args.models.length === 0) {
+			throw new Error("Provider must have at least one model")
+		}
+
+		await ctx.db.patch(args.id, {
+			models: args.models,
+			updatedAt: Date.now(),
+		})
+
+		return args.id
+	},
+})
+
+// Fetch models from OpenCode server and sync provider list
+export const fetchOpencodeModels = action({
+	args: { providerId: v.id("aiProviders") },
+	handler: async (ctx, args) => {
+		const provider = await ctx.runQuery(api.aiProviders.get, {
+			id: args.providerId,
+		})
+		if (!provider) {
+			throw new Error("Provider not found")
+		}
+
+		const baseUrl =
+			typeof provider.options?.baseURL === "string"
+				? provider.options.baseURL
+				: "http://localhost:4097"
+
+		const response = await fetch(`${baseUrl.replace(/\/$/, "")}/zen/v1/models`)
+		if (!response.ok) {
+			throw new Error(`OpenCode models failed: ${response.statusText}`)
+		}
+
+		const data = (await response.json()) as unknown
+		const rawModels = Array.isArray(data)
+			? (data as Array<{ id: string; name?: string }>)
+			: Array.isArray((data as { models?: unknown }).models)
+				? (data as { models: Array<{ id: string; name?: string }> }).models
+				: []
+
+		if (rawModels.length === 0) {
+			throw new Error("OpenCode returned no models")
+		}
+
+		const existing = provider.models ?? []
+		const models = rawModels.map((model) => {
+			const existingModel = existing.find((m) => m.id === model.id)
+			return {
+				id: model.id,
+				name: model.name || model.id,
+				enabled: existingModel?.enabled ?? true,
+			}
+		})
+
+		await ctx.runMutation(api.aiProviders.syncModels, {
+			id: provider._id,
+			models,
+		})
+
+		return { count: models.length }
+	},
+})
+
+// Replace provider options (e.g., baseURL, headers)
+export const updateOptions = mutation({
+	args: {
+		id: v.id("aiProviders"),
+		options: v.optional(v.any()),
+	},
+	handler: async (ctx, args) => {
+		const provider = await ctx.db.get(args.id)
+		if (!provider) {
+			throw new Error("Provider not found")
+		}
+
+		await ctx.db.patch(args.id, {
+			options: args.options,
+			updatedAt: Date.now(),
+		})
+
+		return args.id
+	},
+})
+
 // =============================================================================
 // Initialization
 // =============================================================================
@@ -420,6 +498,7 @@ export const seedBuiltinProviders = internalMutation({
 					enabled: provider.enabled,
 					authType: provider.authType,
 					apiKeySecretKey: provider.apiKeySecretKey,
+					options: provider.options,
 					models: provider.models,
 					isBuiltin: true,
 					createdAt: now,
@@ -452,222 +531,5 @@ export const hasBeenSeeded = query({
 	handler: async (ctx) => {
 		const count = await ctx.db.query("aiProviders").collect()
 		return count.length > 0
-	},
-})
-
-// =============================================================================
-// OAuth Flow Management (Convex-driven, gateway pulls work)
-// =============================================================================
-
-// Frontend calls this to request an OAuth flow
-// Gateway will pick it up and process it
-export const requestOAuthFlow = mutation({
-	args: {
-		provider: v.string(),
-	},
-	handler: async (ctx, args) => {
-		const now = Date.now()
-
-		// Cancel any existing pending flows for this provider
-		const existingFlows = await ctx.db
-			.query("oauthFlows")
-			.withIndex("by_provider_and_status", (q) =>
-				q.eq("provider", args.provider).eq("status", "pending"),
-			)
-			.collect()
-
-		for (const flow of existingFlows) {
-			await ctx.db.patch(flow._id, {
-				status: "failed",
-				error: "Cancelled - new flow started",
-				updatedAt: now,
-			})
-		}
-
-		// Create new pending flow
-		const id = await ctx.db.insert("oauthFlows", {
-			provider: args.provider,
-			status: "pending",
-			createdAt: now,
-			updatedAt: now,
-		})
-
-		return id
-	},
-})
-
-// Get the current OAuth flow for a provider
-export const getActiveOAuthFlow = query({
-	args: {
-		provider: v.string(),
-	},
-	handler: async (ctx, args) => {
-		// Get the most recent non-failed flow
-		const flows = await ctx.db
-			.query("oauthFlows")
-			.withIndex("by_provider_and_status", (q) =>
-				q.eq("provider", args.provider),
-			)
-			.order("desc")
-			.take(10)
-
-		// Find the most recent active flow
-		const activeFlow = flows.find(
-			(f) =>
-				f.status === "pending" ||
-				f.status === "started" ||
-				f.status === "code_received" ||
-				f.status === "completing",
-		)
-
-		return activeFlow ?? null
-	},
-})
-
-// Frontend calls this to submit the auth code
-export const submitOAuthCode = mutation({
-	args: {
-		flowId: v.id("oauthFlows"),
-		code: v.string(),
-	},
-	handler: async (ctx, args) => {
-		const flow = await ctx.db.get(args.flowId)
-		if (!flow) {
-			throw new Error("OAuth flow not found")
-		}
-
-		if (flow.status !== "started") {
-			throw new Error(`Cannot submit code for flow in status: ${flow.status}`)
-		}
-
-		await ctx.db.patch(args.flowId, {
-			status: "code_received",
-			authCode: args.code,
-			updatedAt: Date.now(),
-		})
-	},
-})
-
-// Cancel an OAuth flow
-export const cancelOAuthFlow = mutation({
-	args: {
-		flowId: v.id("oauthFlows"),
-	},
-	handler: async (ctx, args) => {
-		const flow = await ctx.db.get(args.flowId)
-		if (!flow) return
-
-		await ctx.db.patch(args.flowId, {
-			status: "failed",
-			error: "Cancelled by user",
-			updatedAt: Date.now(),
-		})
-	},
-})
-
-// =============================================================================
-// Gateway mutations for OAuth flow updates (called via HTTP API)
-// =============================================================================
-
-// Gateway calls this when it starts the OAuth flow
-export const updateOAuthFlowStarted = mutation({
-	args: {
-		flowId: v.id("oauthFlows"),
-		oauthUrl: v.string(),
-		gatewayFlowId: v.string(),
-		expiresAt: v.number(),
-	},
-	handler: async (ctx, args) => {
-		const flow = await ctx.db.get(args.flowId)
-		if (!flow) {
-			throw new Error("OAuth flow not found")
-		}
-
-		await ctx.db.patch(args.flowId, {
-			status: "started",
-			oauthUrl: args.oauthUrl,
-			flowId: args.gatewayFlowId,
-			expiresAt: args.expiresAt,
-			updatedAt: Date.now(),
-		})
-	},
-})
-
-// Gateway calls this when completing the OAuth exchange
-export const updateOAuthFlowCompleting = mutation({
-	args: {
-		flowId: v.id("oauthFlows"),
-	},
-	handler: async (ctx, args) => {
-		const flow = await ctx.db.get(args.flowId)
-		if (!flow) {
-			throw new Error("OAuth flow not found")
-		}
-
-		await ctx.db.patch(args.flowId, {
-			status: "completing",
-			updatedAt: Date.now(),
-		})
-	},
-})
-
-// Gateway calls this when OAuth completes successfully
-export const completeOAuthFlowSuccess = mutation({
-	args: {
-		flowId: v.id("oauthFlows"),
-	},
-	handler: async (ctx, args) => {
-		const flow = await ctx.db.get(args.flowId)
-		if (!flow) {
-			throw new Error("OAuth flow not found")
-		}
-
-		await ctx.db.patch(args.flowId, {
-			status: "completed",
-			authCode: undefined, // Clear the code
-			updatedAt: Date.now(),
-		})
-	},
-})
-
-// Gateway calls this when OAuth fails
-export const completeOAuthFlowFailure = mutation({
-	args: {
-		flowId: v.id("oauthFlows"),
-		error: v.string(),
-	},
-	handler: async (ctx, args) => {
-		const flow = await ctx.db.get(args.flowId)
-		if (!flow) {
-			throw new Error("OAuth flow not found")
-		}
-
-		await ctx.db.patch(args.flowId, {
-			status: "failed",
-			error: args.error,
-			updatedAt: Date.now(),
-		})
-	},
-})
-
-// Query for gateway to get pending flows
-export const getPendingOAuthFlows = query({
-	args: {},
-	handler: async (ctx) => {
-		return await ctx.db
-			.query("oauthFlows")
-			.withIndex("by_status", (q) => q.eq("status", "pending"))
-			.collect()
-	},
-})
-
-// Query for gateway to get flows with submitted codes
-export const getOAuthFlowsWithCodes = query({
-	args: {},
-	handler: async (ctx) => {
-		return await ctx.db
-			.query("oauthFlows")
-			.withIndex("by_status", (q) => q.eq("status", "code_received"))
-			.collect()
 	},
 })

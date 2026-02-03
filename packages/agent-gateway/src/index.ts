@@ -8,11 +8,10 @@
  * Key responsibilities:
  * - Subscribe to serverCommands for createContainer/stopContainer/deleteContainer
  * - Execute SSH/Docker commands on servers
- * - Handle OAuth flows via Convex subscriptions
+ * - Handle OpenCode headless server availability
  */
 
 import type {
-	AuthStatusPayload,
 	ConnectPayload,
 	CreateContainerRequest,
 	CreateContainerResult,
@@ -25,7 +24,6 @@ import type {
 } from "@agent-manager/agent-shared"
 import { isConnectMessage } from "@agent-manager/agent-shared"
 import type { ServerWebSocket } from "bun"
-import { ClaudeAuth } from "./claude-auth"
 import { ConnectionManager, type ContainerContext } from "./connections"
 import { ConvexCommandProcessor } from "./convex-commands"
 import { ConvexSync } from "./convex-sync"
@@ -892,10 +890,8 @@ RUN mkdir -p /var/run/sshd /root/.ssh && chsh -s /bin/bash root
 # Bun
 RUN curl -fsSL https://bun.sh/install | bash && ln -s /root/.bun/bin/bun /usr/local/bin/bun
 
-# Claude CLI
-RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash - && \\
-    apt-get install -y nodejs && rm -rf /var/lib/apt/lists/* && \\
-    npm install -g @anthropic-ai/claude-code
+# OpenCode CLI
+RUN curl -fsSL https://opencode.ai/install | bash
 
 # Prepare container-daemon directory (binary SCP'd after container start)
 RUN mkdir -p /opt/container-daemon
@@ -1014,6 +1010,10 @@ if [ -x /opt/container-daemon/container-daemon ]; then
     echo "Warning: CONVEX_URL not set - container-daemon will not start"
   fi
 fi
+
+# Start OpenCode headless server
+echo "Starting OpenCode server..."
+opencode serve --hostname 0.0.0.0 --port 4097 &
 
 # Expose workspace via Tailscale serve (if workspace is running on port 5173)
 if [ "$WORKSPACE_STARTED" = "true" ] && ss -tln | grep -q ':5173 '; then
@@ -1642,6 +1642,50 @@ docker ps -a --filter "label=agent-manager.tailscale-hostname" --format '{"name"
 	return containers
 }
 
+/**
+ * Get git diff from a running container
+ */
+async function getContainerDiff(
+	containerName: string,
+	server: string,
+	sshUser?: string,
+	cwd?: string,
+	type: "working" | "staged" = "working",
+): Promise<string> {
+	console.log(`[gateway] Fetching git diff from ${containerName}...`)
+
+	const sshTarget =
+		server === "localhost" ? "localhost" : `${sshUser || "ubuntu"}@${server}`
+	const safeCwd = cwd ? cwd.replace(/"/g, '\\"') : "/workspace"
+
+	const diffCommand = type === "staged" ? "git diff --staged" : "git diff"
+	const diffScript = `
+docker exec ${containerName} bash -lc 'cd "${safeCwd}" && git status --porcelain && ${diffCommand}'
+`
+
+	const diffProc =
+		server === "localhost"
+			? Bun.spawn(["bash", "-c", diffScript], {
+					stdout: "pipe",
+					stderr: "pipe",
+				})
+			: Bun.spawn(["ssh", sshTarget, "bash", "-s"], {
+					stdin: new Blob([diffScript]),
+					stdout: "pipe",
+					stderr: "pipe",
+				})
+
+	const stdout = await new Response(diffProc.stdout).text()
+	const stderr = await new Response(diffProc.stderr).text()
+	const exitCode = await diffProc.exited
+
+	if (exitCode !== 0) {
+		throw new Error(`Failed to get container diff: ${stderr}`)
+	}
+
+	return stdout.trim()
+}
+
 // Configuration from environment
 // Note: No HTTP/WebSocket server - containers connect directly to Convex
 const CONVEX_URL = process.env.CONVEX_URL || ""
@@ -1652,7 +1696,6 @@ const _PRUNE_INTERVAL = 60000 // 60 seconds
 
 const connections = new ConnectionManager(SERVER_ID)
 const convexSync = CONVEX_URL ? new ConvexSync(CONVEX_URL) : null
-const claudeAuth = CONVEX_URL ? new ClaudeAuth(CONVEX_URL) : null
 const taskOrchestrator = CONVEX_URL
 	? new TaskOrchestrator(CONVEX_URL, connections)
 	: null
@@ -1667,6 +1710,7 @@ const commandProcessor = CONVEX_URL
 			restartContainerOnServer,
 			deleteContainerOnServer,
 			listContainersOnServer,
+			getContainerDiff,
 			fetchSecrets,
 			fetchTailscaleConfig,
 			recordContainerCreated: convexSync
@@ -1688,28 +1732,6 @@ const activeExecutions = new Map<
 >()
 
 /**
- * Push stored auth token to a container
- */
-async function pushTokenToContainer(containerId: string): Promise<boolean> {
-	if (!claudeAuth) return false
-
-	const token = await claudeAuth.getStoredToken()
-	if (!token) {
-		console.log(`[gateway] No stored token to push to ${containerId}`)
-		return false
-	}
-
-	const sent = connections.sendToContainer(containerId, "auth:request", {
-		token,
-	})
-
-	if (sent) {
-		console.log(`[gateway] Pushed auth token to ${containerId}`)
-	}
-	return sent
-}
-
-/**
  * Handle incoming WebSocket messages from containers
  */
 function _handleContainerMessage(
@@ -1729,9 +1751,6 @@ function _handleContainerMessage(
 				true,
 			)
 		}
-
-		// Auto-push auth token to newly connected container
-		pushTokenToContainer(payload.containerId)
 
 		return
 	}
@@ -1762,41 +1781,9 @@ function _handleContainerMessage(
 			break
 		}
 
-		case "auth:status": {
-			const payload = message.payload as AuthStatusPayload
-			console.log(`[gateway] Auth status from ${containerId}:`, payload)
-			// Forward to ClaudeAuth for OAuth flow handling
-			if (claudeAuth) {
-				claudeAuth.handleContainerAuthStatus(containerId, payload)
-			}
-			break
-		}
-
-		case "auth:flow:url": {
-			// Container started OAuth flow and returned the URL
-			const payload = message.payload as {
-				flowId: string
-				url: string
-				expiresIn: number
-			}
-			console.log(`[gateway] OAuth URL from ${containerId}:`, payload.url)
-			if (claudeAuth) {
-				claudeAuth.handleContainerAuthFlowUrl(containerId, payload)
-			}
-			break
-		}
-
 		case "error": {
 			const payload = message.payload as { code: string; message: string }
 			console.log(`[gateway] Error from ${containerId}:`, payload)
-			// Forward to ClaudeAuth for error handling
-			if (claudeAuth) {
-				claudeAuth.handleContainerError(
-					containerId,
-					payload,
-					message.correlationId,
-				)
-			}
 			break
 		}
 
@@ -1963,126 +1950,13 @@ async function _handleHttpRequest(req: Request): Promise<Response> {
 	// Health check
 	if (url.pathname === "/health") {
 		const stats = connections.getStats()
-		const hasToken = claudeAuth ? await claudeAuth.hasValidToken() : false
 		return Response.json(
-			{ status: "ok", serverId: SERVER_ID, hasAuthToken: hasToken, ...stats },
+			{ status: "ok", serverId: SERVER_ID, hasAuthToken: false, ...stats },
 			{ headers: corsHeaders },
 		)
 	}
 
-	// Auth status - check if we have a stored token
-	if (url.pathname === "/auth/status" && req.method === "GET") {
-		if (!claudeAuth) {
-			return Response.json(
-				{ error: "Auth not configured (CONVEX_URL not set)" },
-				{ status: 500, headers: corsHeaders },
-			)
-		}
-		const hasToken = await claudeAuth.hasValidToken()
-		return Response.json({ hasToken }, { headers: corsHeaders })
-	}
-
-	// Start OAuth flow to get a token
-	if (url.pathname === "/auth/setup/start" && req.method === "POST") {
-		if (!claudeAuth) {
-			return Response.json(
-				{ error: "Auth not configured (CONVEX_URL not set)" },
-				{ status: 500, headers: corsHeaders },
-			)
-		}
-
-		try {
-			const result = await claudeAuth.startOAuthFlow()
-			return Response.json(result, { headers: corsHeaders })
-		} catch (error) {
-			const message = error instanceof Error ? error.message : String(error)
-			return Response.json(
-				{ error: message },
-				{ status: 500, headers: corsHeaders },
-			)
-		}
-	}
-
-	// Complete OAuth flow with authorization code
-	if (url.pathname === "/auth/setup/complete" && req.method === "POST") {
-		if (!claudeAuth) {
-			return Response.json(
-				{ error: "Auth not configured (CONVEX_URL not set)" },
-				{ status: 500, headers: corsHeaders },
-			)
-		}
-
-		try {
-			const { flowId, code } = (await req.json()) as {
-				flowId: string
-				code: string
-			}
-
-			if (!flowId || !code) {
-				return Response.json(
-					{ error: "flowId and code are required" },
-					{ status: 400, headers: corsHeaders },
-				)
-			}
-
-			const result = await claudeAuth.completeOAuthFlow(flowId, code)
-
-			if (result.success) {
-				// Push the new token to all connected containers
-				const containers = connections.getAllContainers()
-				for (const container of containers) {
-					pushTokenToContainer(container.info.containerId)
-				}
-			}
-
-			return Response.json(result, { headers: corsHeaders })
-		} catch (error) {
-			const message = error instanceof Error ? error.message : String(error)
-			return Response.json(
-				{ error: message },
-				{ status: 500, headers: corsHeaders },
-			)
-		}
-	}
-
-	// Manually set auth token (for testing or importing existing token)
-	if (url.pathname === "/auth/token" && req.method === "POST") {
-		if (!claudeAuth) {
-			return Response.json(
-				{ error: "Auth not configured (CONVEX_URL not set)" },
-				{ status: 500, headers: corsHeaders },
-			)
-		}
-
-		try {
-			const { token } = (await req.json()) as { token: string }
-
-			if (!token) {
-				return Response.json(
-					{ error: "token is required" },
-					{ status: 400, headers: corsHeaders },
-				)
-			}
-
-			const stored = await claudeAuth.storeToken(token)
-
-			if (stored) {
-				// Push the token to all connected containers
-				const containers = connections.getAllContainers()
-				for (const container of containers) {
-					pushTokenToContainer(container.info.containerId)
-				}
-			}
-
-			return Response.json({ success: stored }, { headers: corsHeaders })
-		} catch (error) {
-			const message = error instanceof Error ? error.message : String(error)
-			return Response.json(
-				{ error: message },
-				{ status: 500, headers: corsHeaders },
-			)
-		}
-	}
+	// Auth endpoints removed in OpenCode migration
 
 	// List connected containers
 	if (url.pathname === "/containers" && req.method === "GET") {
@@ -2295,41 +2169,6 @@ async function _handleHttpRequest(req: Request): Promise<Response> {
 
 		const executions = taskOrchestrator.getActiveExecutions()
 		return Response.json({ executions }, { headers: corsHeaders })
-	}
-
-	// Push auth token to container
-	if (
-		url.pathname.match(/^\/containers\/[^/]+\/auth$/) &&
-		req.method === "POST"
-	) {
-		const containerId = url.pathname.split("/")[2]
-		if (!containerId) {
-			return Response.json(
-				{ error: "Container ID required" },
-				{ status: 400, headers: corsHeaders },
-			)
-		}
-		try {
-			const { token } = (await req.json()) as { token: string }
-
-			const sent = connections.sendToContainer(containerId, "auth:request", {
-				token,
-			})
-
-			if (!sent) {
-				return Response.json(
-					{ error: "Container not found or not connected" },
-					{ status: 404, headers: corsHeaders },
-				)
-			}
-
-			return Response.json({ status: "token_sent" }, { headers: corsHeaders })
-		} catch {
-			return Response.json(
-				{ error: "Invalid request" },
-				{ status: 400, headers: corsHeaders },
-			)
-		}
 	}
 
 	// Create container (inline SSH with secrets from Convex)
@@ -2583,16 +2422,7 @@ docker rmi "${containerName}-server" 2>/dev/null || true
 	)
 }
 
-// Start Convex subscriptions for OAuth flows if claudeAuth is available
-if (claudeAuth) {
-	claudeAuth.startConvexSubscriptions()
-
-	// Token updates are now handled via Convex secrets
-	// Containers subscribe directly to secrets for auth token changes
-	claudeAuth.on("auth:token-acquired", () => {
-		console.log("[gateway] Token acquired and stored in Convex secrets")
-	})
-}
+// OAuth flows removed in OpenCode migration
 
 // Start Convex command processor for real-time command handling
 if (commandProcessor) {
@@ -2605,9 +2435,6 @@ if (convexSync) {
 	console.log(`[gateway]   Convex:    enabled`)
 } else {
 	console.log(`[gateway]   Convex:    disabled (set CONVEX_URL to enable)`)
-}
-if (claudeAuth) {
-	console.log(`[gateway]   OAuth:     Convex real-time subscriptions enabled`)
 }
 if (commandProcessor) {
 	console.log(`[gateway]   Commands:  Convex-driven command processing enabled`)

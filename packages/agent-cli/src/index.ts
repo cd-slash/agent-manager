@@ -2,7 +2,7 @@
 /**
  * Agent CLI Tools
  *
- * A CLI tool for Claude agents running in containers to interact with
+ * A CLI tool for OpenCode agents running in containers to interact with
  * the Convex database. Provides commands for managing tasks, requirements,
  * notes, projects, dependencies, and phases.
  *
@@ -29,7 +29,7 @@ const program = new Command()
 program
 	.name("code-agent-tools")
 	.description(
-		"CLI tools for Claude agents to interact with the task management database",
+		"CLI tools for OpenCode agents to interact with the task management database",
 	)
 	.version("0.1.0")
 

@@ -69,8 +69,6 @@ function formatModelName(model: string): string {
 	// Convert model ID to display name
 	if (model.includes("sonnet-4")) return "Claude Sonnet 4"
 	if (model.includes("opus-4")) return "Claude Opus 4"
-	if (model.includes("3-5-sonnet")) return "Claude 3.5 Sonnet"
-	if (model.includes("3-5-haiku")) return "Claude 3.5 Haiku"
 	return model
 }
 
@@ -109,7 +107,7 @@ export function PhaseStatusHeader({
 						{phaseRecord?.model && (
 							<div className="flex items-center gap-1 text-sm text-muted-foreground">
 								<span className="font-medium">
-									{phaseRecord.provider || "anthropic"}/
+									{phaseRecord.provider || "opencode"}/
 									{formatModelName(phaseRecord.model)}
 								</span>
 							</div>

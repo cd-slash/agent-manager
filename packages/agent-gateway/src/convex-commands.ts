@@ -47,6 +47,13 @@ interface CommandProcessorDeps {
 		server: string,
 		sshUser?: string,
 	) => Promise<Array<{ name: string; containerId: string; running: boolean }>>
+	getContainerDiff: (
+		containerName: string,
+		server: string,
+		sshUser?: string,
+		cwd?: string,
+		type?: "working" | "staged",
+	) => Promise<string>
 	fetchSecrets: (
 		convexUrl: string,
 		keys: string[],
@@ -210,6 +217,8 @@ export class ConvexCommandProcessor {
 				return this.handleDeleteContainer(cmd)
 			case "listContainers":
 				return this.handleListContainers(cmd)
+			case "containerDiff":
+				return this.handleContainerDiff(cmd)
 			default:
 				throw new Error(`Unknown server command type: ${cmd.type}`)
 		}
@@ -391,5 +400,35 @@ export class ConvexCommandProcessor {
 			`[commands] Found ${containers.length} containers on ${payload.server}`,
 		)
 		return { containers, server: payload.server }
+	}
+
+	private async handleContainerDiff(cmd: ServerCommand): Promise<unknown> {
+		const payload = cmd.payload as {
+			containerName: string
+			server: string
+			sshUser?: string
+			cwd?: string
+			type?: "working" | "staged"
+		}
+
+		console.log(
+			`[commands] Fetching working tree diff for ${payload.containerName}`,
+		)
+
+		const diff = await this.deps.getContainerDiff(
+			payload.containerName,
+			payload.server,
+			payload.sshUser,
+			payload.cwd,
+			payload.type ?? "working",
+		)
+
+		return {
+			diff,
+			containerName: payload.containerName,
+			server: payload.server,
+			cwd: payload.cwd,
+			type: payload.type ?? "working",
+		}
 	}
 }

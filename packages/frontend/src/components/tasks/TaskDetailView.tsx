@@ -46,7 +46,7 @@ import {
 	TooltipContent,
 	TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { useCreateContainer } from "@/hooks/useGatewayCommand"
+import { useContainerDiff, useCreateContainer } from "@/hooks/useGatewayCommand"
 import type {
 	ChatMessage,
 	ChatMessagePart,
@@ -120,6 +120,18 @@ export function TaskDetailView({
 		pullRequest?._id ? { pullRequestId: pullRequest._id } : "skip",
 	) as PrIssue[] | undefined
 
+	// Fetch OpenCode diffs across task sessions
+	const opencodeDiffs = useQuery(api.opencodeDiffs.getByTask, { taskId })
+	const taskSessions = useQuery(api.agentSessions.listByTask, { taskId })
+	const latestWorkingDiff = useQuery(api.containerDiffs.getLatestByTask, {
+		taskId: taskId as Id<"tasks">,
+		type: "working",
+	})
+	const latestStagedDiff = useQuery(api.containerDiffs.getLatestByTask, {
+		taskId: taskId as Id<"tasks">,
+		type: "staged",
+	})
+
 	// Set of phases that are applicable to this task (from the template)
 	const applicablePhases = new Set(phases.map((p) => p.phase))
 
@@ -150,7 +162,7 @@ export function TaskDetailView({
 	const [isCreatingContainer, setIsCreatingContainer] = useState(false)
 	// Track the current streaming session - only used during active execution for real-time display
 	const [currentSessionId, setCurrentSessionId] = useState<string | null>(null)
-	// Track Claude's session ID for resumption (persisted to task)
+	// Track session ID for resumption (persisted to task)
 	const [activeSessionId, setActiveSessionId] = useState<string | null>(
 		task.activeSessionId ?? null,
 	)
@@ -167,6 +179,11 @@ export function TaskDetailView({
 	// Query to watch container pool for task's container
 	const taskContainer = useQuery(
 		api.containerPool.get,
+		task.activeContainerId ? { containerId: task.activeContainerId } : "skip",
+	)
+
+	const activeContainer = useQuery(
+		api.containers.getByContainerId,
 		task.activeContainerId ? { containerId: task.activeContainerId } : "skip",
 	)
 
@@ -235,92 +252,103 @@ export function TaskDetailView({
 		const toolResults = new Map<string, { content: string; isError: boolean }>()
 		let hasResult = false
 		let hasError = false
-		let finalResultText: string | null = null
 
-		// First pass: collect tool results and check for errors
+		const messageParts: Array<{
+			id?: string
+			type?: string
+			text?: string
+			name?: string
+			input?: unknown
+			content?: unknown
+		}> = []
+
+		const pushMessagePart = (part: unknown) => {
+			if (!part || typeof part !== "object") return
+			messageParts.push(part as (typeof messageParts)[number])
+		}
+
 		for (const msg of streamingMessages) {
 			try {
 				const content = msg.rawContent ? JSON.parse(msg.rawContent) : null
 				if (!content) continue
 
-				// Check for error events (from process manager)
 				if (content.type === "error") {
 					hasError = true
-					hasResult = true // Treat errors as completion to stop "thinking" animation
-					continue
-				}
-
-				if (content.type === "tool_result" && content.tool_use_id) {
-					const resultText =
-						content.content?.[0]?.text ||
-						(typeof content.content === "string" ? content.content : null) ||
-						"No output"
-					toolResults.set(content.tool_use_id, {
-						content:
-							typeof resultText === "string"
-								? resultText.slice(0, 500)
-								: "No output", // Truncate long results
-						isError: content.is_error ?? false,
-					})
-				}
-			} catch {
-				// Skip parse errors
-			}
-		}
-
-		// Second pass: build parts with attached results
-		for (const msg of streamingMessages) {
-			try {
-				const content = msg.rawContent ? JSON.parse(msg.rawContent) : null
-				if (!content) continue
-
-				if (content.type === "result") {
 					hasResult = true
-					finalResultText = content.result
 					continue
 				}
 
-				if (content.type === "assistant" && content.message?.content) {
-					for (const block of content.message.content) {
-						if (block.type === "text" && block.text) {
-							parts.push({ type: "text", content: block.text })
-						} else if (block.type === "thinking" && block.thinking) {
-							// Parse thinking blocks from Claude's extended thinking feature
-							parts.push({ type: "thinking", content: block.thinking })
-						} else if (block.type === "tool_use") {
-							const toolId = block.id
-							parts.push({
-								type: "tool_use",
-								content: formatToolDisplay(block.name, block.input),
-								toolName: block.name || "unknown",
-								toolInput: formatToolInput(block.input),
-								toolId,
-								result: toolResults.get(toolId), // Attach result if available
-							})
-						}
+				if (
+					content.type === "message.response" &&
+					content.messageResult?.parts
+				) {
+					messageParts.push(...content.messageResult.parts)
+				}
+
+				if (content.type === "message.part.updated") {
+					pushMessagePart(content.properties?.part)
+				}
+
+				if (content.type === "message.part.added") {
+					pushMessagePart(content.properties?.part)
+				}
+
+				if (content.type === "message.part.completed") {
+					pushMessagePart(content.properties?.part)
+				}
+
+				if (content.type === "tool.result") {
+					const toolId = content.properties?.toolUseID
+					const result = content.properties?.result
+					if (typeof toolId === "string") {
+						const resultText =
+							(result && typeof result === "object" && "content" in result
+								? (result as { content?: unknown }).content
+								: result) ?? "No output"
+						toolResults.set(toolId, {
+							content:
+								typeof resultText === "string"
+									? resultText.slice(0, 500)
+									: JSON.stringify(resultText).slice(0, 500),
+							isError: !!content.properties?.error,
+						})
 					}
 				}
+
+				if (
+					content.type === "session.completed" ||
+					content.type === "session.idle"
+				) {
+					hasResult = true
+				}
 			} catch {
 				// Skip parse errors
 			}
 		}
 
-		// Add final result as text part if present
-		if (finalResultText) {
-			parts.push({ type: "text", content: finalResultText })
+		for (const part of messageParts) {
+			if (part.type === "text" && part.text) {
+				parts.push({ type: "text", content: part.text })
+				continue
+			}
+			if (part.type === "thinking" && part.text) {
+				parts.push({ type: "thinking", content: part.text })
+				continue
+			}
+			if (part.type === "tool_use") {
+				const toolId = part.id
+				const toolName = part.name || "tool"
+				parts.push({
+					type: "tool_use",
+					content: formatToolDisplay(toolName, part.input),
+					toolName,
+					toolInput: formatToolInput(part.input),
+					toolId: typeof toolId === "string" ? toolId : undefined,
+					result:
+						typeof toolId === "string" ? toolResults.get(toolId) : undefined,
+				})
+			}
 		}
-
-		// Debug: log streaming content
-		console.log(
-			"[TaskDetailView] streamingContent - parts:",
-			parts.length,
-			"hasResult:",
-			hasResult,
-			"hasError:",
-			hasError,
-			"types:",
-			parts.map((p) => p.type),
-		)
 
 		return { parts, hasResult, hasError }
 	}, [streamingMessages, formatToolDisplay, formatToolInput])
@@ -433,15 +461,14 @@ export function TaskDetailView({
 
 	// Mutation to start agent execution
 	const startExecution = useMutation(api.containerCommands.startExecution)
+	const recordContainerDiff = useMutation(api.containerDiffs.record)
 
 	// Mutation to update task (for assigning container)
 	const _updateTask = useMutation(api.tasks.update)
 
 	// Hook for creating containers with proper error handling
 	const createContainer = useCreateContainer()
-
-	// Mutation to push auth token to container
-	const pushAuthToken = useMutation(api.containerCommands.pushAuthToken)
+	const containerDiff = useContainerDiff()
 
 	// Convex mutations for dependencies
 	const addDependency = useMutation(api.tasks.addDependency)
@@ -489,17 +516,34 @@ export function TaskDetailView({
 
 	// Store pending message when waiting for container
 	const [pendingMessage, setPendingMessage] = useState<string | null>(null)
+	const [workingTreeDiff, setWorkingTreeDiff] = useState<string | null>(null)
+	const [workingDiffType, setWorkingDiffType] = useState<"working" | "staged">(
+		"working",
+	)
+
+	useEffect(() => {
+		const latest =
+			workingDiffType === "staged" ? latestStagedDiff : latestWorkingDiff
+		if (latest?.diff) {
+			setWorkingTreeDiff(latest.diff)
+		} else {
+			setWorkingTreeDiff(null)
+		}
+	}, [latestStagedDiff, latestWorkingDiff, workingDiffType])
 
 	// Provider and model state for chat
-	const [selectedProvider, setSelectedProvider] =
-		useState<Provider>("anthropic")
-	const [selectedModel, setSelectedModel] = useState<Model>("opus")
+	const [selectedProvider, setSelectedProvider] = useState<Provider>("")
+	const [selectedModel, setSelectedModel] = useState<Model>("")
 
 	// Handlers for provider/model changes with user feedback
+	const enabledModelGroups = useQuery(api.aiProviders.getEnabledModelsGrouped)
+
 	const handleProviderChange = (newProvider: Provider) => {
 		if (newProvider !== selectedProvider) {
 			setSelectedProvider(newProvider)
-			const providerName = newProvider === "anthropic" ? "Anthropic" : "ZAI"
+			const providerName =
+				enabledModelGroups?.find((group) => group.providerId === newProvider)
+					?.providerName || "Provider"
 			toast.info("Provider changed", `Using ${providerName} for next message`)
 		}
 	}
@@ -507,69 +551,48 @@ export function TaskDetailView({
 	const handleModelChange = (newModel: Model) => {
 		if (newModel !== selectedModel) {
 			setSelectedModel(newModel)
-			const modelName = newModel.charAt(0).toUpperCase() + newModel.slice(1)
+			const modelName =
+				enabledModelGroups
+					?.flatMap((group) => group.models)
+					.find((model) => model.id === newModel)?.name || newModel
 			toast.info("Model changed", `Using ${modelName} for next message`)
 		}
 	}
 
-	// Fetch ZAI API key for when ZAI provider is selected
-	const zaiApiKey = useQuery(api.secrets.get, { key: "ZAI_API_KEY" })
+	useEffect(() => {
+		if (!enabledModelGroups || enabledModelGroups.length === 0) return
+		const hasProvider = enabledModelGroups.some(
+			(group) => group.providerId === selectedProvider,
+		)
+		if (!selectedProvider || !hasProvider) {
+			const firstGroup = enabledModelGroups[0]
+			setSelectedProvider(firstGroup.providerId)
+			if (firstGroup.models.length > 0) {
+				setSelectedModel(firstGroup.models[0].id)
+			}
+		}
+	}, [enabledModelGroups, selectedProvider])
 
 	// Execute with container - defined as useCallback to avoid use-before-declaration
 	const executeWithContainer = useCallback(
 		async (
 			containerId: string,
 			message: string,
-			provider: Provider,
-			model: Model,
+			providerId: Provider,
+			modelId: Model,
 			sessionIdToResume?: string | null,
 		) => {
 			setIsAgentProcessing(true)
 			setCurrentSessionId(null) // Reset session before starting new one
 			try {
-				// Push auth token first
-				const authToken =
-					"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"
-				await pushAuthToken({
-					containerId,
-					token: authToken,
-				})
-
-				// Build environment variables based on provider
-				let envVars:
-					| {
-							ANTHROPIC_AUTH_TOKEN?: string
-							ANTHROPIC_BASE_URL?: string
-							API_TIMEOUT_MS?: string
-					  }
-					| undefined
-
-				if (provider === "zai") {
-					if (!zaiApiKey?.value) {
-						toast.error(
-							"ZAI API Key Missing",
-							"Please configure your ZAI API key in Settings > Providers",
-						)
-						setIsAgentProcessing(false)
-						return
-					}
-					envVars = {
-						ANTHROPIC_AUTH_TOKEN: zaiApiKey.value,
-						ANTHROPIC_BASE_URL: "https://api.z.ai/api/anthropic",
-						API_TIMEOUT_MS: "3000000",
-					}
-				}
-				// For anthropic provider, envVars is undefined (use default env)
-
 				const result = await startExecution({
 					containerId,
 					message,
-					model,
-					provider,
-					envVars,
+					modelId,
+					providerId,
 					taskId: taskId as string,
 					projectId: task.projectId as string,
-					sessionId: sessionIdToResume ?? undefined, // Resume Claude session if provided
+					sessionId: sessionIdToResume ?? undefined,
 				})
 
 				// Track the session for streaming updates
@@ -583,7 +606,7 @@ export function TaskDetailView({
 			}
 			// Note: isAgentProcessing will be cleared by the useEffect watching streamingMessages
 		},
-		[pushAuthToken, startExecution, taskId, task.projectId, toast, zaiApiKey],
+		[startExecution, taskId, task.projectId, toast],
 	)
 
 	// When container becomes available and we have a pending message, execute it
@@ -790,6 +813,43 @@ export function TaskDetailView({
 				setIsCreatingContainer(false)
 				setPendingMessage(null)
 			}
+		}
+	}
+
+	const handleFetchWorkingDiff = async () => {
+		if (!activeContainer?.name || !activeContainer?.serverHostname) {
+			toast.error("Container unavailable", "No active container to diff")
+			return
+		}
+
+		try {
+			const result = await containerDiff.execute({
+				containerName: activeContainer.name,
+				server: activeContainer.serverHostname,
+				sshUser: activeContainer.sshUser,
+				cwd: "/workspace",
+				type: workingDiffType,
+			})
+			const diffText = result?.diff ?? ""
+			setWorkingTreeDiff(diffText)
+
+			const containerId = activeContainer?._id
+			if (containerId) {
+				await recordContainerDiff({
+					taskId: taskId as Id<"tasks">,
+					containerId,
+					containerName: activeContainer.name,
+					server: activeContainer.serverHostname,
+					cwd: "/workspace",
+					type: workingDiffType,
+					diff: diffText,
+				})
+			}
+		} catch (error) {
+			toast.error(
+				"Failed to fetch diff",
+				error instanceof Error ? error.message : "Unknown error",
+			)
 		}
 	}
 
@@ -1047,6 +1107,7 @@ export function TaskDetailView({
 											selectedModel={selectedModel}
 											onProviderChange={handleProviderChange}
 											onModelChange={handleModelChange}
+											modelGroups={enabledModelGroups}
 											sessionId={activeSessionId}
 											onNewSession={handleNewSession}
 										/>
@@ -1920,61 +1981,158 @@ export function TaskDetailView({
 								value="diff"
 								className="!mt-0 flex-1 overflow-y-auto min-h-0 pt-section"
 							>
-								<div className="space-y-4">
-									{pullRequest ? (
-										<>
-											<div className="bg-surface border border-border rounded-lg p-6 text-center">
-												<GitPullRequest
-													size={32}
-													className="mx-auto mb-3 text-muted-foreground"
-												/>
-												<h3 className="text-lg font-medium text-foreground mb-2">
-													View Diff on GitHub
-												</h3>
-												<p className="text-sm text-muted-foreground mb-4">
-													PR #{pullRequest.prNumber} - {pullRequest.title}
-												</p>
-												{pullRequest.url && (
+								<div className="space-y-6">
+									<section>
+										<h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center">
+											<GitPullRequest size={16} className="mr-2" /> Session
+											Diffs
+										</h3>
+										<div className="bg-surface border border-border rounded-lg p-4">
+											{opencodeDiffs && opencodeDiffs.length > 0 ? (
+												<div className="space-y-4">
+													{opencodeDiffs.map((diff) => (
+														<div
+															key={`${diff.sessionId}-${diff.createdAt}`}
+															className="bg-background border border-border rounded-lg p-3"
+														>
+															<div className="flex items-center justify-between text-xs text-muted-foreground">
+																<span className="font-mono">
+																	{diff.sessionId}
+																</span>
+																<span>{formatTime(diff.createdAt)}</span>
+															</div>
+															{diff.messageId && (
+																<div className="text-[10px] text-muted-foreground mt-1">
+																	Message: {diff.messageId}
+																</div>
+															)}
+															<pre className="text-xs text-muted-foreground bg-background/50 mt-2 p-2 rounded overflow-x-auto">
+																{JSON.stringify(diff.diffs, null, 2)}
+															</pre>
+														</div>
+													))}
+												</div>
+											) : (
+												<div className="text-sm text-muted-foreground">
+													No OpenCode diffs recorded yet.
+												</div>
+											)}
+										</div>
+									</section>
+
+									<section>
+										<h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center">
+											<FileText size={16} className="mr-2" /> Working Tree
+										</h3>
+										<div className="bg-surface border border-border rounded-lg p-4 space-y-3">
+											<div className="flex items-center justify-between">
+												<div className="text-xs text-muted-foreground">
+													{activeContainer?.name
+														? `Container: ${activeContainer.name}`
+														: "No active container"}
+												</div>
+												<div className="flex items-center gap-2">
+													<Button
+														variant={
+															workingDiffType === "working"
+																? "default"
+																: "outline"
+														}
+														size="sm"
+														onClick={() => setWorkingDiffType("working")}
+													>
+														Unstaged
+													</Button>
+													<Button
+														variant={
+															workingDiffType === "staged"
+																? "default"
+																: "outline"
+														}
+														size="sm"
+														onClick={() => setWorkingDiffType("staged")}
+													>
+														Staged
+													</Button>
 													<Button
 														variant="outline"
-														onClick={() =>
-															window.open(pullRequest.url, "_blank")
+														size="sm"
+														onClick={handleFetchWorkingDiff}
+														disabled={
+															!activeContainer || containerDiff.isPending
 														}
 													>
-														<Globe size={16} className="mr-2" />
-														Open on GitHub
+														{containerDiff.isPending ? "Loading..." : "Refresh"}
 													</Button>
-												)}
+												</div>
 											</div>
-											<div className="text-xs text-muted-foreground text-center">
-												Branch:{" "}
-												<code className="bg-surface px-1.5 py-0.5 rounded">
-													{pullRequest.branch}
-												</code>
-												{" → "}
-												<code className="bg-surface px-1.5 py-0.5 rounded">
-													{pullRequest.baseBranch}
-												</code>
-											</div>
-										</>
-									) : (
-										<div className="bg-surface border border-border rounded-lg p-8 text-center">
-											<FileText
-												size={32}
-												className="mx-auto mb-3 text-muted-foreground"
-											/>
-											<h3 className="text-lg font-medium text-foreground mb-2">
-												No Changes Yet
-											</h3>
-											<p className="text-sm text-muted-foreground mb-4">
-												Code changes will appear here once the implementation
-												phase begins.
-											</p>
-											<Button onClick={handleCreatePR}>
-												<GitPullRequest size={16} className="mr-2" /> Create PR
-											</Button>
+											{workingTreeDiff ? (
+												<pre className="text-xs text-muted-foreground bg-background/50 p-2 rounded overflow-x-auto">
+													{workingTreeDiff}
+												</pre>
+											) : (
+												<div className="text-sm text-muted-foreground">
+													No working tree diff fetched yet.
+												</div>
+											)}
 										</div>
-									)}
+									</section>
+
+									<section>
+										<h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center">
+											<FileText size={16} className="mr-2" /> Task Sessions
+										</h3>
+										<div className="bg-surface border border-border rounded-lg p-4">
+											{taskSessions && taskSessions.length > 0 ? (
+												<div className="space-y-2">
+													{taskSessions.map((session) => (
+														<div
+															key={session._id}
+															className="flex items-center justify-between text-xs text-muted-foreground"
+														>
+															<span className="font-mono">
+																{session.sessionId}
+															</span>
+															<span>{session.status}</span>
+														</div>
+													))}
+												</div>
+											) : (
+												<div className="text-sm text-muted-foreground">
+													No sessions recorded for this task yet.
+												</div>
+											)}
+										</div>
+									</section>
+
+									<section>
+										<h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center">
+											<Globe size={16} className="mr-2" /> Pull Request
+										</h3>
+										<div className="bg-surface border border-border rounded-lg p-4">
+											{pullRequest ? (
+												<div className="space-y-3">
+													<div className="text-sm text-foreground">
+														PR #{pullRequest.prNumber} - {pullRequest.title}
+													</div>
+													{pullRequest.url && (
+														<Button
+															variant="outline"
+															onClick={() =>
+																window.open(pullRequest.url, "_blank")
+															}
+														>
+															Open on GitHub
+														</Button>
+													)}
+												</div>
+											) : (
+												<div className="text-sm text-muted-foreground">
+													No pull request created yet.
+												</div>
+											)}
+										</div>
+									</section>
 								</div>
 							</TabsContent>
 						</Tabs>

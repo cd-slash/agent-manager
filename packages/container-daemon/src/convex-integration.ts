@@ -12,8 +12,7 @@ import { EventEmitter } from "node:events"
 import { api } from "@agent-manager/convex/api"
 import type { Doc, Id } from "@agent-manager/convex/dataModel"
 import { ConvexClient } from "convex/browser"
-import type { AuthManager } from "./auth-manager"
-import type { ProcessManager } from "./process-manager"
+import { OpencodeRunner } from "./opencode-runner"
 
 type ContainerCommand = Doc<"containerCommands">
 
@@ -74,23 +73,17 @@ interface ConvexIntegrationEvents {
 export class ConvexIntegration extends EventEmitter<ConvexIntegrationEvents> {
 	private client: ConvexClient
 	private config: ConvexIntegrationConfig
-	private authManager: AuthManager
-	private processManager: ProcessManager
+	private opencodeRunner: OpencodeRunner
 	private connected = false
 	private heartbeatInterval: Timer | null = null
 	private commandUnsubscribe: (() => void) | null = null
 	private processingCommands = new Set<string>()
 
-	constructor(
-		config: ConvexIntegrationConfig,
-		authManager: AuthManager,
-		processManager: ProcessManager,
-	) {
+	constructor(config: ConvexIntegrationConfig) {
 		super()
 		this.config = config
-		this.authManager = authManager
-		this.processManager = processManager
 		this.client = new ConvexClient(config.convexUrl)
+		this.opencodeRunner = new OpencodeRunner("http://localhost:4097")
 	}
 
 	async connect(): Promise<void> {
@@ -101,7 +94,7 @@ export class ConvexIntegration extends EventEmitter<ConvexIntegrationEvents> {
 			await this.client.mutation(api.containerPool.register, {
 				containerId: this.config.containerId,
 				hostname: this.config.hostname,
-				capabilities: this.config.capabilities || ["claude", "exec"],
+				capabilities: this.config.capabilities || ["opencode", "exec"],
 				maxConcurrent: 1,
 			})
 
@@ -115,8 +108,7 @@ export class ConvexIntegration extends EventEmitter<ConvexIntegrationEvents> {
 			// Subscribe to commands assigned to this container
 			this.subscribeToCommands()
 
-			// Watch for auth token updates
-			this.subscribeToAuthToken()
+			// Auth tokens handled by OpenCode server configuration
 		} catch (error) {
 			console.error("[convex] Failed to connect:", error)
 			this.emit(
@@ -190,48 +182,6 @@ export class ConvexIntegration extends EventEmitter<ConvexIntegrationEvents> {
 		)
 	}
 
-	private subscribeToAuthToken(): void {
-		// Watch for auth token updates in secrets
-		// Support both CLAUDE_CODE_OAUTH_TOKEN (preferred) and legacy ANTHROPIC_AUTH_TOKEN
-		this.client.onUpdate(
-			api.secrets.get,
-			{ key: "CLAUDE_CODE_OAUTH_TOKEN" },
-			async (secret) => {
-				if (secret?.value) {
-					console.log(
-						"[convex] Received OAuth token update (CLAUDE_CODE_OAUTH_TOKEN)",
-					)
-					try {
-						await this.authManager.setToken(secret.value)
-					} catch (error) {
-						console.error("[convex] Failed to set auth token:", error)
-					}
-				}
-			},
-		)
-		// Also check legacy key on startup
-		this.client.onUpdate(
-			api.secrets.get,
-			{ key: "ANTHROPIC_AUTH_TOKEN" },
-			async (secret) => {
-				// Only use legacy key if new key doesn't exist
-				const newKey = await this.client.query(api.secrets.get, {
-					key: "CLAUDE_CODE_OAUTH_TOKEN",
-				})
-				if (!newKey?.value && secret?.value) {
-					console.log(
-						"[convex] Received OAuth token update (legacy ANTHROPIC_AUTH_TOKEN)",
-					)
-					try {
-						await this.authManager.setToken(secret.value)
-					} catch (error) {
-						console.error("[convex] Failed to set auth token:", error)
-					}
-				}
-			},
-		)
-	}
-
 	private async handleCommand(command: ContainerCommand): Promise<void> {
 		const commandId = command._id
 		this.processingCommands.add(commandId)
@@ -256,20 +206,8 @@ export class ConvexIntegration extends EventEmitter<ConvexIntegrationEvents> {
 					result = await this.handleStartPhaseExecution(command)
 					break
 
-				case "pushAuthToken":
-					result = await this.handlePushAuthToken(command)
-					break
-
 				case "abortExecution":
 					result = await this.handleAbortExecution(command)
-					break
-
-				case "startOAuthFlow":
-					result = await this.handleStartOAuthFlow(command)
-					break
-
-				case "completeOAuthFlow":
-					result = await this.handleCompleteOAuthFlow(command)
 					break
 
 				default:
@@ -315,11 +253,8 @@ export class ConvexIntegration extends EventEmitter<ConvexIntegrationEvents> {
 			message: string
 			model?: string
 			provider?: string
-			envVars?: {
-				ANTHROPIC_AUTH_TOKEN?: string
-				ANTHROPIC_BASE_URL?: string
-				API_TIMEOUT_MS?: string
-			}
+			providerId?: string
+			modelId?: string
 			workingDirectory?: string
 			permissionMode?: string
 			systemPrompt?: string
@@ -334,7 +269,7 @@ export class ConvexIntegration extends EventEmitter<ConvexIntegrationEvents> {
 		let sequenceNumber = 0
 		let finalResult: string | undefined
 		const accumulatedTextParts: string[] = []
-		let claudeSessionId: string | undefined // Claude's session ID for resumption
+		let opencodeSessionId: string | undefined
 
 		// taskId can be in payload or on the command itself
 		const taskId = payload.taskId || command.taskId
@@ -348,6 +283,8 @@ export class ConvexIntegration extends EventEmitter<ConvexIntegrationEvents> {
 				prompt: payload.message,
 				taskId: taskId as Id<"tasks"> | undefined,
 				projectId: projectId as Id<"projects"> | undefined,
+				providerId: payload.providerId || payload.provider,
+				modelId: payload.modelId || payload.model,
 				status: "running",
 				startedAt: Date.now(),
 			})
@@ -359,22 +296,22 @@ export class ConvexIntegration extends EventEmitter<ConvexIntegrationEvents> {
 		let errorMessage: string | undefined
 
 		// Stream execution results to Convex
-		for await (const event of this.processManager.executeStream({
-			message: payload.message,
-			model: payload.model,
-			provider: payload.provider,
-			envVars: payload.envVars,
-			workingDirectory: payload.workingDirectory,
-			permissionMode: payload.permissionMode,
+		const providerId = payload.providerId || payload.provider
+		const modelId = payload.modelId || payload.model
+		if (!providerId || !modelId) {
+			throw new Error("providerId and modelId are required for OpenCode")
+		}
+
+		for await (const event of this.opencodeRunner.executeStream({
+			prompt: payload.message,
+			providerId,
+			modelId,
 			systemPrompt: payload.systemPrompt,
-			allowedTools: payload.allowedTools,
-			disallowedTools: payload.disallowedTools,
 			sessionId: payload.sessionId,
 		})) {
 			// Handle error events from process manager
 			if (event.type === "error") {
-				errorMessage =
-					event.error || `Process exited with code ${event.exitCode}`
+				errorMessage = event.error || "OpenCode session failed"
 				console.error(`[convex] Process error: ${errorMessage}`)
 
 				// Store error as an agent message
@@ -383,7 +320,6 @@ export class ConvexIntegration extends EventEmitter<ConvexIntegrationEvents> {
 					content: JSON.stringify({
 						type: "error",
 						error: errorMessage,
-						exitCode: event.exitCode,
 					}),
 					sequenceNumber: sequenceNumber++,
 				})
@@ -392,51 +328,34 @@ export class ConvexIntegration extends EventEmitter<ConvexIntegrationEvents> {
 
 			// Store each message in Convex
 			if (event.type === "data" && event.data) {
-				// event.data is already a parsed object from the process manager
 				const data = event.data as {
 					type?: string
-					result?: string
-					session_id?: string
-					message?: {
-						content?: Array<{ type: string; text?: string }>
+					properties?: Record<string, unknown>
+					messageResult?: {
+						info?: { id?: string }
+						parts?: Array<{ id?: string; type?: string; text?: string }>
 					}
 				}
-
-				// Store the JSON string in Convex
+				const messageId =
+					data.messageResult?.info?.id ||
+					(data.properties?.messageID as string | undefined)
+				const partId = data.properties?.partID as string | undefined
 				await this.client.mutation(api.agentMessages.create, {
 					sessionId: correlationId,
+					messageId,
+					partId,
 					content: JSON.stringify(data),
 					sequenceNumber: sequenceNumber++,
 				})
 
-				// Extract Claude's session ID from system message (for resumption)
-				if (data.type === "system" && data.session_id) {
-					claudeSessionId = data.session_id
-					console.log(`[convex] Claude session ID: ${claudeSessionId}`)
+				if (event.sessionId) {
+					opencodeSessionId = event.sessionId
 				}
 
-				// Extract the final result text from the result event
-				// Skip if it looks like an error message (handled separately)
-				if (data.type === "result" && data.result) {
-					// Check if the result is actually an error message (e.g., "API Error: 401 ...")
-					if (
-						data.result.startsWith("API Error:") ||
-						data.result.includes("Please run /login")
-					) {
-						// This is an error, not a real result - mark it and skip
-						if (!errorMessage) {
-							errorMessage = data.result
-						}
-					} else {
-						finalResult = data.result
-					}
-				}
-
-				// Also accumulate text from assistant messages as fallback
-				if (data.type === "assistant" && data.message?.content) {
-					for (const block of data.message.content) {
-						if (block.type === "text" && block.text) {
-							accumulatedTextParts.push(block.text)
+				if (data.type === "message.response" && data.messageResult?.parts) {
+					for (const part of data.messageResult.parts) {
+						if (part.type === "text" && part.text) {
+							accumulatedTextParts.push(part.text)
 						}
 					}
 				}
@@ -455,9 +374,9 @@ export class ConvexIntegration extends EventEmitter<ConvexIntegrationEvents> {
 					taskId: taskId as Id<"tasks">,
 					text: formattedError,
 					sender: "ai",
-					model: payload.model,
-					provider: payload.provider,
-					sessionId: claudeSessionId,
+					model: payload.model || payload.modelId,
+					provider: payload.provider || payload.providerId,
+					sessionId: opencodeSessionId,
 					isError: true,
 				})
 				console.log(`[convex] Error message added to chat for task ${taskId}`)
@@ -472,9 +391,9 @@ export class ConvexIntegration extends EventEmitter<ConvexIntegrationEvents> {
 					taskId: taskId as Id<"tasks">,
 					text: responseText,
 					sender: "ai",
-					model: payload.model,
-					provider: payload.provider,
-					sessionId: claudeSessionId, // Include Claude session ID
+					model: payload.model || payload.modelId,
+					provider: payload.provider || payload.providerId,
+					sessionId: opencodeSessionId,
 				})
 				console.log(`[convex] AI response added to chat for task ${taskId}`)
 			} catch (error) {
@@ -483,33 +402,48 @@ export class ConvexIntegration extends EventEmitter<ConvexIntegrationEvents> {
 		}
 
 		// Update the task's active session for resumption
-		if (taskId && claudeSessionId) {
+		if (taskId && opencodeSessionId) {
 			try {
 				await this.client.mutation(api.tasks.setActiveSession, {
 					taskId: taskId as Id<"tasks">,
-					sessionId: claudeSessionId,
+					sessionId: opencodeSessionId,
 					containerId: this.config.containerId,
 				})
-				console.log(`[convex] Task session updated: ${claudeSessionId}`)
+				console.log(`[convex] Task session updated: ${opencodeSessionId}`)
 			} catch (error) {
 				console.error(`[convex] Failed to update task session:`, error)
 			}
 		}
 
 		// Update the agent session status
-		const finalStatus = errorMessage ? "error" : "completed"
+		const finalStatus = errorMessage ? "failed" : "completed"
 		try {
 			await this.client.mutation(api.agentSessions.updateStatus, {
 				sessionId: correlationId,
 				status: finalStatus,
 				result: errorMessage || responseText || undefined,
 				completedAt: Date.now(),
+				opencodeSessionId: opencodeSessionId,
+				providerId: payload.providerId || payload.provider,
+				modelId: payload.modelId || payload.model,
 			})
 		} catch (error) {
 			console.error(`[convex] Failed to update agent session status:`, error)
 		}
 
-		return { correlationId, claudeSessionId, status: finalStatus }
+		if (opencodeSessionId) {
+			try {
+				const diffs = await this.opencodeRunner.getDiff(opencodeSessionId)
+				await this.client.mutation(api.opencodeDiffs.record, {
+					sessionId: opencodeSessionId,
+					diffs,
+				})
+			} catch (error) {
+				console.error(`[convex] Failed to record session diff:`, error)
+			}
+		}
+
+		return { correlationId, opencodeSessionId, status: finalStatus }
 	}
 
 	private async handleStartPhaseExecution(
@@ -521,6 +455,8 @@ export class ConvexIntegration extends EventEmitter<ConvexIntegrationEvents> {
 			customPrompt?: string
 			configOverrides?: {
 				model?: string
+				providerId?: string
+				modelId?: string
 				permissionMode?: string
 			}
 		}
@@ -549,6 +485,9 @@ export class ConvexIntegration extends EventEmitter<ConvexIntegrationEvents> {
 			phaseConfig.prompt ||
 			`Execute ${payload.phase} phase`
 		const model = payload.configOverrides?.model || phaseConfig.model
+		const providerId =
+			payload.configOverrides?.providerId || phaseConfig.providerId
+		const modelId = payload.configOverrides?.modelId || phaseConfig.modelId
 
 		// Execute the phase
 		return await this.handleStartExecution({
@@ -556,23 +495,12 @@ export class ConvexIntegration extends EventEmitter<ConvexIntegrationEvents> {
 			payload: {
 				message: prompt,
 				model,
+				providerId,
+				modelId,
 				permissionMode: payload.configOverrides?.permissionMode,
 				taskId: payload.taskId,
 			},
 		})
-	}
-
-	private async handlePushAuthToken(
-		command: ContainerCommand,
-	): Promise<unknown> {
-		const payload = command.payload as { token: string }
-
-		if (!payload.token) {
-			throw new Error("Token is required")
-		}
-
-		await this.authManager.setToken(payload.token)
-		return { success: true }
 	}
 
 	private async handleAbortExecution(
@@ -581,81 +509,15 @@ export class ConvexIntegration extends EventEmitter<ConvexIntegrationEvents> {
 		const payload = command.payload as {
 			correlationId?: string
 			processId?: number
+			sessionId?: string
 		}
 
-		if (payload.processId) {
-			const success = this.processManager.abort(payload.processId)
-			return { success }
+		if (payload.sessionId) {
+			await this.opencodeRunner.abort(payload.sessionId)
+			return { success: true }
 		}
 
-		// If no specific processId, abort all
-		this.processManager.abortAll()
-		return { success: true, abortedAll: true }
-	}
-
-	private async handleStartOAuthFlow(
-		command: ContainerCommand,
-	): Promise<unknown> {
-		const payload = command.payload as {
-			provider: string
-			oauthFlowId: string
-		}
-
-		console.log(
-			`[convex] Starting OAuth flow for provider: ${payload.provider}`,
-		)
-
-		try {
-			const result = await this.authManager.startOAuthFlow()
-			return {
-				success: true,
-				flowId: result.flowId,
-				url: result.url,
-				expiresIn: result.expiresIn,
-			}
-		} catch (error) {
-			const message = error instanceof Error ? error.message : String(error)
-			console.error(`[convex] OAuth flow start failed: ${message}`)
-			return { success: false, error: message }
-		}
-	}
-
-	private async handleCompleteOAuthFlow(
-		command: ContainerCommand,
-	): Promise<unknown> {
-		const payload = command.payload as {
-			oauthFlowId: string
-			containerFlowId: string
-			authCode: string
-		}
-
-		console.log(`[convex] Completing OAuth flow: ${payload.containerFlowId}`)
-
-		try {
-			const result = await this.authManager.completeOAuthFlow(
-				payload.containerFlowId,
-				payload.authCode,
-			)
-
-			if (result.success && result.token) {
-				// Store the token in Convex secrets
-				await this.client.mutation(api.secrets.set, {
-					key: "ANTHROPIC_AUTH_TOKEN",
-					value: result.token,
-					description: "Claude OAuth token",
-				})
-				console.log(`[convex] OAuth token stored in Convex secrets`)
-			}
-
-			return {
-				success: result.success,
-				hasToken: !!result.token,
-			}
-		} catch (error) {
-			const message = error instanceof Error ? error.message : String(error)
-			console.error(`[convex] OAuth flow completion failed: ${message}`)
-			return { success: false, error: message }
-		}
+		return { success: false, error: "sessionId required" }
 	}
 
 	getState(): { connected: boolean; containerId: string } {

@@ -122,8 +122,12 @@ export interface TaskContext {
 }
 
 export interface PhasePromptConfig {
-	/** Model to use */
+	/** Model to use (deprecated) */
 	model?: "sonnet" | "opus" | "haiku"
+	/** OpenCode provider ID */
+	providerId?: string
+	/** OpenCode model ID */
+	modelId?: string
 	/** Permission mode */
 	permissionMode?: "default" | "acceptEdits" | "bypassPermissions" | "plan"
 	/** System prompt override */

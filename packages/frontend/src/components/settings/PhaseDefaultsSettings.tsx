@@ -33,10 +33,8 @@ import {
 
 // Fallback models when no providers are configured
 const FALLBACK_MODELS = [
-	{ value: "claude-sonnet-4-20250514", label: "Claude Sonnet 4" },
-	{ value: "claude-opus-4-20250514", label: "Claude Opus 4" },
-	{ value: "claude-3-5-sonnet-20241022", label: "Claude 3.5 Sonnet" },
-	{ value: "claude-3-5-haiku-20241022", label: "Claude 3.5 Haiku" },
+	{ value: "opencode/claude-sonnet-4", label: "Claude Sonnet 4" },
+	{ value: "opencode/claude-opus-4", label: "Claude Opus 4" },
 ]
 
 // Permission modes
@@ -91,7 +89,7 @@ function PhaseConfigCard({
 }: PhaseConfigCardProps) {
 	const [isExpanded, setIsExpanded] = useState(false)
 	const [model, setModel] = useState(
-		config?.model || "claude-sonnet-4-20250514",
+		config?.model || "opencode/claude-sonnet-4",
 	)
 	const [permissionMode, setPermissionMode] = useState(
 		config?.permissionMode || "default",
@@ -104,7 +102,7 @@ function PhaseConfigCard({
 
 	const handleSave = async () => {
 		await onSave({
-			provider: "anthropic",
+			provider: "opencode",
 			model,
 			permissionMode,
 			promptTemplate,
@@ -114,7 +112,7 @@ function PhaseConfigCard({
 	}
 
 	const handleReset = () => {
-		setModel(config?.model || "claude-sonnet-4-20250514")
+		setModel(config?.model || "opencode/claude-sonnet-4")
 		setPermissionMode(config?.permissionMode || "default")
 		setPromptTemplate(config?.promptTemplate || builtinPrompt || "")
 		setEnabled(config?.enabled ?? true)

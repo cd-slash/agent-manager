@@ -25,10 +25,8 @@ import { PHASE_DISPLAY_NAMES, type TaskId, type TaskPhase } from "@/types"
 
 // Available models
 const MODELS = [
-	{ value: "claude-sonnet-4-20250514", label: "Claude Sonnet 4" },
-	{ value: "claude-opus-4-20250514", label: "Claude Opus 4" },
-	{ value: "claude-3-5-sonnet-20241022", label: "Claude 3.5 Sonnet" },
-	{ value: "claude-3-5-haiku-20241022", label: "Claude 3.5 Haiku" },
+	{ value: "opencode/claude-sonnet-4", label: "Claude Sonnet 4" },
+	{ value: "opencode/claude-opus-4", label: "Claude Opus 4" },
 ]
 
 // Permission modes
@@ -60,7 +58,7 @@ export function PhaseConfigPanel({
 	const [useDefault, setUseDefault] = useState(true)
 
 	// Form state
-	const [model, setModel] = useState("claude-sonnet-4-20250514")
+	const [model, setModel] = useState("opencode/claude-sonnet-4")
 	const [permissionMode, setPermissionMode] = useState("default")
 	const [promptTemplate, setPromptTemplate] = useState("")
 	const [enabled, setEnabled] = useState(true)
@@ -103,7 +101,7 @@ export function PhaseConfigPanel({
 				await upsertOverride({
 					taskId,
 					phase,
-					provider: "anthropic",
+					provider: "opencode",
 					model,
 					permissionMode,
 					promptTemplate,

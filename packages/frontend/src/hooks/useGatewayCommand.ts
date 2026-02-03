@@ -372,6 +372,81 @@ export function useDeleteContainer() {
 	}
 }
 
+/**
+ * Hook for fetching a container working tree diff
+ */
+export function useContainerDiff() {
+	const createCommand = useMutation(api.serverCommands.containerDiff)
+	const [pendingId, setPendingId] = useState<Id<"serverCommands"> | null>(null)
+	const pendingRef = useRef<PendingServerCommand<{
+		diff: string
+		containerName: string
+		server: string
+		cwd?: string
+	} | null> | null>(null)
+
+	const commandStatus = useServerCommandWatcher(pendingId)
+
+	useEffect(() => {
+		if (!commandStatus || !pendingRef.current) return
+
+		if (commandStatus.status === "completed") {
+			pendingRef.current.resolve(
+				commandStatus.result as {
+					diff: string
+					containerName: string
+					server: string
+					cwd?: string
+				} | null,
+			)
+			pendingRef.current = null
+			setPendingId(null)
+		} else if (commandStatus.status === "failed") {
+			pendingRef.current.reject(
+				new Error(commandStatus.error || "Command failed"),
+			)
+			pendingRef.current = null
+			setPendingId(null)
+		}
+	}, [commandStatus])
+
+	const execute = useCallback(
+		(args: {
+			containerName: string
+			server: string
+			sshUser?: string
+			cwd?: string
+			type?: "working" | "staged"
+		}): Promise<{
+			diff: string
+			containerName: string
+			server: string
+			cwd?: string
+			type?: "working" | "staged"
+		} | null> => {
+			return new Promise((resolve, reject) => {
+				createCommand(args)
+					.then((commandId) => {
+						pendingRef.current = {
+							id: commandId,
+							resolve,
+							reject,
+						}
+						setPendingId(commandId)
+					})
+					.catch(reject)
+			})
+		},
+		[createCommand],
+	)
+
+	return {
+		execute,
+		isPending: pendingId !== null,
+		status: commandStatus?.status ?? null,
+	}
+}
+
 // =============================================================================
 // Container Commands (Containers process directly)
 // =============================================================================
@@ -416,7 +491,8 @@ export function useStartExecution() {
 		(args: {
 			containerId: string
 			message: string
-			model?: string
+			providerId: string
+			modelId: string
 			workingDirectory?: string
 			permissionMode?: string
 			taskId?: string

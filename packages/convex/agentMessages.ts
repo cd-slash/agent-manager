@@ -1,8 +1,8 @@
 /**
  * Agent Messages - Structured Streaming Storage
  *
- * Stores streaming output from Claude Code CLI in a structured format
- * for rich display and analysis. Messages are parsed from raw JSON streams
+ * Stores streaming output from OpenCode in a structured format
+ * for rich display and analysis. Messages are parsed from OpenCode events
  * into typed records with proper fields for tools, text, thinking, etc.
  */
 
@@ -13,19 +13,16 @@ import { agentMessageTypeValidator } from "./validators"
 // Types for raw streaming content
 type RawStreamContent = {
 	type?: string
-	content?: Array<{
-		type: string
-		text?: string
-		id?: string
-		name?: string
-		input?: unknown
-	}>
-	tool_use_id?: string
-	is_error?: boolean
-	content_block?: {
-		type: string
-		id?: string
-		name?: string
+	properties?: Record<string, unknown>
+	messageResult?: {
+		info?: { id?: string }
+		parts?: Array<{
+			id?: string
+			type?: string
+			text?: string
+			name?: string
+			input?: unknown
+		}>
 	}
 }
 
@@ -246,6 +243,8 @@ export const create = mutation({
 		streamType: v.optional(v.string()),
 		content: v.any(), // Raw content from stream
 		sequenceNumber: v.optional(v.number()),
+		messageId: v.optional(v.string()),
+		partId: v.optional(v.string()),
 		// Legacy support
 		messageType: v.optional(v.string()),
 		timestamp: v.optional(v.number()),
@@ -270,6 +269,8 @@ export const create = mutation({
 
 		return await ctx.db.insert("agentMessages", {
 			sessionId: args.sessionId,
+			messageId: args.messageId,
+			partId: args.partId,
 			messageType,
 			streamType: args.streamType,
 			text: parsed.text,
@@ -300,6 +301,8 @@ export const createBatch = mutation({
 				streamType: v.optional(v.string()),
 				content: v.any(),
 				sequenceNumber: v.optional(v.number()),
+				messageId: v.optional(v.string()),
+				partId: v.optional(v.string()),
 			}),
 		),
 	},
@@ -312,6 +315,8 @@ export const createBatch = mutation({
 
 			const id = await ctx.db.insert("agentMessages", {
 				sessionId: msg.sessionId,
+				messageId: msg.messageId,
+				partId: msg.partId,
 				messageType: parsed.messageType,
 				streamType: msg.streamType,
 				text: parsed.text,
@@ -352,10 +357,14 @@ export const createStructured = mutation({
 		isError: v.optional(v.boolean()),
 		rawContent: v.optional(v.string()),
 		sequenceNumber: v.optional(v.number()),
+		messageId: v.optional(v.string()),
+		partId: v.optional(v.string()),
 	},
 	handler: async (ctx, args) => {
 		return await ctx.db.insert("agentMessages", {
 			sessionId: args.sessionId,
+			messageId: args.messageId,
+			partId: args.partId,
 			messageType: args.messageType,
 			streamType: args.streamType,
 			text: args.text,
@@ -461,75 +470,89 @@ function parseStreamContent(
 	// Handle object content
 	if (content && typeof content === "object") {
 		const obj = content as RawStreamContent
+		const type = obj.type
 
-		// Check for tool_use
-		if (obj.type === "tool_use" || obj.content_block?.type === "tool_use") {
-			return {
-				messageType: "tool_use",
-				toolId: obj.content_block?.id,
-				toolName: obj.content_block?.name,
-				toolInput: undefined, // Input comes in delta events
-			}
-		}
-
-		// Check for tool_result
-		if (obj.type === "tool_result") {
-			return {
-				messageType: "tool_result",
-				toolId: obj.tool_use_id,
-				toolResult: obj.content,
-				isError: obj.is_error,
-			}
-		}
-
-		// Check for content array
-		if (Array.isArray(obj.content)) {
-			// Extract text from content blocks
-			const textBlocks = obj.content.filter(
-				(c): c is { type: "text"; text: string } =>
-					c.type === "text" && typeof c.text === "string",
+		if (type === "message.response" && obj.messageResult?.parts) {
+			const textParts = obj.messageResult.parts.filter(
+				(part) => part.type === "text" && typeof part.text === "string",
 			)
-			if (textBlocks.length > 0) {
+			if (textParts.length > 0) {
 				return {
 					messageType: "text",
-					text: textBlocks.map((b) => b.text).join(""),
-				}
-			}
-
-			// Extract tool_use from content blocks
-			const toolBlocks = obj.content.filter(
-				(
-					c,
-				): c is {
-					type: "tool_use"
-					id: string
-					name: string
-					input: unknown
-				} => c.type === "tool_use",
-			)
-			const tool = toolBlocks[0]
-			if (tool) {
-				return {
-					messageType: "tool_use",
-					toolId: tool.id,
-					toolName: tool.name,
-					toolInput: tool.input,
+					text: textParts.map((p) => p.text).join(""),
 				}
 			}
 		}
 
-		// Check stream type hints
+		if (type === "message.part.updated" || type === "message.part.added") {
+			const part = obj.properties?.part as
+				| {
+						type?: string
+						text?: string
+						id?: string
+						name?: string
+						input?: unknown
+				  }
+				| undefined
+			if (part?.type === "text" && typeof part.text === "string") {
+				return {
+					messageType: "text",
+					text: part.text,
+				}
+			}
+			if (part?.type === "thinking" && typeof part.text === "string") {
+				return {
+					messageType: "thinking",
+					text: part.text,
+				}
+			}
+			if (part?.type === "tool_use") {
+				return {
+					messageType: "tool_use",
+					toolId: part.id,
+					toolName: part.name,
+					toolInput: part.input,
+				}
+			}
+		}
+
+		if (type === "tool.result") {
+			const toolId = obj.properties?.toolUseID as string | undefined
+			const result = obj.properties?.result
+			return {
+				messageType: "tool_result",
+				toolId,
+				toolResult: result,
+				isError: Boolean(obj.properties?.error),
+			}
+		}
+
+		if (type === "error") {
+			return {
+				messageType: "error",
+				text: JSON.stringify(obj),
+				isError: true,
+			}
+		}
+
+		if (type === "session.completed" || type === "session.idle") {
+			return {
+				messageType: "result",
+				text: JSON.stringify(obj),
+			}
+		}
+
 		if (streamType === "result") {
 			return {
 				messageType: "result",
-				text: typeof obj === "object" ? JSON.stringify(obj) : String(obj),
+				text: JSON.stringify(obj),
 			}
 		}
 
 		if (streamType === "system") {
 			return {
 				messageType: "system",
-				text: typeof obj === "object" ? JSON.stringify(obj) : String(obj),
+				text: JSON.stringify(obj),
 			}
 		}
 	}

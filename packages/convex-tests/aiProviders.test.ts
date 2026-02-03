@@ -22,27 +22,15 @@ describe("aiProviders", () => {
 
 			const providers = await t.query(api.aiProviders.list, {})
 
-			expect(providers.length).toBeGreaterThanOrEqual(3)
+			expect(providers.length).toBeGreaterThanOrEqual(1)
 
-			// Check Anthropic provider
-			const anthropic = providers.find((p) => p.type === "anthropic")
-			expect(anthropic).toBeDefined()
-			expect(anthropic?.name).toBe("Anthropic")
-			expect(anthropic?.enabled).toBe(true)
-			expect(anthropic?.authType).toBe("oauth")
-			expect(anthropic?.isBuiltin).toBe(true)
-			expect(anthropic?.models.length).toBeGreaterThan(0)
-
-			// Check OpenAI provider
-			const openai = providers.find((p) => p.type === "openai")
-			expect(openai).toBeDefined()
-			expect(openai?.enabled).toBe(false)
-			expect(openai?.authType).toBe("api_key")
-
-			// Check Google provider
-			const google = providers.find((p) => p.type === "google")
-			expect(google).toBeDefined()
-			expect(google?.enabled).toBe(false)
+			// Check OpenCode provider
+			const opencode = providers.find((p) => p.type === "opencode")
+			expect(opencode).toBeDefined()
+			expect(opencode?.name).toBe("OpenCode")
+			expect(opencode?.enabled).toBe(true)
+			expect(opencode?.authType).toBe("api_key")
+			expect(opencode?.isBuiltin).toBe(true)
 		})
 
 		it("should not duplicate providers on re-seed", async () => {

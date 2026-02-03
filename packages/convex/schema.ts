@@ -127,7 +127,7 @@ export default defineSchema({
 		// AI response metadata (only populated for sender: "ai")
 		model: v.optional(v.string()),
 		provider: v.optional(v.string()),
-		// Claude session ID for this message exchange (for session resumption)
+		// OpenCode session ID for this message exchange (for session resumption)
 		sessionId: v.optional(v.string()),
 		// Whether this message is an error (e.g., API authentication failure)
 		isError: v.optional(v.boolean()),
@@ -334,13 +334,16 @@ export default defineSchema({
 		.index("by_task", ["taskId"])
 		.index("by_status", ["status"]),
 
-	// Agent sessions - Claude Code CLI sessions via agent-gateway
+	// Agent sessions - OpenCode sessions via agent-gateway
 	agentSessions: defineTable({
 		sessionId: v.string(), // UUID from gateway
 		containerId: v.string(), // Container running the session
 		taskId: v.optional(v.id("tasks")),
 		projectId: v.optional(v.id("projects")),
 		prompt: v.string(), // Initial prompt sent to CLI
+		opencodeSessionId: v.optional(v.string()),
+		providerId: v.optional(v.string()),
+		modelId: v.optional(v.string()),
 		status: v.union(
 			v.literal("starting"),
 			v.literal("running"),
@@ -361,10 +364,12 @@ export default defineSchema({
 		.index("by_project", ["projectId"])
 		.index("by_status", ["status"]),
 
-	// Agent messages - streaming output from Claude Code CLI
+	// Agent messages - streaming output from OpenCode
 	// Stores structured content for rich display and analysis
 	agentMessages: defineTable({
 		sessionId: v.string(), // References agentSessions.sessionId
+		messageId: v.optional(v.string()),
+		partId: v.optional(v.string()),
 
 		// Message classification
 		messageType: agentMessageTypeValidator,
@@ -418,7 +423,7 @@ export default defineSchema({
 		description: v.optional(v.string()),
 	}).index("by_key", ["key"]),
 
-	// AI Providers - configuration for AI model providers (Anthropic, OpenAI, Google)
+	// AI Providers - configuration for OpenCode providers/models
 	aiProviders: defineTable({
 		name: v.string(),
 		type: aiProviderTypeValidator,
@@ -426,7 +431,8 @@ export default defineSchema({
 		authType: authTypeValidator,
 		// API Key auth - references secrets table
 		apiKeySecretKey: v.optional(v.string()),
-		// OAuth auth - uses existing gateway flow, token stored as ANTHROPIC_AUTH_TOKEN in secrets
+		// Provider-specific options (baseURL, headers, etc.)
+		options: v.optional(v.any()),
 		models: v.array(
 			v.object({
 				id: v.string(),
@@ -542,31 +548,30 @@ export default defineSchema({
 		.index("by_task_and_cycle", ["taskId", "cycleNumber"])
 		.index("by_status", ["status"]),
 
-	// OAuth flows - track OAuth flow requests for gateway processing
-	// Frontend creates a flow, gateway processes it, updates with results
-	oauthFlows: defineTable({
-		provider: v.string(), // "anthropic", "openai", etc.
-		status: v.union(
-			v.literal("pending"), // Waiting for gateway to process
-			v.literal("started"), // Gateway initiated OAuth, has URL
-			v.literal("code_received"), // User submitted auth code
-			v.literal("completing"), // Gateway is exchanging code for token
-			v.literal("completed"), // Successfully got token
-			v.literal("failed"), // Error occurred
-		),
-		// Set by gateway when it starts the flow
-		oauthUrl: v.optional(v.string()),
-		flowId: v.optional(v.string()), // Gateway's internal flow ID
-		expiresAt: v.optional(v.number()),
-		// Set by frontend when user submits code
-		authCode: v.optional(v.string()),
-		// Set by gateway on completion
-		error: v.optional(v.string()),
+	// OpenCode session diffs
+	opencodeSessionDiffs: defineTable({
+		sessionId: v.string(),
+		messageId: v.optional(v.string()),
+		diffs: v.any(),
 		createdAt: v.number(),
-		updatedAt: v.number(),
 	})
-		.index("by_status", ["status"])
-		.index("by_provider_and_status", ["provider", "status"]),
+		.index("by_session", ["sessionId"])
+		.index("by_session_and_message", ["sessionId", "messageId"]),
+
+	// Container working tree diffs (snapshots)
+	containerDiffs: defineTable({
+		taskId: v.optional(v.id("tasks")),
+		containerId: v.optional(v.id("containers")),
+		containerName: v.string(),
+		server: v.string(),
+		cwd: v.optional(v.string()),
+		type: v.union(v.literal("working"), v.literal("staged")),
+		diff: v.string(),
+		createdAt: v.number(),
+	})
+		.index("by_task", ["taskId"])
+		.index("by_container", ["containerId"])
+		.index("by_container_and_type", ["containerId", "type"]),
 
 	// Phase configs - store default and per-task agent configurations
 	phaseConfigs: defineTable({
@@ -603,6 +608,7 @@ export default defineSchema({
 		// createContainer: { repo?, branch?, name?, server?, sshUser?, taskId?, projectId? }
 		// stopContainer: { containerName, server, sshUser? }
 		// deleteContainer: { containerName, server, sshUser? }
+		// containerDiff: { containerName, server, sshUser?, cwd?, type? }
 		payload: v.any(),
 
 		// Result set by gateway on completion
@@ -651,8 +657,6 @@ export default defineSchema({
 		// abortExecution: { correlationId }
 		// pushAuthToken: { token }
 		// startPhaseExecution: { taskId, phase, customPrompt?, configOverrides? }
-		// startOAuthFlow: { provider, oauthFlowId }
-		// completeOAuthFlow: { oauthFlowId, authCode }
 		payload: v.any(),
 
 		// Result set by container on completion

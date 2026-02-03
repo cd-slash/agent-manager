@@ -9,6 +9,9 @@ export const create = mutation({
 		prompt: v.string(),
 		taskId: v.optional(v.id("tasks")),
 		projectId: v.optional(v.id("projects")),
+		opencodeSessionId: v.optional(v.string()),
+		providerId: v.optional(v.string()),
+		modelId: v.optional(v.string()),
 		status: v.union(
 			v.literal("starting"),
 			v.literal("running"),
@@ -25,6 +28,9 @@ export const create = mutation({
 			prompt: args.prompt,
 			taskId: args.taskId,
 			projectId: args.projectId,
+			opencodeSessionId: args.opencodeSessionId,
+			providerId: args.providerId,
+			modelId: args.modelId,
 			status: args.status,
 			startedAt: args.startedAt,
 		})
@@ -47,6 +53,9 @@ export const updateStatus = mutation({
 		totalCostUsd: v.optional(v.number()),
 		numTurns: v.optional(v.number()),
 		completedAt: v.optional(v.number()),
+		opencodeSessionId: v.optional(v.string()),
+		providerId: v.optional(v.string()),
+		modelId: v.optional(v.string()),
 	},
 	handler: async (ctx, args) => {
 		const session = await ctx.db
@@ -66,6 +75,10 @@ export const updateStatus = mutation({
 			updates.totalCostUsd = args.totalCostUsd
 		if (args.numTurns !== undefined) updates.numTurns = args.numTurns
 		if (args.completedAt !== undefined) updates.completedAt = args.completedAt
+		if (args.opencodeSessionId !== undefined)
+			updates.opencodeSessionId = args.opencodeSessionId
+		if (args.providerId !== undefined) updates.providerId = args.providerId
+		if (args.modelId !== undefined) updates.modelId = args.modelId
 
 		await ctx.db.patch(session._id, updates)
 		return session._id

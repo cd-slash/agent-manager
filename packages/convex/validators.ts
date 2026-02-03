@@ -2,18 +2,12 @@ import { v } from "convex/values"
 
 // AI Provider type
 export const aiProviderTypeValidator = v.union(
-	v.literal("anthropic"),
-	v.literal("openai"),
-	v.literal("google"),
-	v.literal("zai"),
+	v.literal("opencode"),
 	v.literal("custom"),
 )
 
 // Authentication type for AI providers
-export const authTypeValidator = v.union(
-	v.literal("api_key"),
-	v.literal("oauth"),
-)
+export const authTypeValidator = v.union(v.literal("api_key"))
 
 // Task category status
 export const categoryValidator = v.union(
@@ -132,7 +126,7 @@ export const phaseStatusValidator = v.union(
 	v.literal("skipped"),
 )
 
-// Permission mode - Claude Code permission modes
+// Permission mode - OpenCode permission modes
 export const permissionModeValidator = v.union(
 	v.literal("default"),
 	v.literal("plan"),
@@ -154,16 +148,14 @@ export const serverCommandTypeValidator = v.union(
 	v.literal("restartContainer"),
 	v.literal("deleteContainer"),
 	v.literal("listContainers"),
+	v.literal("containerDiff"),
 )
 
 // Container command types - operations that containers process directly
 export const containerCommandTypeValidator = v.union(
 	v.literal("startExecution"),
 	v.literal("abortExecution"),
-	v.literal("pushAuthToken"),
 	v.literal("startPhaseExecution"),
-	v.literal("startOAuthFlow"),
-	v.literal("completeOAuthFlow"),
 )
 
 // Gateway command status
@@ -196,7 +188,7 @@ export const agentMessageTypeValidator = v.union(
 	v.literal("text"), // Plain text output
 	v.literal("tool_use"), // Tool invocation
 	v.literal("tool_result"), // Tool result
-	v.literal("thinking"), // Claude's thinking
+	v.literal("thinking"), // Model thinking
 	v.literal("error"), // Error message
 	v.literal("system"), // System message
 	v.literal("result"), // Final result

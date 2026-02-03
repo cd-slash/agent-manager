@@ -75,17 +75,20 @@ describe("agentMessages", () => {
 	})
 
 	describe("create - tool_use content", () => {
-		it("should parse tool_use from object content", async () => {
+		it("should parse tool_use from OpenCode part event", async () => {
 			const t = await createConvexTest(schema)
 
 			await t.mutation(api.agentMessages.create, {
 				sessionId: "session-123",
 				content: {
-					type: "tool_use",
-					content_block: {
-						type: "tool_use",
-						id: "tool_abc123",
-						name: "Bash",
+					type: "message.part.updated",
+					properties: {
+						part: {
+							type: "tool_use",
+							id: "tool_abc123",
+							name: "Bash",
+							input: { command: "ls" },
+						},
 					},
 				},
 				sequenceNumber: 0,
@@ -99,47 +102,20 @@ describe("agentMessages", () => {
 			expect(messages[0]?.toolId).toBe("tool_abc123")
 			expect(messages[0]?.toolName).toBe("Bash")
 		})
-
-		it("should parse tool_use from content array", async () => {
-			const t = await createConvexTest(schema)
-
-			await t.mutation(api.agentMessages.create, {
-				sessionId: "session-123",
-				content: {
-					content: [
-						{
-							type: "tool_use",
-							id: "tool_xyz789",
-							name: "Read",
-							input: { file_path: "/test/file.txt" },
-						},
-					],
-				},
-				sequenceNumber: 0,
-			})
-
-			const messages = await t.query(api.agentMessages.getBySession, {
-				sessionId: "session-123",
-			})
-
-			expect(messages[0]?.messageType).toBe("tool_use")
-			expect(messages[0]?.toolId).toBe("tool_xyz789")
-			expect(messages[0]?.toolName).toBe("Read")
-			expect(messages[0]?.toolInput).toEqual({ file_path: "/test/file.txt" })
-		})
 	})
 
 	describe("create - tool_result content", () => {
-		it("should parse tool_result from object content", async () => {
+		it("should parse tool_result from OpenCode tool.result", async () => {
 			const t = await createConvexTest(schema)
 
 			await t.mutation(api.agentMessages.create, {
 				sessionId: "session-123",
 				content: {
-					type: "tool_result",
-					tool_use_id: "tool_abc123",
-					content: [{ type: "text", text: "File contents here" }],
-					is_error: false,
+					type: "tool.result",
+					properties: {
+						toolUseID: "tool_abc123",
+						result: { content: "File contents here" },
+					},
 				},
 				sequenceNumber: 0,
 			})
@@ -150,9 +126,7 @@ describe("agentMessages", () => {
 
 			expect(messages[0]?.messageType).toBe("tool_result")
 			expect(messages[0]?.toolId).toBe("tool_abc123")
-			expect(messages[0]?.toolResult).toEqual([
-				{ type: "text", text: "File contents here" },
-			])
+			expect(messages[0]?.toolResult).toEqual({ content: "File contents here" })
 			expect(messages[0]?.isError).toBe(false)
 		})
 
@@ -162,10 +136,12 @@ describe("agentMessages", () => {
 			await t.mutation(api.agentMessages.create, {
 				sessionId: "session-123",
 				content: {
-					type: "tool_result",
-					tool_use_id: "tool_abc123",
-					content: [{ type: "text", text: "Command failed: not found" }],
-					is_error: true,
+					type: "tool.result",
+					properties: {
+						toolUseID: "tool_abc123",
+						result: { content: "Command failed: not found" },
+						error: "not found",
+					},
 				},
 				sequenceNumber: 0,
 			})
@@ -180,16 +156,19 @@ describe("agentMessages", () => {
 	})
 
 	describe("create - text content array", () => {
-		it("should extract text from content array", async () => {
+		it("should extract text from OpenCode message response", async () => {
 			const t = await createConvexTest(schema)
 
 			await t.mutation(api.agentMessages.create, {
 				sessionId: "session-123",
 				content: {
-					content: [
-						{ type: "text", text: "First part. " },
-						{ type: "text", text: "Second part." },
-					],
+					type: "message.response",
+					messageResult: {
+						parts: [
+							{ type: "text", text: "First part. " },
+							{ type: "text", text: "Second part." },
+						],
+					},
 				},
 				sequenceNumber: 0,
 			})

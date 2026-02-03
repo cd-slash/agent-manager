@@ -173,6 +173,39 @@ export const listContainers = mutation({
 	},
 })
 
+/**
+ * Request working tree diff for a container
+ */
+export const containerDiff = mutation({
+	args: {
+		containerName: v.string(),
+		server: v.string(),
+		sshUser: v.optional(v.string()),
+		cwd: v.optional(v.string()),
+		type: v.optional(v.union(v.literal("working"), v.literal("staged"))),
+		priority: v.optional(commandPriorityValidator),
+	},
+	handler: async (ctx, args) => {
+		const now = Date.now()
+		return await ctx.db.insert("serverCommands", {
+			type: "containerDiff",
+			status: "pending",
+			priority: args.priority ?? "high",
+			payload: {
+				containerName: args.containerName,
+				server: args.server,
+				sshUser: args.sshUser,
+				cwd: args.cwd,
+				type: args.type ?? "working",
+			},
+			retryCount: 0,
+			maxRetries: DEFAULT_MAX_RETRIES,
+			createdAt: now,
+			updatedAt: now,
+		})
+	},
+})
+
 // =============================================================================
 // Queries - For gateway to get work and frontend to check status
 // =============================================================================
