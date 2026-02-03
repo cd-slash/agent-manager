@@ -131,6 +131,14 @@ export function TaskDetailView({
 		taskId: taskId as Id<"tasks">,
 		type: "staged",
 	})
+	const [diffHistoryCursor, setDiffHistoryCursor] = useState<string | null>(
+		null,
+	)
+	const diffHistory = useQuery(api.containerDiffs.listByTaskPaginated, {
+		taskId: taskId as Id<"tasks">,
+		limit: 5,
+		cursor: diffHistoryCursor ?? undefined,
+	})
 
 	// Set of phases that are applicable to this task (from the template)
 	const applicablePhases = new Set(phases.map((p) => p.phase))
@@ -522,6 +530,10 @@ export function TaskDetailView({
 	)
 
 	useEffect(() => {
+		setDiffHistoryCursor(null)
+	}, [])
+
+	useEffect(() => {
 		const latest =
 			workingDiffType === "staged" ? latestStagedDiff : latestWorkingDiff
 		if (latest?.diff) {
@@ -832,6 +844,7 @@ export function TaskDetailView({
 			})
 			const diffText = result?.diff ?? ""
 			setWorkingTreeDiff(diffText)
+			setDiffHistoryCursor(null)
 
 			const containerId = activeContainer?._id
 			if (containerId) {
@@ -2024,7 +2037,7 @@ export function TaskDetailView({
 										<h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center">
 											<FileText size={16} className="mr-2" /> Working Tree
 										</h3>
-										<div className="bg-surface border border-border rounded-lg p-4 space-y-3">
+										<div className="bg-surface border border-border rounded-lg p-4 space-y-4">
 											<div className="flex items-center justify-between">
 												<div className="text-xs text-muted-foreground">
 													{activeContainer?.name
@@ -2075,6 +2088,42 @@ export function TaskDetailView({
 													No working tree diff fetched yet.
 												</div>
 											)}
+											<div>
+												<h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+													Snapshot History
+												</h4>
+												{diffHistory?.items?.length ? (
+													<div className="space-y-2">
+														{diffHistory.items.map((snapshot) => (
+															<div
+																key={snapshot._id}
+																className="flex items-center justify-between text-xs text-muted-foreground"
+															>
+																<span className="font-mono">
+																	{snapshot.type}
+																</span>
+																<span>{formatTime(snapshot.createdAt)}</span>
+															</div>
+														))}
+													</div>
+												) : (
+													<div className="text-sm text-muted-foreground">
+														No snapshots recorded yet.
+													</div>
+												)}
+												{diffHistory && !diffHistory.isDone && (
+													<Button
+														variant="outline"
+														size="sm"
+														className="mt-2"
+														onClick={() =>
+															setDiffHistoryCursor(diffHistory.nextCursor)
+														}
+													>
+														Load more
+													</Button>
+												)}
+											</div>
 										</div>
 									</section>
 
