@@ -52,6 +52,29 @@ export const listByTask = query({
 	},
 })
 
+export const clearByTask = mutation({
+	args: {
+		taskId: v.id("tasks"),
+		type: v.optional(v.union(v.literal("working"), v.literal("staged"))),
+	},
+	handler: async (ctx, args) => {
+		let query = ctx.db
+			.query("containerDiffs")
+			.withIndex("by_task", (q) => q.eq("taskId", args.taskId))
+
+		if (args.type) {
+			query = query.filter((q) => q.eq(q.field("type"), args.type))
+		}
+
+		const snapshots = await query.collect()
+		for (const snapshot of snapshots) {
+			await ctx.db.delete(snapshot._id)
+		}
+
+		return { deleted: snapshots.length }
+	},
+})
+
 export const listByTaskPaginated = query({
 	args: {
 		taskId: v.id("tasks"),

@@ -470,6 +470,7 @@ export function TaskDetailView({
 	// Mutation to start agent execution
 	const startExecution = useMutation(api.containerCommands.startExecution)
 	const recordContainerDiff = useMutation(api.containerDiffs.record)
+	const clearContainerDiffs = useMutation(api.containerDiffs.clearByTask)
 
 	// Mutation to update task (for assigning container)
 	const _updateTask = useMutation(api.tasks.update)
@@ -864,6 +865,15 @@ export function TaskDetailView({
 				error instanceof Error ? error.message : "Unknown error",
 			)
 		}
+	}
+
+	const handleClearSnapshots = async () => {
+		await clearContainerDiffs({
+			taskId: taskId as Id<"tasks">,
+			type: workingDiffType,
+		})
+		setWorkingTreeDiff(null)
+		setDiffHistoryCursor(null)
 	}
 
 	return (
@@ -2111,6 +2121,15 @@ export function TaskDetailView({
 														No snapshots recorded yet.
 													</div>
 												)}
+												<div className="flex items-center gap-2 pt-2">
+													<Button
+														variant="outline"
+														size="sm"
+														onClick={handleClearSnapshots}
+													>
+														Clear snapshots
+													</Button>
+												</div>
 												{diffHistory && !diffHistory.isDone && (
 													<Button
 														variant="outline"
