@@ -10,6 +10,8 @@ export const record = mutation({
 		cwd: v.optional(v.string()),
 		type: v.union(v.literal("working"), v.literal("staged")),
 		diff: v.string(),
+		lineCount: v.optional(v.number()),
+		byteCount: v.optional(v.number()),
 	},
 	handler: async (ctx, args) => {
 		const now = Date.now()
@@ -21,6 +23,8 @@ export const record = mutation({
 			cwd: args.cwd,
 			type: args.type,
 			diff: args.diff,
+			lineCount: args.lineCount,
+			byteCount: args.byteCount,
 			createdAt: now,
 		})
 	},

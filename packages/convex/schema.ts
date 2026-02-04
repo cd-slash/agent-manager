@@ -567,6 +567,8 @@ export default defineSchema({
 		cwd: v.optional(v.string()),
 		type: v.union(v.literal("working"), v.literal("staged")),
 		diff: v.string(),
+		lineCount: v.optional(v.number()),
+		byteCount: v.optional(v.number()),
 		createdAt: v.number(),
 	})
 		.index("by_task", ["taskId"])

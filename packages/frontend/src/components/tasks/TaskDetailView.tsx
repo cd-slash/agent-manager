@@ -882,6 +882,8 @@ export function TaskDetailView({
 
 			const containerId = activeContainer?._id
 			if (containerId) {
+				const lineCount = diffText ? diffText.split("\n").length : 0
+				const byteCount = new TextEncoder().encode(diffText).length
 				await recordContainerDiff({
 					taskId: taskId as Id<"tasks">,
 					containerId,
@@ -890,6 +892,8 @@ export function TaskDetailView({
 					cwd: "/workspace",
 					type: workingDiffType,
 					diff: diffText,
+					lineCount,
+					byteCount,
 				})
 			}
 		} catch (error) {
@@ -2154,6 +2158,16 @@ export function TaskDetailView({
 																		{snapshot.type}
 																	</span>
 																	<span>{formatTime(snapshot.createdAt)}</span>
+																	{typeof snapshot.lineCount === "number" && (
+																		<span className="text-[10px] text-muted-foreground">
+																			{snapshot.lineCount} lines
+																		</span>
+																	)}
+																	{typeof snapshot.byteCount === "number" && (
+																		<span className="text-[10px] text-muted-foreground">
+																			{Math.round(snapshot.byteCount / 1024)} KB
+																		</span>
+																	)}
 																</div>
 																<Button
 																	variant="outline"
