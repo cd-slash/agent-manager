@@ -909,6 +909,13 @@ export function TaskDetailView({
 		setDiffHistoryCursor(null)
 	}
 
+	const handleLoadSnapshot = (snapshot: { diff: string; type: string }) => {
+		setWorkingTreeDiff(snapshot.diff)
+		if (snapshot.type === "staged" || snapshot.type === "working") {
+			setWorkingDiffType(snapshot.type)
+		}
+	}
+
 	return (
 		<div className="flex flex-col h-full bg-background animate-in fade-in duration-300 overflow-hidden">
 			<div className="flex-1 flex overflow-hidden">
@@ -2142,10 +2149,19 @@ export function TaskDetailView({
 																key={snapshot._id}
 																className="flex items-center justify-between text-xs text-muted-foreground"
 															>
-																<span className="font-mono">
-																	{snapshot.type}
-																</span>
-																<span>{formatTime(snapshot.createdAt)}</span>
+																<div className="flex items-center gap-2">
+																	<span className="font-mono">
+																		{snapshot.type}
+																	</span>
+																	<span>{formatTime(snapshot.createdAt)}</span>
+																</div>
+																<Button
+																	variant="outline"
+																	size="sm"
+																	onClick={() => handleLoadSnapshot(snapshot)}
+																>
+																	View
+																</Button>
 															</div>
 														))}
 													</div>
