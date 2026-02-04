@@ -80,14 +80,25 @@ export const listByTaskPaginated = query({
 		taskId: v.id("tasks"),
 		limit: v.optional(v.number()),
 		cursor: v.optional(v.string()),
+		containerName: v.optional(v.string()),
 	},
 	handler: async (ctx, args) => {
 		const limit = args.limit ?? 20
-		const result = await ctx.db
+		let query = ctx.db
 			.query("containerDiffs")
 			.withIndex("by_task", (q) => q.eq("taskId", args.taskId))
 			.order("desc")
-			.paginate({ numItems: limit, cursor: args.cursor ?? null })
+
+		if (args.containerName) {
+			query = query.filter((q) =>
+				q.eq(q.field("containerName"), args.containerName),
+			)
+		}
+
+		const result = await query.paginate({
+			numItems: limit,
+			cursor: args.cursor ?? null,
+		})
 
 		return {
 			items: result.page,

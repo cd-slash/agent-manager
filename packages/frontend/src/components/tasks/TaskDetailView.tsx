@@ -134,10 +134,12 @@ export function TaskDetailView({
 	const [diffHistoryCursor, setDiffHistoryCursor] = useState<string | null>(
 		null,
 	)
+	const [diffHistoryFilter, setDiffHistoryFilter] = useState("all")
 	const diffHistory = useQuery(api.containerDiffs.listByTaskPaginated, {
 		taskId: taskId as Id<"tasks">,
 		limit: 5,
 		cursor: diffHistoryCursor ?? undefined,
+		containerName: diffHistoryFilter === "all" ? undefined : diffHistoryFilter,
 	})
 
 	// Set of phases that are applicable to this task (from the template)
@@ -194,6 +196,14 @@ export function TaskDetailView({
 		api.containers.getByContainerId,
 		task.activeContainerId ? { containerId: task.activeContainerId } : "skip",
 	)
+	const containerFilterOptions = useMemo(() => {
+		const names = new Set<string>()
+		for (const snapshot of diffHistory?.items ?? []) {
+			if (snapshot.containerName) names.add(snapshot.containerName)
+		}
+		if (activeContainer?.name) names.add(activeContainer.name)
+		return ["all", ...Array.from(names)]
+	}, [diffHistory?.items, activeContainer?.name])
 
 	// Compute agent status based on current state
 	const agentStatus: AgentStatus = useMemo(() => {
@@ -2152,6 +2162,27 @@ export function TaskDetailView({
 													>
 														Clear snapshots
 													</Button>
+													{containerFilterOptions.length > 1 && (
+														<div className="flex items-center gap-2">
+															<span className="text-[10px] text-muted-foreground uppercase">
+																Filter
+															</span>
+															<select
+																className="h-7 rounded border border-border bg-background px-2 text-xs text-foreground"
+																value={diffHistoryFilter}
+																onChange={(event) => {
+																	setDiffHistoryFilter(event.target.value)
+																	setDiffHistoryCursor(null)
+																}}
+															>
+																{containerFilterOptions.map((name) => (
+																	<option key={name} value={name}>
+																		{name === "all" ? "All containers" : name}
+																	</option>
+																))}
+															</select>
+														</div>
+													)}
 												</div>
 												{diffHistory && !diffHistory.isDone && (
 													<Button
